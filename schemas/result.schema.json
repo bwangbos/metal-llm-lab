@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://metal-llm-lab.dev/schemas/result.schema.json",
+  "title": "Metal LLM Lab benchmark result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "experiment_id", "date", "model_id", "runs"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "experiment_id": { "$ref": "#/$defs/id" },
+    "date": { "type": "string", "format": "date" },
+    "model_id": { "$ref": "#/$defs/id" },
+    "suite_id": { "$ref": "#/$defs/id" },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["output", "title"],
+      "properties": {
+        "output": { "type": "string", "pattern": "^[a-z0-9.-]+\\.md$" },
+        "title": { "type": "string", "minLength": 1 }
+      }
+    },
+    "environment": { "type": "object" },
+    "configuration": { "type": "object" },
+    "interpretation": { "type": "object" },
+    "validations": { "type": "array", "items": { "type": "object" } },
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/run" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+    },
+    "git_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "experiment",
+        "measurement_kind",
+        "timestamp",
+        "repository_revision",
+        "hardware_id",
+        "runtime_id",
+        "runtime_revision",
+        "profile",
+        "effective_prompt_tokens",
+        "generated_tokens",
+        "prompt_tokens_per_second",
+        "generation_tokens_per_second",
+        "generation_settings",
+        "notes"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "experiment": { "$ref": "#/$defs/id" },
+        "measurement_kind": {
+          "enum": ["single_run", "three_run_mean"]
+        },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "repository_revision": { "$ref": "#/$defs/git_sha" },
+        "hardware_id": { "$ref": "#/$defs/id" },
+        "runtime_id": { "$ref": "#/$defs/id" },
+        "runtime_revision": { "$ref": "#/$defs/git_sha" },
+        "profile": { "$ref": "#/$defs/id" },
+        "effective_prompt_tokens": { "type": "integer", "minimum": 0 },
+        "generated_tokens": { "type": "integer", "minimum": 0 },
+        "prompt_tokens_per_second": { "type": "number", "minimum": 0 },
+        "generation_tokens_per_second": { "type": "number", "minimum": 0 },
+        "prompt_tokens_per_second_display": { "type": "string", "pattern": "^[0-9]+(?:,[0-9]{3})*(?:\\.[0-9]+)?$" },
+        "generation_tokens_per_second_display": { "type": "string", "pattern": "^[0-9]+(?:,[0-9]{3})*(?:\\.[0-9]+)?$" },
+        "prompt_tokens_per_second_sd": { "type": "number", "minimum": 0 },
+        "generation_tokens_per_second_sd": { "type": "number", "minimum": 0 },
+        "generation_tokens_per_second_sd_display": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$" },
+        "change_display": { "type": "string", "pattern": "^[+-][0-9]+(?:\\.[0-9]+)?%$" },
+        "cache_depth": { "type": "integer", "minimum": 0 },
+        "vision": { "type": "boolean" },
+        "mtp": { "type": "boolean" },
+        "draft_acceptance": { "type": "string", "pattern": "^[0-9]+/[0-9]+$" },
+        "output_sha256": { "$ref": "#/$defs/sha256" },
+        "output_equivalence": { "enum": ["byte_identical", "diverged", "not_compared"] },
+        "generation_settings": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["temperature", "seed", "max_tokens"],
+          "properties": {
+            "temperature": { "type": "number" },
+            "seed": { "type": "integer" },
+            "max_tokens": { "type": "integer", "minimum": 0 },
+            "reasoning": { "type": "boolean" }
+          }
+        },
+        "notes": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

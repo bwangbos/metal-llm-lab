@@ -32,8 +32,7 @@ mkdir -p "$fixture_root"/{bin,lib,manifests/models,manifests/runtimes,manifests/
 fixture_root=${fixture_root:A}
 artifact_dir="$fixture_root/.lab/artifacts/fixture-model"
 cp "$source_root/bin/metal-llm" "$fixture_root/bin/metal-llm"
-cp "$source_root/lib/common.zsh" "$source_root/lib/doctor.zsh" "$source_root/lib/setup.zsh" "$fixture_root/lib/"
-[[ -f "$source_root/lib/serve.zsh" ]] && cp "$source_root/lib/serve.zsh" "$fixture_root/lib/"
+cp "$source_root/lib"/*.zsh "$fixture_root/lib/"
 
 print -n -- 'model' > "$artifact_dir/model.gguf"
 print -n -- 'projector' > "$artifact_dir/projector.gguf"

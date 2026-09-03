@@ -9,6 +9,8 @@ source "$METAL_LLM_ROOT/lib/common.zsh"
 source "$METAL_LLM_ROOT/lib/doctor.zsh"
 source "$METAL_LLM_ROOT/lib/setup.zsh"
 source "$METAL_LLM_ROOT/lib/serve.zsh"
+source "$METAL_LLM_ROOT/lib/bench.zsh"
+source "$METAL_LLM_ROOT/lib/report.zsh"
 
 metal_llm_help() {
     print -- 'usage: metal-llm COMMAND [ARGUMENTS]'
@@ -17,8 +19,8 @@ metal_llm_help() {
     print -- '  metal-llm doctor'
     print -- '  metal-llm setup MODEL [--dry-run] [--yes]'
     print -- '  metal-llm serve MODEL --profile PROFILE [--dry-run] [-- EXTRA_LLAMA_ARGS]'
-    print -- '  metal-llm bench MODEL --suite SUITE'
-    print -- '  metal-llm report'
+    print -- '  metal-llm bench MODEL --suite SUITE [--dry-run]'
+    print -- '  metal-llm report [--check]'
     print -- '  metal-llm help'
     print -- ''
     print -- 'environment:'
@@ -41,10 +43,8 @@ case "$command_name" in
     doctor) metal_llm_doctor "$@" ;;
     setup) metal_llm_setup "$@" ;;
     serve) metal_llm_serve "$@" ;;
-    bench|report)
-        metal_llm_error "command not implemented yet: $command_name"
-        exit 2
-        ;;
+    bench) metal_llm_bench "$@" ;;
+    report) metal_llm_report "$@" ;;
     *)
         metal_llm_error "unknown command: $command_name"
         metal_llm_help >&2

@@ -23,6 +23,8 @@ for command_name in doctor setup serve bench report help; do
 done
 assert_contains "$help_output" 'metal-llm setup MODEL [--dry-run] [--yes]'
 assert_contains "$help_output" 'METAL_LLM_BUILD_RESERVE_BYTES'
+assert_contains "$help_output" 'metal-llm bench MODEL --suite SUITE [--dry-run]'
+assert_contains "$help_output" 'metal-llm report [--check]'
 
 if unknown_output=$("$cli" definitely-not-a-command 2>&1); then
     fail 'unknown command succeeded'
@@ -40,15 +42,21 @@ fi
 (( serve_status == 2 )) || fail "serve without arguments exited $serve_status, expected 2"
 assert_contains "$serve_output" 'usage: metal-llm serve MODEL --profile PROFILE'
 
-for reserved_command in bench report; do
-    if reserved_output=$("$cli" "$reserved_command" 2>&1); then
-        fail "reserved command succeeded: $reserved_command"
-    else
-        reserved_status=$?
-    fi
-    (( reserved_status == 2 )) || fail "reserved command exited $reserved_status, expected 2"
-    assert_contains "$reserved_output" "not implemented yet: $reserved_command"
-done
+if bench_output=$("$cli" bench 2>&1); then
+    fail 'bench without arguments succeeded'
+else
+    bench_status=$?
+fi
+(( bench_status == 2 )) || fail "bench without arguments exited $bench_status, expected 2"
+assert_contains "$bench_output" 'usage: metal-llm bench MODEL --suite SUITE'
+
+if report_output=$("$cli" report unexpected 2>&1); then
+    fail 'report with an unknown argument succeeded'
+else
+    report_status=$?
+fi
+(( report_status == 2 )) || fail "report with an unknown argument exited $report_status, expected 2"
+assert_contains "$report_output" 'usage: metal-llm report [--check]'
 
 outside_dir=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-cli.XXXXXX")
 trap 'rm -rf -- "$outside_dir"' EXIT

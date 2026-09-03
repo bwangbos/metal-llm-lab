@@ -37,6 +37,8 @@ cd metal-llm-lab
 ./bin/metal-llm doctor
 ./bin/metal-llm setup qwen3.8-flash-next
 ./bin/metal-llm serve qwen3.8-flash-next --profile auto
+./bin/metal-llm bench qwen3.8-flash-next --suite qwen3.8-smoke --dry-run
+./bin/metal-llm report --check
 ```
 
 Setup downloads approximately **100 GB**, checks every artifact checksum, and
@@ -69,8 +71,13 @@ server but omitted from dry-run output. Extra llama-server arguments may follow
 `--`, for example `-- --threads 8`.
 
 Only one managed server may run at a time. Stop the current process before
-switching profiles. The remaining planned command interface includes `bench
-MODEL --suite SUITE` and `report`.
+switching profiles or running local `llama-bench`. `bench MODEL --suite SUITE`
+runs a versioned suite and atomically saves raw JSON; `--dry-run` prints the
+resolved microbenchmark/API actions without running them. Optional API and vision
+cases are retained as endpoint-only suite templates; do not run them beside the
+local microbenchmark cases, because that would require two full-model processes.
+`report` validates raw results and regenerates Markdown summaries; `report
+--check` detects drift without rewriting files and is appropriate for CI.
 
 ## Reproducible work
 
@@ -82,3 +89,12 @@ extending the workflow.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for reproducibility defect reports and
 [SECURITY.md](SECURITY.md) for responsible vulnerability reporting.
+
+The initial case-study record is available as
+[raw JSON](results/raw/2026-09-03-qwen38-m5-max.json) and a
+[generated summary](results/summaries/qwen3.8-flash-next-m5-max.md). Continue with
+the [model notes](docs/models/qwen3.8-flash-next.md),
+[tested hardware](docs/hardware/apple-m5-max-128gb.md),
+[runtime experiment](docs/experiments/2026-09-03-runtime-comparison.md),
+[MTP crossover study](docs/experiments/2026-09-03-mtp-context-crossover.md), and
+[dynamic-MTP direction](docs/decisions/0002-dynamic-mtp-direction.md).

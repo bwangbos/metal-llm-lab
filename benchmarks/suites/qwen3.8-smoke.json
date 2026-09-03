@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "id": "qwen3.8-smoke",
+  "default_profile": "fast",
+  "cases": [
+    {
+      "id": "prompt-512",
+      "kind": "llama-bench",
+      "prompt_tokens": 512,
+      "generated_tokens": 0,
+      "repetitions": 3,
+      "notes": "512-token prompt-processing microbenchmark"
+    },
+    {
+      "id": "generation-128",
+      "kind": "llama-bench",
+      "prompt_tokens": 0,
+      "generated_tokens": 128,
+      "repetitions": 3,
+      "notes": "128-token generation microbenchmark"
+    },
+    {
+      "id": "deterministic-api-smoke",
+      "kind": "api",
+      "optional": true,
+      "prompt": "Reply with exactly: METAL-LLM-SMOKE",
+      "max_tokens": 32,
+      "temperature": 0,
+      "seed": 1234,
+      "notes": "Optional deterministic OpenAI-compatible API check"
+    },
+    {
+      "id": "vision-spatial-smoke",
+      "kind": "vision",
+      "optional": true,
+      "fixture": "benchmarks/fixtures/vision-spatial.svg",
+      "prompt": "Describe the relative positions of the shapes in one sentence.",
+      "max_tokens": 64,
+      "temperature": 0,
+      "seed": 1234,
+      "notes": "Optional vision fixture; requires an installed fixture and a vision endpoint"
+    }
+  ]
+}
