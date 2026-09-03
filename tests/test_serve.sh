@@ -95,8 +95,15 @@ for runtime_id in hybrid stable; do
     build_dir="$runtime_dir/build-metal"
     mkdir -p "$source_dir" "$build_dir/bin"
     "$real_git" -C "$source_dir" init -q
+    "$real_git" -C "$source_dir" config filter.conceal.clean "sed 's/^conceal-B$/conceal-A/'"
+    "$real_git" -C "$source_dir" config filter.conceal.smudge cat
+    "$real_git" -C "$source_dir" config filter.conceal.required true
+    print -- 'filtered.txt filter=conceal' > "$source_dir/.gitattributes"
+    print -- conceal-A > "$source_dir/filtered.txt"
+    funny_source_name=$'funny\tname\nsource.txt'
+    print -- 'funny filename source' > "$source_dir/$funny_source_name"
     print -- "$runtime_id source" > "$source_dir/runtime.txt"
-    "$real_git" -C "$source_dir" add runtime.txt
+    "$real_git" -C "$source_dir" add .gitattributes filtered.txt "$funny_source_name" runtime.txt
     "$real_git" -C "$source_dir" -c user.name='Serve Test' -c user.email='serve-test@localhost' \
         commit -qm 'fixture runtime'
     source_tree=$($real_git -C "$source_dir" rev-parse 'HEAD^{tree}')
@@ -352,6 +359,23 @@ fi
 assert_contains "$flag_output" 'unsafe tracked-file index flag'
 "$real_git" -C "$hybrid_source" update-index --no-skip-worktree runtime.txt
 "$real_git" -C "$hybrid_source" checkout -q -- runtime.txt
+
+filter_timestamp_reference="$temporary_root/filter-timestamp-reference"
+cp -p "$hybrid_source/filtered.txt" "$filter_timestamp_reference"
+"$real_git" -C "$hybrid_source" config core.trustctime false
+"$real_git" -C "$hybrid_source" config core.checkstat minimal
+print -- conceal-B > "$hybrid_source/filtered.txt"
+touch -r "$filter_timestamp_reference" "$hybrid_source/filtered.txt"
+[[ -z $("$real_git" -C "$hybrid_source" status --porcelain=v1 --untracked-files=all) ]] || \
+    fail 'clean-filter regression did not conceal the raw-byte modification from Git status'
+if filter_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run 2>&1); then
+    rm -f -- "$hybrid_source/filtered.txt"
+    "$real_git" -C "$hybrid_source" checkout -q HEAD -- filtered.txt
+    fail 'serve accepted raw worktree bytes concealed by a clean filter'
+fi
+assert_contains "$filter_output" 'runtime source content differs from the index'
+rm -f -- "$hybrid_source/filtered.txt"
+"$real_git" -C "$hybrid_source" checkout -q HEAD -- filtered.txt
 
 stable_binary="$fixture_root/.lab/runtimes/stable/build-metal/bin/llama-server"
 cp "$stable_binary" "$stable_binary.saved"

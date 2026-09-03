@@ -182,7 +182,7 @@ metal_llm_verify_runtime_source_checkout() {
                         return 1
                     }
                 fi
-                actual_blob=$(git -C "$source_dir" hash-object --path="$tracked_path" -- "$tracked_path") || return 1
+                actual_blob=$(git -C "$source_dir" hash-object --no-filters -- "$tracked_path") || return 1
                 ;;
             120000)
                 [[ -L "$source_dir/$tracked_path" ]] || {

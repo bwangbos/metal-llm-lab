@@ -34,6 +34,31 @@ metal_llm_command_json() {
     jq -cn --args '$ARGS.positional' -- "$@"
 }
 
+metal_llm_publish_benchmark_result() {
+    local result_part=$1
+    local result_path=$2
+    if ! ln "$result_part" "$result_path" 2>/dev/null; then
+        rm -f -- "$result_part"
+        metal_llm_die "benchmark result already exists: ${result_path:t}"
+        return 1
+    fi
+    rm -f -- "$result_part" || return 1
+}
+
+metal_llm_validate_benchmark_timestamp() {
+    local now=$1
+    [[ "$now" =~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' ]] || {
+        metal_llm_die 'system UTC clock did not produce an RFC 3339 timestamp'
+        return 1
+    }
+    jq -en --arg now "$now" '
+      try (($now | fromdateiso8601 | strftime("%Y-%m-%dT%H:%M:%SZ")) == $now) catch false
+    ' >/dev/null || {
+        metal_llm_die 'system UTC clock did not produce a real RFC 3339 UTC calendar timestamp'
+        return 1
+    }
+}
+
 metal_llm_benchmark_system_provenance() {
     local os_version='' compiler_output='' compiler='' sdk='' power_output='' power_source=''
     local power_settings='' low_power_mode_json=null
@@ -290,21 +315,17 @@ metal_llm_bench() {
         metal_llm_die 'METAL_LLM_NOW is not accepted; benchmark time comes from the system clock'
         return 1
     }
+    local clock_executable=/bin/date
+    [[ -f "$clock_executable" && -x "$clock_executable" && ! -L "$clock_executable" ]] || {
+        metal_llm_die 'trusted system clock executable is unavailable: /bin/date'
+        return 1
+    }
     local now
-    now=$(date -u +%Y-%m-%dT%H:%M:%SZ) || {
+    now=$("$clock_executable" -u +%Y-%m-%dT%H:%M:%SZ) || {
         metal_llm_die 'could not read the system UTC clock'
         return 1
     }
-    [[ "$now" =~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' ]] || {
-        metal_llm_die 'system UTC clock did not produce an RFC 3339 timestamp'
-        return 1
-    }
-    jq -en --arg now "$now" '
-      try (($now | fromdateiso8601 | strftime("%Y-%m-%dT%H:%M:%SZ")) == $now) catch false
-    ' >/dev/null || {
-        metal_llm_die 'system UTC clock did not produce a real RFC 3339 UTC calendar timestamp'
-        return 1
-    }
+    metal_llm_validate_benchmark_timestamp "$now" || return 1
     [[ -z "${METAL_LLM_REPOSITORY_REVISION:-}" ]] || {
         metal_llm_die 'METAL_LLM_REPOSITORY_REVISION is not accepted; the checked-out revision is recorded'
         return 1
@@ -632,11 +653,6 @@ metal_llm_bench() {
         rm -f -- "$result_part"
         return 1
     fi
-    if ! ln "$result_part" "$result_path" 2>/dev/null; then
-        rm -f -- "$result_part"
-        metal_llm_die "benchmark result already exists: ${result_path:t}"
-        return 1
-    fi
-    rm -f -- "$result_part" || return 1
+    metal_llm_publish_benchmark_result "$result_part" "$result_path" || return 1
     print -- "wrote benchmark result: $result_path"
 }

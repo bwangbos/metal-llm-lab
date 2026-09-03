@@ -205,7 +205,8 @@ EOF
 cat > "$fake_bin/date" <<'EOF'
 #!/bin/zsh
 [[ "$*" == '-u +%Y-%m-%dT%H:%M:%SZ' ]] || exit 2
-print -- "${BENCH_TEST_NOW:-2026-09-03T12:34:56Z}"
+print -- invoked >> "$FAKE_DATE_LOG"
+print -- '1999-01-02T03:04:05Z'
 EOF
 chmod +x "$fake_bin/system_profiler" "$fake_bin/ps" "$fake_bin/sw_vers" "$fake_bin/xcrun" "$fake_bin/pmset" \
   "$fake_bin/date"
@@ -226,7 +227,8 @@ common_environment=(
   PATH="$fake_bin:$PATH"
   TMPDIR="$managed_tmp"
   METAL_LLM_RESULTS_DIR="$results_dir"
-  BENCH_TEST_NOW=2026-09-03T12:34:56Z
+  BENCH_TEST_NOW=1998-01-02T03:04:05Z
+  FAKE_DATE_LOG="$temporary_root/date.log"
   FAKE_BENCH_LOG="$temporary_root/bench.log"
   FAKE_CURL_LOG="$temporary_root/curl.log"
   FAKE_AUTH_CAPTURE="$temporary_root/auth.capture"
@@ -287,6 +289,12 @@ result_files=("$results_dir"/*.json(N))
 (( ${#result_files} == 1 )) || fail "expected one result, found ${#result_files}"
 result_file=$result_files[1]
 jq -e '
+  .date != "1999-01-02" and .date != "1998-01-02" and
+  ((.experiment_id | startswith("19990102t030405z")) | not) and
+  ((.experiment_id | startswith("19980102t030405z")) | not)
+' "$result_file" >/dev/null || fail 'PATH or legacy test environment controlled the recorded benchmark time'
+[[ ! -e "$temporary_root/date.log" ]] || fail 'benchmark invoked a PATH-selected date executable'
+jq -e '
   .model_id == "fixture-model" and .suite_id == "qwen3.8-smoke" and .benchmark_mode == "local" and
   (.runs | length == 2) and
   (.runs[0].prompt_tokens_per_second == 987.25) and
@@ -329,15 +337,23 @@ partial_files=("$results_dir"/*.part*(N))
 bench_log_contents=$(command cat -- "$temporary_root/bench.log")
 assert_contains "$bench_log_contents" '-m'
 
-result_before_collision=$($real_shasum -a 256 "$result_file" | awk '{print $1}')
-if collision_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
-    fail 'benchmark publication replaced an existing same-name measurement'
+collision_target="$temporary_root/collision-target.json"
+collision_part="$temporary_root/collision-part.json"
+print -n -- 'existing-result' > "$collision_target"
+print -n -- 'candidate-result' > "$collision_part"
+result_before_collision=$($real_shasum -a 256 "$collision_target" | awk '{print $1}')
+if collision_output=$(zsh -fc '
+    source "$1"
+    source "$2"
+    metal_llm_publish_benchmark_result "$3" "$4"
+  ' -- "$fixture_root/lib/common.zsh" "$fixture_root/lib/bench.zsh" \
+  "$collision_part" "$collision_target" 2>&1); then
+    fail 'benchmark publication helper replaced an existing target'
 fi
 assert_contains "$collision_output" 'benchmark result already exists'
-[[ $($real_shasum -a 256 "$result_file" | awk '{print $1}') == "$result_before_collision" ]] || \
+[[ $($real_shasum -a 256 "$collision_target" | awk '{print $1}') == "$result_before_collision" ]] || \
   fail 'benchmark collision changed the existing measurement'
-partial_files=("$results_dir"/*.part*(N))
-(( ${#partial_files} == 0 )) || fail 'benchmark collision leaked a temporary result'
+[[ ! -e "$collision_part" ]] || fail 'benchmark collision leaked its candidate result'
 
 time_override_results="$temporary_root/time-override-results"
 mkdir -p "$time_override_results"
@@ -351,20 +367,20 @@ assert_contains "$time_override_output" 'METAL_LLM_NOW is not accepted'
 time_override_files=("$time_override_results"/*(N))
 (( ${#time_override_files} == 0 )) || fail 'rejected timestamp override leaked result data'
 
-invalid_time_results="$temporary_root/invalid-time-results"
-mkdir -p "$invalid_time_results"
-if timestamp_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$invalid_time_results" \
-    BENCH_TEST_NOW=2026-02-30T12:34:56Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
-    fail 'benchmark accepted an impossible calendar timestamp'
+if timestamp_output=$(zsh -fc '
+    source "$1"
+    source "$2"
+    metal_llm_validate_benchmark_timestamp "$3"
+  ' -- "$fixture_root/lib/common.zsh" "$fixture_root/lib/bench.zsh" \
+  '2026-02-30T12:34:56Z' 2>&1); then
+    fail 'benchmark timestamp validator accepted an impossible calendar timestamp'
 fi
 assert_contains "$timestamp_output" 'real RFC 3339 UTC calendar timestamp'
-invalid_time_files=("$invalid_time_results"/*(N))
-(( ${#invalid_time_files} == 0 )) || fail 'invalid timestamp published or leaked result data'
 
 hardware_results="$temporary_root/hardware-mismatch-results"
 mkdir -p "$hardware_results"
 if hardware_output=$(env "${common_environment[@]}" BENCH_TEST_MEMORY_GB=2 \
-    METAL_LLM_RESULTS_DIR="$hardware_results" BENCH_TEST_NOW=2026-09-03T12:35:00Z \
+    METAL_LLM_RESULTS_DIR="$hardware_results" \
     "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
     fail 'benchmark assumed a hardware manifest that did not match the detected memory'
 fi
@@ -374,7 +390,7 @@ revision_results="$temporary_root/revision-override-results"
 mkdir -p "$revision_results"
 if revision_output=$(env "${common_environment[@]}" \
     METAL_LLM_REPOSITORY_REVISION=4444444444444444444444444444444444444444 \
-    METAL_LLM_RESULTS_DIR="$revision_results" BENCH_TEST_NOW=2026-09-03T12:35:01Z \
+    METAL_LLM_RESULTS_DIR="$revision_results" \
     "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
     fail 'benchmark accepted an arbitrary repository revision claim'
 fi
@@ -385,7 +401,7 @@ print -- '# dirty benchmark checkout' >> "$fixture_root/.gitignore"
 dirty_results="$temporary_root/dirty-repository-results"
 mkdir -p "$dirty_results"
 if dirty_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$dirty_results" \
-    BENCH_TEST_NOW=2026-09-03T12:35:02Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
+    "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
     mv "$fixture_root/.gitignore.saved" "$fixture_root/.gitignore"
     fail 'benchmark accepted a dirty repository checkout'
 fi
@@ -395,7 +411,7 @@ assert_contains "$dirty_output" 'benchmark repository checkout is not clean'
 unavailable_results="$temporary_root/unavailable-environment-results"
 mkdir -p "$unavailable_results"
 env "${common_environment[@]}" BENCH_TEST_XCRUN_UNAVAILABLE=1 BENCH_TEST_PMSET_UNAVAILABLE=1 \
-  METAL_LLM_RESULTS_DIR="$unavailable_results" BENCH_TEST_NOW=2026-09-03T12:35:03Z \
+  METAL_LLM_RESULTS_DIR="$unavailable_results" \
   "$fixture_cli" bench fixture-model --suite qwen3.8-smoke >/dev/null
 unavailable_files=("$unavailable_results"/*.json(N))
 (( ${#unavailable_files} == 1 )) || fail 'unavailable-environment benchmark did not publish exactly one result'
@@ -452,7 +468,7 @@ write_live_server_identity "$managed_identity_pid" vision true
 live_results="$temporary_root/live-conflict-results"
 mkdir -p "$live_results"
 if lease_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$live_results" \
-    BENCH_TEST_NOW=2026-09-03T12:34:57Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
+    "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
     kill "$managed_identity_pid" 2>/dev/null || true
     wait "$managed_identity_pid" 2>/dev/null || true
     fail 'local bench ran beside a live managed full-model process'
@@ -464,7 +480,7 @@ wait "$managed_identity_pid" 2>/dev/null || true
 stale_results="$temporary_root/stale-recovery-results"
 mkdir -p "$stale_results"
 env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$stale_results" \
-  BENCH_TEST_NOW=2026-09-03T12:34:58Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke >/dev/null
+  "$fixture_cli" bench fixture-model --suite qwen3.8-smoke >/dev/null
 [[ ! -e "$lease_dir" ]] || fail 'local bench did not release a recovered stale managed lease'
 
 if busy_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
@@ -548,7 +564,7 @@ fi
 negative_usage_results="$temporary_root/negative-usage-results"
 mkdir -p "$negative_usage_results"
 if negative_usage_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 FAKE_NEGATIVE_USAGE=1 \
-    METAL_LLM_RESULTS_DIR="$negative_usage_results" BENCH_TEST_NOW=2026-09-03T12:35:04Z \
+    METAL_LLM_RESULTS_DIR="$negative_usage_results" \
     "$fixture_cli" bench fixture-model --suite qwen3.8-smoke --mode endpoint 2>&1); then
     fail 'endpoint benchmark published a result with negative API usage counters'
 fi

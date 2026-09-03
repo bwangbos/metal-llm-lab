@@ -107,9 +107,11 @@ and tree, an exact detected chip/memory hardware-manifest match, the verified
 runtime revision/tree/manifest/receipt/executable, model manifest and artifact
 identities, suite and fixture checksums, and sanitized exact argument arrays.
 Runtime verification rejects hidden Git index flags and compares every tracked
-path's content and executable mode with the index; every call also verifies both
-`llama-server` and `llama-bench` as regular, non-symlink executables against the
-build receipt. Benchmark timestamps always come from the system UTC clock.
+path's raw, unfiltered bytes and executable mode with the index; every call also
+verifies both `llama-server` and `llama-bench` as regular, non-symlink
+executables against the build receipt. Benchmark timestamps always come from the
+trusted absolute system clock executable `/bin/date`; `PATH` and environment
+overrides cannot supply recorded time.
 OS, compiler, SDK, and power evidence is recorded from the host; unavailable
 values are explicit JSON `null`, never guessed. Hardware and repository identity
 overrides are rejected. The imported initial case-study result predates this
