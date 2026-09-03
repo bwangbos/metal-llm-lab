@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Lightweight repository validation
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run repository checks
+        run: zsh tests/run.sh
+
+      - name: Install ShellCheck
+        run: brew install shellcheck
+
+      # ShellCheck does not support Zsh. The Zsh sources are syntax-checked by
+      # tests/run.sh; this checks the tracked POSIX bootstrap entry point.
+      - name: ShellCheck POSIX shell sources
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          typeset -a shell_files
+          local_file=''
+          while IFS= read -r -d $'\0' local_file; do
+            [[ $(head -n 1 -- "$local_file") == '#!/bin/sh' ]] && shell_files+=("$local_file")
+          done < <(git ls-files -z -- ':(glob)**/*.sh' ':(glob)**/*.zsh' ':(glob)bin/**')
+          (( ${#shell_files[@]} > 0 ))
+          shellcheck -- "${shell_files[@]}"

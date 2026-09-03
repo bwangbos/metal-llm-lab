@@ -1,0 +1,61 @@
+name: Benchmark report
+description: Share reproducible performance, correctness, or memory evidence.
+title: "[Benchmark]: "
+labels:
+  - benchmark
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Include enough provenance for another Apple Silicon user to reproduce the result. Do not include tokens, credentials, usernames, or private absolute paths.
+  - type: input
+    id: model
+    attributes:
+      label: Model and artifact checksums
+      description: Model ID, quantization, and relevant artifact SHA-256 values.
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime revision and patch series
+      description: Runtime ID, exact revision/tree, and ordered patch set or checksum.
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware and software environment
+      description: Chip, unified memory, macOS, Xcode/compiler, power state, and concurrent workload.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command and profile
+      description: Include the command, profile, context, prompt/fixture identity, and generation settings.
+    validations:
+      required: true
+  - type: textarea
+    id: measurements
+    attributes:
+      label: Raw measurements
+      description: Include prompt/generation throughput, token counts, latency, memory readings, repeats, and anomalies.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized raw-result JSON or link
+      description: Attach or link the raw result after removing private paths and secrets.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy and provenance
+      options:
+        - label: I removed credentials, tokens, usernames, and private absolute paths.
+          required: true
+        - label: I recorded the provenance needed to reproduce this result.
+          required: true
