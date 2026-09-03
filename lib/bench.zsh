@@ -1,5 +1,5 @@
 metal_llm_bench_usage() {
-    metal_llm_error 'usage: metal-llm bench MODEL --suite SUITE [--dry-run]'
+    metal_llm_error 'usage: metal-llm bench MODEL --suite SUITE [--mode MODE] [--dry-run]'
     return 2
 }
 
@@ -8,10 +8,13 @@ metal_llm_validate_benchmark_suite() {
     local expected_id=$2
     jq -e --arg expected_id "$expected_id" '
       .schema_version == 1 and .id == $expected_id and
+      (.default_mode == "local" or .default_mode == "endpoint") and
       (.default_profile | type == "string" and test("^[a-z0-9]+([.-][a-z0-9]+)*$")) and
       (.cases | type == "array" and length > 0 and all(.[];
         (.id | type == "string" and test("^[a-z0-9]+([.-][a-z0-9]+)*$")) and
+        (.mode == "local" or .mode == "endpoint") and
         (.kind == "llama-bench" or .kind == "api" or .kind == "vision") and
+        (if .mode == "local" then .kind == "llama-bench" else (.kind == "api" or .kind == "vision") end) and
         (.notes | type == "string" and length > 0) and
         (if .kind == "llama-bench" then
           (.prompt_tokens | type == "number" and . >= 0 and floor == .) and
@@ -69,7 +72,7 @@ metal_llm_bench_port_is_owned() {
 }
 
 metal_llm_bench() {
-    local model_id='' suite_id='' dry_run=0 argument
+    local model_id='' suite_id='' mode='' dry_run=0 argument
     while (( $# > 0 )); do
         argument=$1
         shift
@@ -82,6 +85,12 @@ metal_llm_bench() {
                 (( $# > 0 )) || { metal_llm_bench_usage; return $?; }
                 [[ -z "$suite_id" ]] || { metal_llm_bench_usage; return $?; }
                 suite_id=$1
+                shift
+                ;;
+            --mode)
+                (( $# > 0 )) || { metal_llm_bench_usage; return $?; }
+                [[ -z "$mode" ]] || { metal_llm_bench_usage; return $?; }
+                mode=$1
                 shift
                 ;;
             -*) metal_llm_bench_usage; return $? ;;
@@ -109,6 +118,11 @@ metal_llm_bench() {
         metal_llm_die "invalid benchmark suite: $suite_file"
         return 1
     }
+    [[ -n "$mode" ]] || mode=$(jq -er '.default_mode' "$suite_file") || return 1
+    if ! jq -e --arg mode "$mode" 'any(.cases[]; .mode == $mode)' "$suite_file" >/dev/null; then
+        metal_llm_die "mode not found: $mode"
+        return 1
+    fi
 
     local profile_id=${METAL_LLM_PROFILE:-}
     [[ -n "$profile_id" ]] || profile_id=$(jq -er '.default_profile' "$suite_file") || return 1
@@ -138,14 +152,14 @@ metal_llm_bench() {
         metal_llm_die "invalid runtime manifest: $runtime_manifest"
         return 1
     }
-    local bench_executable
-    bench_executable=$(metal_llm_verified_bench_path "$runtime_id" "$runtime_manifest") || return 1
-
-    local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
-    local model_path mtp_path=''
-    model_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$model_artifact_id") || return 1
-    if [[ "$mtp_enabled" == true ]]; then
-        mtp_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$mtp_artifact_id") || return 1
+    local bench_executable='' model_path='' mtp_path=''
+    if [[ "$mode" == local ]]; then
+        bench_executable=$(metal_llm_verified_bench_path "$runtime_id" "$runtime_manifest") || return 1
+        local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
+        model_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$model_artifact_id") || return 1
+        if [[ "$mtp_enabled" == true ]]; then
+            mtp_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$mtp_artifact_id") || return 1
+        fi
     fi
 
     local hardware_id=${METAL_LLM_HARDWARE_ID:-}
@@ -170,9 +184,12 @@ metal_llm_bench() {
         metal_llm_die 'METAL_LLM_PORT must be an integer from 1 to 65535'
         return 1
     }
-    if (( dry_run == 0 )) && jq -e 'any(.cases[]; .kind == "llama-bench" and (.optional // false | not))' "$suite_file" >/dev/null; then
-        if metal_llm_bench_port_is_owned "$host" "$port"; then
+    if (( dry_run == 0 )); then
+        if [[ "$mode" == local ]] && metal_llm_bench_port_is_owned "$host" "$port"; then
             metal_llm_die "configured port is owned by a running lab server: $host:$port"
+            return 1
+        elif [[ "$mode" == endpoint ]] && ! metal_llm_bench_port_is_owned "$host" "$port"; then
+            metal_llm_die "endpoint mode requires a running endpoint: $host:$port"
             return 1
         fi
     fi
@@ -255,8 +272,8 @@ metal_llm_bench() {
                 timestamp: $timestamp, repository_revision: $repo,
                 hardware_id: $hardware, runtime_id: $runtime, runtime_revision: $runtime_revision,
                 profile: $profile, effective_prompt_tokens: $prompt, generated_tokens: $generated,
-                prompt_tokens_per_second: (if $prompt > 0 then $throughput else 0 end),
-                generation_tokens_per_second: (if $generated > 0 then $throughput else 0 end),
+                prompt_tokens_per_second: (if $prompt > 0 then $throughput else null end),
+                generation_tokens_per_second: (if $generated > 0 then $throughput else null end),
                 mtp: $mtp,
                 generation_settings: {temperature: 0, seed: 1234, max_tokens: $generated, reasoning: false, repetitions: $repetitions},
                 notes: $notes
@@ -285,7 +302,6 @@ metal_llm_bench() {
                     return 1
                 }
                 case "$fixture" in
-                    *.svg) image_mime='image/svg+xml' ;;
                     *.png) image_mime='image/png' ;;
                     *.jpg|*.jpeg) image_mime='image/jpeg' ;;
                     *)
@@ -326,8 +342,8 @@ metal_llm_bench() {
                 rm -f -- "$run_buffer"
                 return 1
             }
-            prompt_tokens=$(jq -er '.usage.prompt_tokens' <<< "$response") || prompt_tokens=0
-            generated_tokens=$(jq -er '.usage.completion_tokens' <<< "$response") || generated_tokens=0
+            prompt_tokens=$(jq -er '.usage.prompt_tokens' <<< "$response") || prompt_tokens=null
+            generated_tokens=$(jq -er '.usage.completion_tokens' <<< "$response") || generated_tokens=null
             jq -n \
               --arg id "$case_id" --arg timestamp "$now" --arg repo "$repository_revision" \
               --arg hardware "$hardware_id" --arg runtime "$runtime_id" --arg runtime_revision "$runtime_revision" \
@@ -340,14 +356,14 @@ metal_llm_bench() {
                 timestamp: $timestamp, repository_revision: $repo,
                 hardware_id: $hardware, runtime_id: $runtime, runtime_revision: $runtime_revision,
                 profile: $profile, effective_prompt_tokens: $prompt, generated_tokens: $generated,
-                prompt_tokens_per_second: 0, generation_tokens_per_second: 0,
+                prompt_tokens_per_second: null, generation_tokens_per_second: null,
                 mtp: $mtp, output_sha256: $sha,
                 generation_settings: {temperature: $temperature, seed: $seed, max_tokens: $max_tokens, reasoning: false},
                 notes: $notes
               }
             ' >> "$run_buffer" || { rm -f -- "$run_buffer"; return 1; }
         fi
-    done < <(jq -c '.cases[]' "$suite_file")
+    done < <(jq -c --arg mode "$mode" '.cases[] | select(.mode == $mode)' "$suite_file")
 
     (( dry_run == 1 )) && { rm -f -- "$run_buffer"; return; }
     [[ -s "$run_buffer" ]] || {
@@ -358,14 +374,14 @@ metal_llm_bench() {
     local results_dir=${METAL_LLM_RESULTS_DIR:-$METAL_LLM_ROOT/results/raw}
     mkdir -p "$results_dir"
     local compact_timestamp=${now//[-:]/}
-    local result_path="$results_dir/$compact_timestamp-$suite_id-$model_id.json"
+    local result_path="$results_dir/$compact_timestamp-$suite_id-$mode-$model_id.json"
     local result_part
     result_part=$(mktemp "$result_path.part.XXXXXX") || { rm -f -- "$run_buffer"; return 1; }
     if ! jq -s \
       --arg experiment_id "$compact_timestamp-$suite_id" --arg date "${now[1,10]}" \
-      --arg model "$model_id" --arg suite "$suite_id" '
+      --arg model "$model_id" --arg suite "$suite_id" --arg mode "$mode" '
       {schema_version: 1, experiment_id: ($experiment_id | ascii_downcase), date: $date,
-       model_id: $model, suite_id: $suite, runs: .}
+       model_id: $model, suite_id: $suite, benchmark_mode: $mode, runs: .}
     ' "$run_buffer" > "$result_part"; then
         rm -f -- "$run_buffer" "$result_part"
         return 1

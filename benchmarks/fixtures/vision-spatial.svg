@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
-  <rect width="320" height="180" fill="white"/>
-  <circle cx="80" cy="90" r="34" fill="#2563eb"/>
-  <rect x="210" y="56" width="68" height="68" fill="#f97316"/>
-  <text x="160" y="165" text-anchor="middle" font-family="sans-serif" font-size="16" fill="black">blue circle left of orange square</text>
-</svg>

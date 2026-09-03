@@ -11,6 +11,7 @@
     "date": { "type": "string", "format": "date" },
     "model_id": { "$ref": "#/$defs/id" },
     "suite_id": { "$ref": "#/$defs/id" },
+    "benchmark_mode": { "enum": ["local", "endpoint"] },
     "summary": {
       "type": "object",
       "additionalProperties": false,
@@ -69,16 +70,23 @@
         "measurement_kind": {
           "enum": ["single_run", "three_run_mean"]
         },
-        "timestamp": { "type": "string", "format": "date-time" },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
         "repository_revision": { "$ref": "#/$defs/git_sha" },
         "hardware_id": { "$ref": "#/$defs/id" },
         "runtime_id": { "$ref": "#/$defs/id" },
         "runtime_revision": { "$ref": "#/$defs/git_sha" },
-        "profile": { "$ref": "#/$defs/id" },
+        "profile": {
+          "type": ["string", "null"],
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+        },
         "effective_prompt_tokens": { "type": "integer", "minimum": 0 },
-        "generated_tokens": { "type": "integer", "minimum": 0 },
-        "prompt_tokens_per_second": { "type": "number", "minimum": 0 },
-        "generation_tokens_per_second": { "type": "number", "minimum": 0 },
+        "generated_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "prompt_tokens_per_second": { "type": ["number", "null"], "minimum": 0 },
+        "generation_tokens_per_second": { "type": ["number", "null"], "minimum": 0 },
         "prompt_tokens_per_second_display": { "type": "string", "pattern": "^[0-9]+(?:,[0-9]{3})*(?:\\.[0-9]+)?$" },
         "generation_tokens_per_second_display": { "type": "string", "pattern": "^[0-9]+(?:,[0-9]{3})*(?:\\.[0-9]+)?$" },
         "prompt_tokens_per_second_sd": { "type": "number", "minimum": 0 },
@@ -93,13 +101,15 @@
         "output_equivalence": { "enum": ["byte_identical", "diverged", "not_compared"] },
         "generation_settings": {
           "type": "object",
-          "additionalProperties": true,
+          "additionalProperties": false,
           "required": ["temperature", "seed", "max_tokens"],
           "properties": {
             "temperature": { "type": "number" },
             "seed": { "type": "integer" },
             "max_tokens": { "type": "integer", "minimum": 0 },
-            "reasoning": { "type": "boolean" }
+            "reasoning": { "type": "boolean" },
+            "repetitions": { "type": "integer", "minimum": 1 },
+            "draft_n_max": { "type": "integer", "minimum": 1 }
           }
         },
         "notes": { "type": "string", "minLength": 1 }

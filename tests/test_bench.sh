@@ -19,25 +19,33 @@ assert_contains() {
 
 [[ -f "$suite" ]] || fail 'missing benchmarks/suites/qwen3.8-smoke.json'
 jq -e '
-    .schema_version == 1 and .id == "qwen3.8-smoke" and
-    any(.cases[]; .kind == "llama-bench" and .prompt_tokens == 512) and
-    any(.cases[]; .kind == "llama-bench" and .generated_tokens == 128) and
-    any(.cases[]; .kind == "api" and .temperature == 0 and .seed == 1234) and
-    any(.cases[]; .kind == "vision" and .optional == true and (.fixture | type == "string"))
+    .schema_version == 1 and .id == "qwen3.8-smoke" and .default_mode == "local" and
+    all(.cases[] | select(.mode == "local"); .kind == "llama-bench") and
+    any(.cases[]; .mode == "local" and .kind == "llama-bench" and .prompt_tokens == 512) and
+    any(.cases[]; .mode == "local" and .kind == "llama-bench" and .generated_tokens == 128) and
+    all(.cases[] | select(.mode == "endpoint"); .kind == "api" or .kind == "vision") and
+    any(.cases[]; .mode == "endpoint" and .kind == "api" and .temperature == 0 and .seed == 1234) and
+    any(.cases[]; .mode == "endpoint" and .kind == "vision" and .optional == true and (.fixture | endswith(".png")))
 ' "$suite" >/dev/null
 vision_fixture=$(jq -r 'first(.cases[] | select(.kind == "vision") | .fixture)' "$suite")
 [[ -f "$source_root/$vision_fixture" ]] || fail "missing optional vision fixture: $vision_fixture"
+file "$source_root/$vision_fixture" | grep -Fq 'PNG image data' || fail 'vision fixture is not PNG'
+if strings "$source_root/$vision_fixture" | grep -Eiq 'blue|orange|circle|square|left|right'; then
+    fail 'vision fixture contains its expected answer as visible text metadata'
+fi
 
 temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-bench.XXXXXX")
 trap 'rm -rf -- "$temporary_root"' EXIT
 fixture_root="$temporary_root/repository"
 fake_bin="$temporary_root/bin"
 results_dir="$temporary_root/results"
-mkdir -p "$fixture_root"/{bin,lib,benchmarks/suites,manifests/models,manifests/runtimes,manifests/hardware,.lab/artifacts/fixture-model,.lab/runtimes/fixture-runtime/build-metal/bin} \
+mkdir -p "$fixture_root"/{bin,lib,benchmarks/suites,benchmarks/fixtures,manifests/models,manifests/runtimes,manifests/hardware,.lab/artifacts/fixture-model,.lab/runtimes/fixture-runtime/build-metal/bin} \
     "$fake_bin" "$results_dir"
 cp "$source_root/bin/metal-llm" "$fixture_root/bin/metal-llm"
 cp "$source_root/lib"/*.zsh "$fixture_root/lib/"
 chmod +x "$fixture_root/bin/metal-llm"
+cp "$suite" "$fixture_root/benchmarks/suites/qwen3.8-smoke.json"
+cp "$source_root/$vision_fixture" "$fixture_root/$vision_fixture"
 
 print -n -- 'fixture-model' > "$fixture_root/.lab/artifacts/fixture-model/model.gguf"
 model_bytes=$(wc -c < "$fixture_root/.lab/artifacts/fixture-model/model.gguf" | tr -d ' ')
@@ -70,14 +78,6 @@ $real_jq -n '{
   gpu_cores: 1, unified_memory_bytes: 1024, recommended_profile: "fast",
   tested: {date: "2026-09-03", operating_system: "macOS"}
 }' > "$fixture_root/manifests/hardware/fixture-hardware.json"
-
-$real_jq -n '{
-  schema_version: 1, id: "fixture-suite", default_profile: "fast",
-  cases: [
-    {id: "prompt-512", kind: "llama-bench", prompt_tokens: 512, generated_tokens: 0, repetitions: 1, notes: "fixture prompt processing"},
-    {id: "generation-128", kind: "llama-bench", prompt_tokens: 0, generated_tokens: 128, repetitions: 1, notes: "fixture generation"}
-  ]
-}' > "$fixture_root/benchmarks/suites/fixture-suite.json"
 
 fake_bench="$fixture_root/.lab/runtimes/fixture-runtime/build-metal/bin/llama-bench"
 print -r -- '#!/bin/zsh' > "$fake_bench"
@@ -122,20 +122,21 @@ common_environment=(
   FAKE_CURL_LOG="$temporary_root/curl.log"
 )
 
-dry_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model --suite fixture-suite --dry-run)
+dry_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model --suite qwen3.8-smoke --dry-run)
 assert_contains "$dry_output" 'llama-bench'
 assert_contains "$dry_output" '-p 512 -n 0'
 assert_contains "$dry_output" '-p 0 -n 128'
+[[ "$dry_output" != *'HTTP POST'* ]] || fail 'local mode included endpoint cases'
 dry_result_files=("$results_dir"/*(N))
 (( ${#dry_result_files} == 0 )) || fail 'bench --dry-run wrote a result file'
 
-run_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model --suite fixture-suite)
+run_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model --suite qwen3.8-smoke)
 assert_contains "$run_output" 'wrote benchmark result:'
 result_files=("$results_dir"/*.json(N))
 (( ${#result_files} == 1 )) || fail "expected one result, found ${#result_files}"
 result_file=$result_files[1]
 jq -e '
-  .model_id == "fixture-model" and .suite_id == "fixture-suite" and
+  .model_id == "fixture-model" and .suite_id == "qwen3.8-smoke" and .benchmark_mode == "local" and
   (.runs | length == 2) and
   (.runs[0].prompt_tokens_per_second == 987.25) and
   (.runs[1].generation_tokens_per_second == 44.5)
@@ -144,29 +145,46 @@ partial_files=("$results_dir"/*.part*(N))
 (( ${#partial_files} == 0 )) || fail 'bench left a partial result behind'
 assert_contains "$(<"$temporary_root/bench.log")" '-m'
 
-if busy_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 "$fixture_cli" bench fixture-model --suite fixture-suite 2>&1); then
+if busy_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
     fail 'bench ran beside an active lab server'
 fi
 assert_contains "$busy_output" 'configured port is owned by a running lab server'
 
-if injection_output=$(env "${common_environment[@]}" "$fixture_cli" bench 'fixture-model;touch-pwned' --suite fixture-suite 2>&1); then
+if injection_output=$(env "${common_environment[@]}" "$fixture_cli" bench 'fixture-model;touch-pwned' --suite qwen3.8-smoke 2>&1); then
     fail 'bench accepted an unsafe model ID'
 fi
 assert_contains "$injection_output" 'invalid model id'
 [[ ! -e "$temporary_root/pwned" ]] || fail 'bench evaluated a model argument'
 
-mkdir -p "$fixture_root/benchmarks/fixtures"
-print -r -- '<svg xmlns="http://www.w3.org/2000/svg"><circle cx="4" cy="4" r="2"/></svg>' \
-    > "$fixture_root/benchmarks/fixtures/vision.svg"
-$real_jq -n '{
-  schema_version: 1, id: "vision-suite", default_profile: "fast",
-  cases: [{
-    id: "vision", kind: "vision", fixture: "benchmarks/fixtures/vision.svg",
-    prompt: "Where is the circle?", max_tokens: 16, temperature: 0, seed: 1234,
-    notes: "fixture vision request"
-  }]
-}' > "$fixture_root/benchmarks/suites/vision-suite.json"
-env "${common_environment[@]}" "$fixture_cli" bench fixture-model --suite vision-suite >/dev/null
-assert_contains "$(<"$temporary_root/curl.log")" 'data:image/svg+xml;base64,'
+endpoint_results="$temporary_root/endpoint-results"
+mkdir -p "$endpoint_results"
+# Endpoint-only cases use the already loaded server and must not depend on a
+# standalone llama-bench executable being present locally.
+rm -f -- "$fake_bench"
+if inactive_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$endpoint_results" \
+    "$fixture_cli" bench fixture-model --suite qwen3.8-smoke --mode endpoint 2>&1); then
+    fail 'endpoint mode ran without an active endpoint'
+fi
+assert_contains "$inactive_output" 'endpoint mode requires a running endpoint'
+
+endpoint_dry=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
+    METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
+    --suite qwen3.8-smoke --mode endpoint --dry-run)
+assert_contains "$endpoint_dry" 'HTTP POST'
+[[ "$endpoint_dry" != *'llama-bench'* ]] || fail 'endpoint mode included local cases'
+
+env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
+    METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
+    --suite qwen3.8-smoke --mode endpoint >/dev/null
+endpoint_files=("$endpoint_results"/*.json(N))
+(( ${#endpoint_files} == 1 )) || fail "expected one endpoint result, found ${#endpoint_files}"
+jq -e '.benchmark_mode == "endpoint" and (.runs | length == 2)' "$endpoint_files[1]" >/dev/null
+assert_contains "$(<"$temporary_root/curl.log")" 'data:image/png;base64,'
+
+if mode_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+    --suite qwen3.8-smoke --mode mixed 2>&1); then
+    fail 'bench accepted an unknown suite mode'
+fi
+assert_contains "$mode_output" 'mode not found: mixed'
 
 print -- 'bench checks: PASS'

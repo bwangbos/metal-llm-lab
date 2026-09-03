@@ -37,7 +37,7 @@ cd metal-llm-lab
 ./bin/metal-llm doctor
 ./bin/metal-llm setup qwen3.8-flash-next
 ./bin/metal-llm serve qwen3.8-flash-next --profile auto
-./bin/metal-llm bench qwen3.8-flash-next --suite qwen3.8-smoke --dry-run
+./bin/metal-llm bench qwen3.8-flash-next --suite qwen3.8-smoke --mode local --dry-run
 ./bin/metal-llm report --check
 ```
 
@@ -72,10 +72,12 @@ server but omitted from dry-run output. Extra llama-server arguments may follow
 
 Only one managed server may run at a time. Stop the current process before
 switching profiles or running local `llama-bench`. `bench MODEL --suite SUITE`
-runs a versioned suite and atomically saves raw JSON; `--dry-run` prints the
-resolved microbenchmark/API actions without running them. Optional API and vision
-cases are retained as endpoint-only suite templates; do not run them beside the
-local microbenchmark cases, because that would require two full-model processes.
+runs a versioned suite and atomically saves raw JSON. The shipped suite defaults
+to `--mode local`, which runs only standalone `llama-bench` cases and refuses an
+active endpoint. `--mode endpoint` runs only API cases and requires an already
+running endpoint; set `METAL_LLM_INCLUDE_OPTIONAL=1` to include its PNG vision
+case. `--dry-run` prints only the selected mode's actions without running them.
+The modes are mutually exclusive so the harness never loads a second full model.
 `report` validates raw results and regenerates Markdown summaries; `report
 --check` detects drift without rewriting files and is appropriate for CI.
 

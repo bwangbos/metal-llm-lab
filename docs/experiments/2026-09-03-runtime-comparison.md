@@ -16,7 +16,9 @@ The raw record labels these rows `three_run_mean`. Sample standard deviations
 were not retained for this earlier comparison, so none are implied. The hybrid
 rows were captured later after Metal shader caches had warmed. Prompt processing
 is more sensitive than generation to cache and residency state; generation is
-the safer branch-comparison signal.
+the safer branch-comparison signal. Repository profile identifiers were added
+after these measurements, so the raw historical rows deliberately use `null`
+instead of assigning a later profile by inference.
 
 ## Result and interpretation
 

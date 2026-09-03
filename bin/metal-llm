@@ -19,7 +19,7 @@ metal_llm_help() {
     print -- '  metal-llm doctor'
     print -- '  metal-llm setup MODEL [--dry-run] [--yes]'
     print -- '  metal-llm serve MODEL --profile PROFILE [--dry-run] [-- EXTRA_LLAMA_ARGS]'
-    print -- '  metal-llm bench MODEL --suite SUITE [--dry-run]'
+    print -- '  metal-llm bench MODEL --suite SUITE [--mode MODE] [--dry-run]'
     print -- '  metal-llm report [--check]'
     print -- '  metal-llm help'
     print -- ''

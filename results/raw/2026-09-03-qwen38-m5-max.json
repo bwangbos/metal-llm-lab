@@ -21,7 +21,8 @@
     "model": "AtomicChat 4.27 bpw Q4",
     "projector": "F16 with 1,024 minimum image tokens",
     "mtp_sidecar": "Unsloth shared Q8",
-    "common_server_flags": [
+    "mtp_draft_n_max": 2,
+    "crossover_common_server_flags": [
       "-ngl",
       "all",
       "-c",
@@ -37,7 +38,7 @@
       "-np",
       "1"
     ],
-    "mtp_server_flags": [
+    "crossover_mtp_server_flags": [
       "-md",
       "mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
       "--spec-type",
@@ -47,6 +48,15 @@
       "-ngld",
       "all"
     ],
+    "matched_mtp_ab": {
+      "raw_prompt_tokens": 24,
+      "context_allocation_tokens": 32768,
+      "maximum_generated_tokens": 256,
+      "temperature": 0,
+      "seed": 1234,
+      "reasoning": false,
+      "prompt_cache_reuse": false
+    },
     "llama_bench_command": [
       "llama-bench",
       "-m",
@@ -85,10 +95,11 @@
     ],
     "routing_guidance": "Use MTP below 28K, prefer no-MTP at or above 30K, and favor no-MTP in the gray zone when repeatability matters.",
     "runtime_comparison_limit": "Prompt processing is sensitive to cache and residency state; use generation speed as the primary branch comparison.",
-    "retrieval_budget_note": "The approximately 96K retrieval ran at 23.80 tok/s with MTP enabled. A 96-token output budget clipped visible content after reasoning; a cached retry with 160 returned the full key.",
-    "crossover_note": "Measured crossover bracket: 32,844–33,868 effective prompt tokens. Linear interpolation gives approximately 33.6K, a workload-specific point estimate rather than a universal threshold. The rows are non-monotonic and outputs often diverged between routes.",
-    "corrected_long_context_note": "The no-MTP measurements at 99,405 effective tokens with an attached image (34.4737 tok/s) and at 98,338 text tokens with the projector resident (36.6619 tok/s) correct any implication that the earlier 23.80 tok/s retrieval number represented no-MTP performance.",
-    "output_behavior": "Many same-input greedy requests differed between MTP and no-MTP, and repeated requests within one mode occasionally differed despite temperature 0 and seed 1234. Only the 16,417-token calibration and the short matched A/B were byte-identical. A visible-string grammar was rejected as a compute-path control because identical bytes can use different BPE segmentations and completion-token counts.",
+    "retrieval_initial_output_budget_tokens": 96,
+    "retrieval_retry_output_budget_tokens": 160,
+    "crossover_limit": "This is a workload-specific point estimate rather than a universal threshold. The rows are non-monotonic and outputs often diverged between routes.",
+    "corrected_long_context_limit": "These no-MTP measurements correct any implication that the earlier MTP retrieval number represented no-MTP performance.",
+    "output_behavior": "Many same-input greedy requests differed between MTP and no-MTP, and repeated requests within one mode occasionally differed despite the recorded deterministic settings. Only rows explicitly marked byte-identical should be treated as such. A visible-string grammar was rejected as a compute-path control because identical bytes can use different BPE segmentations and completion-token counts.",
     "limitation": "These measurements characterize operational throughput on this workload and machine. Dynamic per-request MTP selection remains a documented direction, not an implemented feature."
   },
   "validations": [
@@ -137,7 +148,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -163,7 +174,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -189,7 +200,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -215,7 +226,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -241,7 +252,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -267,7 +278,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -293,7 +304,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -319,7 +330,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -345,7 +356,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -371,7 +382,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -397,7 +408,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -408,7 +419,7 @@
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 24,
       "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 51.09,
       "generation_tokens_per_second_display": "51.09",
       "mtp": false,
@@ -422,7 +433,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "fast",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -433,7 +444,7 @@
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 24,
       "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 76.88,
       "generation_tokens_per_second_display": "76.88",
       "mtp": true,
@@ -448,7 +459,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "long",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -458,9 +469,9 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 28088,
-      "generated_tokens": 0,
+      "generated_tokens": null,
       "prompt_tokens_per_second": 926.51,
-      "generation_tokens_per_second": 0,
+      "generation_tokens_per_second": null,
       "prompt_tokens_per_second_display": "926.51",
       "mtp": false,
       "notes": "Exact ORCHID-729184 retrieval; generated-token count and generation throughput were not retained"
@@ -472,7 +483,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -482,7 +493,7 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 96088,
-      "generated_tokens": 70,
+      "generated_tokens": null,
       "prompt_tokens_per_second": 809.07,
       "generation_tokens_per_second": 23.8,
       "prompt_tokens_per_second_display": "809.07",
@@ -498,7 +509,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -508,14 +519,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 1097,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 44.1598,
       "generation_tokens_per_second_display": "44.1598",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-1097-mtp",
@@ -524,7 +535,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -534,15 +545,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 1097,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 64.6917,
       "generation_tokens_per_second_display": "64.6917",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "160/189",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-5196-no-mtp",
@@ -551,7 +562,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -561,14 +572,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 5196,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 37.8846,
       "generation_tokens_per_second_display": "37.8846",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-5196-mtp",
@@ -577,7 +588,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -587,15 +598,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 5196,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 54.6147,
       "generation_tokens_per_second_display": "54.6147",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "162/186",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-9292-no-mtp",
@@ -604,7 +615,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -614,14 +625,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 9292,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 34.5551,
       "generation_tokens_per_second_display": "34.5551",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-9292-mtp",
@@ -630,7 +641,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -640,15 +651,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 9292,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 48.328,
       "generation_tokens_per_second_display": "48.3280",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "159/190",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-17484-no-mtp",
@@ -657,7 +668,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -667,14 +678,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 17484,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 35.9064,
       "generation_tokens_per_second_display": "35.9064",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-17484-mtp",
@@ -683,7 +694,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -693,15 +704,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 17484,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 45.2849,
       "generation_tokens_per_second_display": "45.2849",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "161/188",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-25676-no-mtp",
@@ -710,7 +721,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -720,14 +731,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 25676,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 35.6788,
       "generation_tokens_per_second_display": "35.6788",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-25676-mtp",
@@ -736,7 +747,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -746,15 +757,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 25676,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 40.058,
       "generation_tokens_per_second_display": "40.0580",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "163/184",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-29772-no-mtp",
@@ -763,7 +774,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -773,14 +784,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 29772,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 38.1485,
       "generation_tokens_per_second_display": "38.1485",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-29772-mtp",
@@ -789,7 +800,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -799,15 +810,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 29772,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 39.6194,
       "generation_tokens_per_second_display": "39.6194",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "162/184",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-30796-no-mtp",
@@ -816,7 +827,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -826,14 +837,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 30796,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 29.8666,
       "generation_tokens_per_second_display": "29.8666",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-30796-mtp",
@@ -842,7 +853,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -852,15 +863,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 30796,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 38.8863,
       "generation_tokens_per_second_display": "38.8863",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "162/186",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-31820-no-mtp",
@@ -869,7 +880,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -879,14 +890,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 31820,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 30.7268,
       "generation_tokens_per_second_display": "30.7268",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-31820-mtp",
@@ -895,7 +906,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -905,15 +916,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 31820,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 32.9093,
       "generation_tokens_per_second_display": "32.9093",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "159/190",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-32844-no-mtp",
@@ -922,7 +933,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -932,14 +943,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 32844,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 30.1183,
       "generation_tokens_per_second_display": "30.1183",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-32844-mtp",
@@ -948,7 +959,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -958,15 +969,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 32844,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 36.8054,
       "generation_tokens_per_second_display": "36.8054",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "161/188",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-33868-no-mtp",
@@ -975,7 +986,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -985,14 +996,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 33868,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 36.6638,
       "generation_tokens_per_second_display": "36.6638",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-33868-mtp",
@@ -1001,7 +1012,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1011,15 +1022,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 33868,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 34.3194,
       "generation_tokens_per_second_display": "34.3194",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "162/186",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-50253-no-mtp",
@@ -1028,7 +1039,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1038,14 +1049,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 50253,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 36.1154,
       "generation_tokens_per_second_display": "36.1154",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-50253-mtp",
@@ -1054,7 +1065,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1064,15 +1075,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 50253,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 30.2585,
       "generation_tokens_per_second_display": "30.2585",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "162/185",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-66637-no-mtp",
@@ -1081,7 +1092,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1091,14 +1102,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 66637,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 32.7542,
       "generation_tokens_per_second_display": "32.7542",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-66637-mtp",
@@ -1107,7 +1118,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1117,15 +1128,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 66637,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 24.1353,
       "generation_tokens_per_second_display": "24.1353",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "158/194",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-99405-no-mtp",
@@ -1134,7 +1145,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1144,14 +1155,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 99405,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 34.4737,
       "generation_tokens_per_second_display": "34.4737",
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "image-99405-mtp",
@@ -1160,7 +1171,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "vision",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1170,15 +1181,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 99405,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 21.2468,
       "generation_tokens_per_second_display": "21.2468",
       "vision": true,
       "mtp": true,
       "draft_acceptance": "160/188",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
     },
     {
       "id": "text-mean-28705-no-mtp",
@@ -1187,7 +1198,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1198,14 +1209,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 28705,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 40.755,
       "generation_tokens_per_second_display": "40.755",
       "generation_tokens_per_second_sd": 0.567,
       "vision": false,
       "mtp": false,
-      "notes": "F16 projector resident; text-only request; MTP disabled"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
     },
     {
       "id": "text-mean-28705-mtp",
@@ -1214,7 +1225,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1225,15 +1236,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 28705,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 41.279,
       "generation_tokens_per_second_display": "41.279",
       "generation_tokens_per_second_sd": 3.082,
+      "change_display": "+1.29%",
       "vision": false,
       "mtp": true,
-      "change_display": "+1.29%",
-      "notes": "F16 projector resident; text-only request; MTP enabled"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
     },
     {
       "id": "text-mean-29217-no-mtp",
@@ -1242,7 +1253,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1253,14 +1264,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 29217,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 40.952,
       "generation_tokens_per_second_display": "40.952",
       "generation_tokens_per_second_sd": 0.411,
       "vision": false,
       "mtp": false,
-      "notes": "F16 projector resident; text-only request; MTP disabled"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
     },
     {
       "id": "text-mean-29217-mtp",
@@ -1269,7 +1280,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1280,15 +1291,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 29217,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 37.571,
       "generation_tokens_per_second_display": "37.571",
       "generation_tokens_per_second_sd": 0.587,
+      "change_display": "-8.25%",
       "vision": false,
       "mtp": true,
-      "change_display": "-8.25%",
-      "notes": "F16 projector resident; text-only request; MTP enabled"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
     },
     {
       "id": "text-mean-29729-no-mtp",
@@ -1297,7 +1308,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1308,14 +1319,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 29729,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 39.681,
       "generation_tokens_per_second_display": "39.681",
       "generation_tokens_per_second_sd": 0.842,
       "vision": false,
       "mtp": false,
-      "notes": "F16 projector resident; text-only request; MTP disabled"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
     },
     {
       "id": "text-mean-29729-mtp",
@@ -1324,7 +1335,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1335,15 +1346,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 29729,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 39.518,
       "generation_tokens_per_second_display": "39.518",
       "generation_tokens_per_second_sd": 0.873,
+      "change_display": "-0.41%",
       "vision": false,
       "mtp": true,
-      "change_display": "-0.41%",
-      "notes": "F16 projector resident; text-only request; MTP enabled"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
     },
     {
       "id": "text-mean-30241-no-mtp",
@@ -1352,7 +1363,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1363,14 +1374,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 30241,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 39.355,
       "generation_tokens_per_second_display": "39.355",
       "generation_tokens_per_second_sd": 0.253,
       "vision": false,
       "mtp": false,
-      "notes": "F16 projector resident; text-only request; MTP disabled"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
     },
     {
       "id": "text-mean-30241-mtp",
@@ -1379,7 +1390,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1390,16 +1401,16 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 30241,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 38.246,
       "generation_tokens_per_second_display": "38.246",
       "generation_tokens_per_second_sd": 0.200,
       "generation_tokens_per_second_sd_display": "0.200",
+      "change_display": "-2.82%",
       "vision": false,
       "mtp": true,
-      "change_display": "-2.82%",
-      "notes": "F16 projector resident; text-only request; MTP enabled"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
     },
     {
       "id": "text-mean-30753-no-mtp",
@@ -1408,7 +1419,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1419,14 +1430,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 30753,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 39.547,
       "generation_tokens_per_second_display": "39.547",
       "generation_tokens_per_second_sd": 0.034,
       "vision": false,
       "mtp": false,
-      "notes": "F16 projector resident; text-only request; MTP disabled"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
     },
     {
       "id": "text-mean-30753-mtp",
@@ -1435,7 +1446,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1446,15 +1457,15 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 30753,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 38.136,
       "generation_tokens_per_second_display": "38.136",
       "generation_tokens_per_second_sd": 0.983,
+      "change_display": "-3.57%",
       "vision": false,
       "mtp": true,
-      "change_display": "-3.57%",
-      "notes": "F16 projector resident; text-only request; MTP enabled"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-30-no-mtp",
@@ -1463,7 +1474,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1473,14 +1484,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 30,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 44.84,
       "generation_tokens_per_second_display": "44.8400",
       "vision": false,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP disabled"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-30-mtp",
@@ -1489,7 +1500,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1499,14 +1510,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 30,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 72.2581,
       "generation_tokens_per_second_display": "72.2581",
       "vision": false,
       "mtp": true,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP enabled"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-16417-no-mtp",
@@ -1515,7 +1526,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1525,14 +1536,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 16417,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 41.9763,
       "generation_tokens_per_second_display": "41.9763",
       "vision": false,
       "mtp": false,
       "output_equivalence": "byte_identical",
-      "notes": "F16 projector resident; text-only request; MTP disabled"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-16417-mtp",
@@ -1541,7 +1552,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1551,14 +1562,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 16417,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 46.731,
       "generation_tokens_per_second_display": "46.7310",
       "vision": false,
       "mtp": true,
       "output_equivalence": "byte_identical",
-      "notes": "F16 projector resident; text-only request; MTP enabled"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-24609-no-mtp",
@@ -1567,7 +1578,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1577,14 +1588,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 24609,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 40.262,
       "generation_tokens_per_second_display": "40.2620",
       "vision": false,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP disabled"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-24609-mtp",
@@ -1593,7 +1604,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1603,14 +1614,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 24609,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 41.3607,
       "generation_tokens_per_second_display": "41.3607",
       "vision": false,
       "mtp": true,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP enabled"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-32801-no-mtp",
@@ -1619,7 +1630,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1629,14 +1640,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 32801,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 37.4413,
       "generation_tokens_per_second_display": "37.4413",
       "vision": false,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP disabled"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-32801-mtp",
@@ -1645,7 +1656,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1655,14 +1666,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 32801,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 36.5331,
       "generation_tokens_per_second_display": "36.5331",
       "vision": false,
       "mtp": true,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP enabled"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-49186-no-mtp",
@@ -1671,7 +1682,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1681,14 +1692,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 49186,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 38.8234,
       "generation_tokens_per_second_display": "38.8234",
       "vision": false,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP disabled"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-49186-mtp",
@@ -1697,7 +1708,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1707,14 +1718,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 49186,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 34.8063,
       "generation_tokens_per_second_display": "34.8063",
       "vision": false,
       "mtp": true,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP enabled"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-98338-no-mtp",
@@ -1723,7 +1734,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1733,14 +1744,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 98338,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 36.6619,
       "generation_tokens_per_second_display": "36.6619",
       "vision": false,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP disabled"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
     },
     {
       "id": "text-single-98338-mtp",
@@ -1749,7 +1760,7 @@
       "timestamp": "2026-09-03T00:00:00Z",
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
-      "profile": "research",
+      "profile": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1759,14 +1770,14 @@
       "runtime_id": "llama-cpp-qwen38-hybrid",
       "runtime_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
       "effective_prompt_tokens": 98338,
-      "generated_tokens": 256,
-      "prompt_tokens_per_second": 0,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
       "generation_tokens_per_second": 24.8822,
       "generation_tokens_per_second_display": "24.8822",
       "vision": false,
       "mtp": true,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP enabled"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
     }
   ]
 }

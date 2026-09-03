@@ -1,10 +1,12 @@
 {
   "schema_version": 1,
   "id": "qwen3.8-smoke",
+  "default_mode": "local",
   "default_profile": "fast",
   "cases": [
     {
       "id": "prompt-512",
+      "mode": "local",
       "kind": "llama-bench",
       "prompt_tokens": 512,
       "generated_tokens": 0,
@@ -13,6 +15,7 @@
     },
     {
       "id": "generation-128",
+      "mode": "local",
       "kind": "llama-bench",
       "prompt_tokens": 0,
       "generated_tokens": 128,
@@ -21,19 +24,20 @@
     },
     {
       "id": "deterministic-api-smoke",
+      "mode": "endpoint",
       "kind": "api",
-      "optional": true,
       "prompt": "Reply with exactly: METAL-LLM-SMOKE",
       "max_tokens": 32,
       "temperature": 0,
       "seed": 1234,
-      "notes": "Optional deterministic OpenAI-compatible API check"
+      "notes": "Deterministic OpenAI-compatible API check against an already running endpoint"
     },
     {
       "id": "vision-spatial-smoke",
+      "mode": "endpoint",
       "kind": "vision",
       "optional": true,
-      "fixture": "benchmarks/fixtures/vision-spatial.svg",
+      "fixture": "benchmarks/fixtures/vision-spatial.png",
       "prompt": "Describe the relative positions of the shapes in one sentence.",
       "max_tokens": 64,
       "temperature": 0,

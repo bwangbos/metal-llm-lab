@@ -16,7 +16,10 @@ for both tables in the
 [generated summary](../../results/summaries/qwen3.8-flash-next-m5-max.md).
 Attached-image rows are single runs. The five text-only boundary rows are
 three-run means with sample standard deviations. Other text-only calibration
-rows are single runs.
+rows are single runs. These historical rows retained the 256-token output cap,
+but not the actual generated-token counts, so the raw result records those
+counts as `null` rather than presenting the cap as a measurement. Repository
+profile identifiers also postdate this capture and are therefore `null`.
 
 ## Findings
 

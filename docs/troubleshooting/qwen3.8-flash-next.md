@@ -5,7 +5,9 @@
 Stop every other full-model process, then retry. This failure was reproduced
 when `llama-bench` ran beside an active server and disappeared after the server
 stopped. One loaded target is the supported configuration. `metal-llm bench`
-checks the configured lab port before starting a local microbenchmark.
+checks the configured lab port before starting `--mode local`. Use `--mode
+endpoint` for API checks against the already running server; the modes never run
+together.
 
 ## Structured JSON is empty or clipped
 
