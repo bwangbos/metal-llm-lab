@@ -8,6 +8,7 @@ export METAL_LLM_ROOT
 source "$METAL_LLM_ROOT/lib/common.zsh"
 source "$METAL_LLM_ROOT/lib/doctor.zsh"
 source "$METAL_LLM_ROOT/lib/setup.zsh"
+source "$METAL_LLM_ROOT/lib/serve.zsh"
 
 metal_llm_help() {
     print -- 'usage: metal-llm COMMAND [ARGUMENTS]'
@@ -15,13 +16,18 @@ metal_llm_help() {
     print -- 'commands:'
     print -- '  metal-llm doctor'
     print -- '  metal-llm setup MODEL [--dry-run] [--yes]'
-    print -- '  metal-llm serve MODEL --profile PROFILE'
+    print -- '  metal-llm serve MODEL --profile PROFILE [--dry-run] [-- EXTRA_LLAMA_ARGS]'
     print -- '  metal-llm bench MODEL --suite SUITE'
     print -- '  metal-llm report'
     print -- '  metal-llm help'
     print -- ''
     print -- 'environment:'
     print -- '  METAL_LLM_BUILD_RESERVE_BYTES  build-space reserve for setup (default: 5368709120)'
+    print -- '  METAL_LLM_HOST                 server bind address (default: 127.0.0.1)'
+    print -- '  METAL_LLM_PORT                 server port (default: 8080)'
+    print -- '  METAL_LLM_PARALLEL             request slots (default: 1)'
+    print -- '  METAL_LLM_CONTEXT              override profile context size'
+    print -- '  METAL_LLM_API_KEY              optional server API key (never logged)'
 }
 
 command_name=${1:-help}
@@ -34,7 +40,8 @@ case "$command_name" in
         ;;
     doctor) metal_llm_doctor "$@" ;;
     setup) metal_llm_setup "$@" ;;
-    serve|bench|report)
+    serve) metal_llm_serve "$@" ;;
+    bench|report)
         metal_llm_error "command not implemented yet: $command_name"
         exit 2
         ;;

@@ -28,19 +28,48 @@ pinned upstream revisions and labeled experimental in benchmarks and
 comparisons. Dynamic per-request MTP selection is future work. It is not part
 of this foundation milestone and has no implemented or tested patch here.
 
-## Quick start (coming with the harness)
+## Quick start
 
 ```sh
 git clone https://github.com/bwangbos/metal-llm-lab.git
 cd metal-llm-lab
 ./scripts/bootstrap-macos.sh
+./bin/metal-llm doctor
 ./bin/metal-llm setup qwen3.8-flash-next
 ./bin/metal-llm serve qwen3.8-flash-next --profile auto
 ```
 
-The future command interface also includes `doctor`, `bench MODEL --suite
-SUITE`, and `report`. Until implemented, this shell records the intended public
-interface rather than promising a completed installation.
+Setup downloads approximately **100 GB**, checks every artifact checksum, and
+builds the pinned runtime locally. Its duration depends on network speed,
+machine load, and compiler performance; no fixed completion time is guaranteed.
+The server listens only on `127.0.0.1:8080` by default. Once it is ready, test
+its OpenAI-compatible API from another terminal:
+
+```sh
+curl http://127.0.0.1:8080/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"qwen3.8-flash-next","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+Choose a profile explicitly or use `auto`, which selects the detected hardware
+manifest's recommendation:
+
+| Profile | Context | Vision | MTP | Runtime |
+| --- | ---: | --- | --- | --- |
+| `fast` | 32,768 | No | Yes | Experimental hybrid |
+| `vision` | 32,768 | Yes | Yes | Experimental hybrid |
+| `long` | 131,072 | No | No | Experimental hybrid |
+| `stable` | 32,768 | No | No | Pinned upstream stable |
+
+`METAL_LLM_HOST`, `METAL_LLM_PORT`, `METAL_LLM_PARALLEL`, and
+`METAL_LLM_CONTEXT` override the bind address, port, request slots, and context
+size. Set `METAL_LLM_API_KEY` to require an API key; its value is passed to the
+server but omitted from dry-run output. Extra llama-server arguments may follow
+`--`, for example `-- --threads 8`.
+
+Only one managed server may run at a time. Stop the current process before
+switching profiles. The remaining planned command interface includes `bench
+MODEL --suite SUITE` and `report`.
 
 ## Reproducible work
 

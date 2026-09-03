@@ -24,7 +24,8 @@ fake_bin="$temporary_root/bin"
 source_artifact="$temporary_root/tiny-model.gguf"
 mkdir -p "$fixture_root"/{bin,lib,scripts,manifests/models,manifests/runtimes} "$fake_bin"
 cp "$source_root/bin/metal-llm" "$fixture_root/bin/metal-llm"
-cp "$source_root/lib/common.zsh" "$source_root/lib/setup.zsh" "$source_root/lib/doctor.zsh" "$fixture_root/lib/"
+cp "$source_root/lib/common.zsh" "$source_root/lib/setup.zsh" "$source_root/lib/doctor.zsh" \
+    "$source_root/lib/serve.zsh" "$fixture_root/lib/"
 print -n -- 'tiny model artifact for setup tests' > "$source_artifact"
 artifact_bytes=$(wc -c < "$source_artifact" | tr -d ' ')
 artifact_sha=$($real_shasum -a 256 "$source_artifact" | awk '{print $1}')

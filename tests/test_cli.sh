@@ -32,7 +32,15 @@ fi
 (( unknown_status == 2 )) || fail "unknown command exited $unknown_status, expected 2"
 assert_contains "$unknown_output" 'unknown command: definitely-not-a-command'
 
-for reserved_command in serve bench report; do
+if serve_output=$("$cli" serve 2>&1); then
+    fail 'serve without arguments succeeded'
+else
+    serve_status=$?
+fi
+(( serve_status == 2 )) || fail "serve without arguments exited $serve_status, expected 2"
+assert_contains "$serve_output" 'usage: metal-llm serve MODEL --profile PROFILE'
+
+for reserved_command in bench report; do
     if reserved_output=$("$cli" "$reserved_command" 2>&1); then
         fail "reserved command succeeded: $reserved_command"
     else
