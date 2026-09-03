@@ -45,18 +45,27 @@ check_tracked_file_sizes() {
 
 check_secrets() {
     local token_pattern
-    local matches
-    local scan_rc
-    token_pattern='(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})'
+    local tracked_file scan_rc
+    token_pattern='(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|hf_[A-Za-z0-9]{20,}|sk-((proj-)?)[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})'
 
-    if matches=$(git -C "$root" grep -nEI -- "$token_pattern"); then
-        print -u2 -- 'secret-like token found in tracked files:'
-        print -u2 -- "$matches"
-        return 1
-    else
-        scan_rc=$?
-    fi
-    (( scan_rc == 1 )) || return "$scan_rc"
+    while IFS= read -r -d $'\0' tracked_file; do
+        if grep -aEq -- "$token_pattern" "$root/$tracked_file"; then
+            print -u2 -- "secret-like token found in tracked file: $tracked_file"
+            return 1
+        else
+            scan_rc=$?
+        fi
+        (( scan_rc == 1 )) || return "$scan_rc"
+    done < <(git -C "$root" ls-files -z)
+}
+
+if (( $# == 1 )) && [[ "$1" == --check-secrets ]]; then
+    check_secrets
+    exit $?
+fi
+(( $# == 0 )) || {
+    print -u2 -- 'usage: tests/run.sh [--check-secrets]'
+    exit 2
 }
 
 run_tracked_tests
