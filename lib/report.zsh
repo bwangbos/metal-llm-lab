@@ -114,7 +114,7 @@ metal_llm_generate_summary() {
         else ((. / 1000) | tostring) + "K" end;
       def percent_change($base; $new):
         (((($new / $base - 1) * 1000) | round) / 10) as $percent |
-        (if $percent >= 0 then "+" else "" end) + ($percent | tostring) + "%";
+        (if $percent > 0 then "+" else "" end) + ($percent | tostring) + "%";
       def table($rows): $rows | join("\n");
       . as $root |
       ([.runs[] | select(.id == "matched-no-mtp")][0]) as $matched_off |
@@ -149,7 +149,15 @@ metal_llm_generate_summary() {
         "| " + (if .mtp then "MTP on, max " + ($root.configuration.mtp_draft_n_max | tostring) + " draft tokens" else "MTP off" end) + " | " + shown("generation_tokens_per_second"; "generation_tokens_per_second_display") + " | " + (.draft_acceptance // "n/a") + " | " + (if .output_equivalence == "byte_identical" then "Byte-identical" else .output_equivalence end) + " |"] ) +
       [
         "",
-        "The recorded matched run improved from " + ($matched_off | shown("generation_tokens_per_second"; "generation_tokens_per_second_display")) + " to " + ($matched_on | shown("generation_tokens_per_second"; "generation_tokens_per_second_display")) + " tok/s (" + percent_change($matched_off.generation_tokens_per_second; $matched_on.generation_tokens_per_second) + ")" +
+        "The recorded matched run " +
+          (if $matched_on.generation_tokens_per_second > $matched_off.generation_tokens_per_second then
+             "improved from " + ($matched_off | shown("generation_tokens_per_second"; "generation_tokens_per_second_display")) + " to " + ($matched_on | shown("generation_tokens_per_second"; "generation_tokens_per_second_display"))
+           elif $matched_on.generation_tokens_per_second < $matched_off.generation_tokens_per_second then
+             "declined from " + ($matched_off | shown("generation_tokens_per_second"; "generation_tokens_per_second_display")) + " to " + ($matched_on | shown("generation_tokens_per_second"; "generation_tokens_per_second_display"))
+           else
+             "was unchanged at " + ($matched_on | shown("generation_tokens_per_second"; "generation_tokens_per_second_display"))
+           end) +
+          " tok/s (" + percent_change($matched_off.generation_tokens_per_second; $matched_on.generation_tokens_per_second) + ")" +
           (if $matched_on.output_equivalence == "byte_identical" then " and produced byte-identical output."
            elif $matched_on.output_equivalence == "diverged" then " and the outputs diverged."
            else " and output equivalence was not compared." end) +
@@ -236,7 +244,7 @@ metal_llm_generate_generic_summary() {
         "| --- | --- | ---: | ---: | ---: | ---: |"
       ] +
       [.runs[] |
-        "| " + .id + " | " + .experiment + " | " + (.effective_prompt_tokens | comma) +
+        "| " + .id + " | " + .experiment + " | " + (if .effective_prompt_tokens == null then "n/a" else (.effective_prompt_tokens | comma) end) +
         " | " + (if .generated_tokens == null then "n/a" else (.generated_tokens | comma) end) + " | " +
         shown("prompt_tokens_per_second"; "prompt_tokens_per_second_display") + " | " +
         shown("generation_tokens_per_second"; "generation_tokens_per_second_display") + " |"

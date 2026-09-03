@@ -39,10 +39,11 @@ trap 'rm -rf -- "$temporary_root"' EXIT
 fixture_root="$temporary_root/repository"
 fake_bin="$temporary_root/bin"
 results_dir="$temporary_root/results"
-mkdir -p "$fixture_root"/{bin,lib,benchmarks/suites,benchmarks/fixtures,manifests/models,manifests/runtimes,manifests/hardware,.lab/artifacts/fixture-model,.lab/runtimes/fixture-runtime/build-metal/bin} \
+mkdir -p "$fixture_root"/{bin,lib,schemas,results/raw,benchmarks/suites,benchmarks/fixtures,manifests/models,manifests/runtimes,manifests/hardware,.lab/artifacts/fixture-model,.lab/runtimes/fixture-runtime/build-metal/bin} \
     "$fake_bin" "$results_dir"
 cp "$source_root/bin/metal-llm" "$fixture_root/bin/metal-llm"
 cp "$source_root/lib"/*.zsh "$fixture_root/lib/"
+cp "$source_root/schemas/result.schema.json" "$fixture_root/schemas/result.schema.json"
 chmod +x "$fixture_root/bin/metal-llm"
 cp "$suite" "$fixture_root/benchmarks/suites/qwen3.8-smoke.json"
 cp "$source_root/$vision_fixture" "$fixture_root/$vision_fixture"
@@ -108,7 +109,11 @@ print -r -- 'if [[ "$*" == *"/health"* ]]; then' >> "$fake_bin/curl"
 print -r -- '  [[ "${FAKE_SERVER_ACTIVE:-0}" == 1 ]] && { print '\''{"status":"ok"}'\''; exit 0; }' >> "$fake_bin/curl"
 print -r -- '  exit 22' >> "$fake_bin/curl"
 print -r -- 'fi' >> "$fake_bin/curl"
-print -r -- 'print '\''{"choices":[{"message":{"content":"fixture response"}}],"usage":{"prompt_tokens":3,"completion_tokens":2}}'\''' >> "$fake_bin/curl"
+print -r -- 'if [[ "${FAKE_OMIT_USAGE:-0}" == 1 ]]; then' >> "$fake_bin/curl"
+print -r -- '  print '\''{"choices":[{"message":{"content":"fixture response"}}]}'\''' >> "$fake_bin/curl"
+print -r -- 'else' >> "$fake_bin/curl"
+print -r -- '  print '\''{"choices":[{"message":{"content":"fixture response"}}],"usage":{"prompt_tokens":3,"completion_tokens":2}}'\''' >> "$fake_bin/curl"
+print -r -- 'fi' >> "$fake_bin/curl"
 chmod +x "$fake_bin/curl"
 
 fixture_cli="$fixture_root/bin/metal-llm"
@@ -173,13 +178,22 @@ endpoint_dry=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INC
 assert_contains "$endpoint_dry" 'HTTP POST'
 [[ "$endpoint_dry" != *'llama-bench'* ]] || fail 'endpoint mode included local cases'
 
-env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
+env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 FAKE_OMIT_USAGE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
     METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
     --suite qwen3.8-smoke --mode endpoint >/dev/null
 endpoint_files=("$endpoint_results"/*.json(N))
 (( ${#endpoint_files} == 1 )) || fail "expected one endpoint result, found ${#endpoint_files}"
-jq -e '.benchmark_mode == "endpoint" and (.runs | length == 2)' "$endpoint_files[1]" >/dev/null
+jq -e '
+  .benchmark_mode == "endpoint" and (.runs | length == 2) and
+  all(.runs[];
+    .effective_prompt_tokens == null and .generated_tokens == null and
+    .prompt_tokens_per_second == null and .generation_tokens_per_second == null)
+' "$endpoint_files[1]" >/dev/null
 assert_contains "$(<"$temporary_root/curl.log")" 'data:image/png;base64,'
+cp "$endpoint_files[1]" "$fixture_root/results/raw/endpoint.json"
+endpoint_report=$(env "${common_environment[@]}" "$fixture_cli" report)
+assert_contains "$endpoint_report" '| deterministic-api-smoke | suite-run | n/a | n/a | n/a | n/a |'
+assert_contains "$endpoint_report" '| vision-spatial-smoke | suite-run | n/a | n/a | n/a | n/a |'
 
 if mode_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
     --suite qwen3.8-smoke --mode mixed 2>&1); then

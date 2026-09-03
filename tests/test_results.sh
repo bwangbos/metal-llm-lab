@@ -181,6 +181,7 @@ jq '
 mutation_output=$($fixture_cli report)
 assert_contains "$mutation_output" '2026-09-04'
 assert_contains "$mutation_output" '+100%'
+assert_contains "$mutation_output" 'improved from 51.09 to 102.18 tok/s (+100%)'
 assert_contains "$mutation_output" 'and the outputs diverged.'
 assert_contains "$mutation_output" '31,000–32,000 effective tokens'
 assert_contains "$mutation_output" '35.1234 tok/s'
@@ -189,5 +190,19 @@ if mutation_check=$($fixture_cli report --check 2>&1); then
     fail 'report --check accepted a summary after raw source values changed'
 fi
 assert_contains "$mutation_check" 'summary differs from generated output'
+
+jq '
+  (.runs[] | select(.id == "matched-mtp") | .generation_tokens_per_second) = 25.545 |
+  (.runs[] | select(.id == "matched-mtp") | .generation_tokens_per_second_display) = "25.545"
+' "$raw_result" > "$fixture_root/results/raw/result.json"
+negative_output=$($fixture_cli report)
+assert_contains "$negative_output" 'declined from 51.09 to 25.545 tok/s (-50%)'
+
+jq '
+  (.runs[] | select(.id == "matched-mtp") | .generation_tokens_per_second) = 51.09 |
+  (.runs[] | select(.id == "matched-mtp") | .generation_tokens_per_second_display) = "51.09"
+' "$raw_result" > "$fixture_root/results/raw/result.json"
+equal_output=$($fixture_cli report)
+assert_contains "$equal_output" 'was unchanged at 51.09 tok/s (0%)'
 
 print -- 'result checks: PASS'
