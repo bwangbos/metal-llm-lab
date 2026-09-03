@@ -10,18 +10,23 @@ checked-out runtimes.
 
 | Area | Current status |
 | --- | --- |
-| Apple Silicon | Initial target: Apple M5 Max with 128 GB unified memory |
+| Platform | macOS on Apple Silicon only; initial target: Apple M5 Max with 128 GB unified memory |
 | Model | Initial case study: Qwen3.8-Flash-Next |
 | Runtimes | Pinned upstream revisions plus versioned local patch series |
 | Other systems and models | Reusable design; not yet tested |
+
+Supported platforms: macOS on Apple Silicon only. Non-macOS and
+non-Apple-Silicon environments are unsupported; commands must fail with clear,
+actionable diagnostics.
 
 The Qwen artifact download requires approximately **100 GB** of available
 storage, in addition to space for source checkouts and build outputs. Confirm
 the artifact source, license, destination, size, and checksum before download.
 
-Experimental runtime patches, including dynamic per-request MTP selection, are
-tested patches against pinned upstream revisions. They are not upstream-stable
-support and must be labeled experimental in benchmarks and comparisons.
+Experimental runtime patches will be maintained as versioned patches against
+pinned upstream revisions and labeled experimental in benchmarks and
+comparisons. Dynamic per-request MTP selection is future work. It is not part
+of this foundation milestone and has no implemented or tested patch here.
 
 ## Quick start (coming with the harness)
 
