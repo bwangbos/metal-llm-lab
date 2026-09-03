@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "llama-cpp-qwen38-hybrid",
+  "repository": "https://github.com/ggml-org/llama.cpp.git",
+  "base_revision": "7798007a29a90e3053e799394da48cf53a2f8e0f",
+  "patches": [
+    { "revision": "67d777b61c1169d9f7a8cf00f4abc1e731e6fa75", "file": "0001-metal-optimize-qwen4-exp-inference.patch" },
+    { "revision": "3e7bb3cce8b0e75be395bde5d0486ca66edf7cc4", "file": "0002-gguf-py-register-qwen4exp-nextn-tensors.patch" },
+    { "revision": "4dd392360d1b4aa52bed0f2e6f4a4e54c373f5ca", "file": "0003-model-add-qwen4exp-nextn-mtp-draft-head.patch" },
+    { "revision": "e8a368fac1c5f8f0b59db5092946e4977308f7a6", "file": "0004-convert-export-qwen4exp-nextn-mtp-draft-head.patch" },
+    { "revision": "86adb73f1bc78ac76a137734b660e354a73d589e", "file": "0005-ggml-cuda-key-cuda-graph-cache-by-shape.patch" },
+    { "revision": "6cce65a486b5d86992c84f81e3b2730f9f8d4adb", "file": "0006-llama-let-mtp-draft-borrow-target-embeddings-lm-head.patch" },
+    { "revision": "f36b6108cdde4685f7ce5d0caa086c352ccbf4a5", "file": "0007-qwen4exp-allow-loading-draft-only-mtp-export.patch" },
+    { "revision": "e3fe25cb0cf2ac62c70e4e87bb7e5721c47deb74", "file": "0008-qwen4exp-mtp-trim-comments.patch" },
+    { "revision": "811160ef1a6ca6362c78e74797a946b05590f1b6", "file": "0009-convert-declare-mtp-shared-embd-on-qwen-mtp-mixin.patch" },
+    { "revision": "a38a256463cf2454dac1954bf129850cf767723c", "file": "0010-ggml-cuda-guard-graph-key-against-empty-graph.patch" },
+    { "revision": "f9aa445300b8fcf12cec0834ab6b39b1be3f19a0", "file": "0011-qwen4exp-reject-draft-only-export-without-target.patch" },
+    { "revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528", "file": "0012-qwen4exp-expose-optimized-graph-helpers-to-mtp.patch" }
+  ],
+  "tested_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
+  "tested_tree_sha": "50ea300c34ee161a7008ca5d7b3cef8e2a77360b",
+  "build": {
+    "generator": "Ninja",
+    "build_type": "Release",
+    "architecture": "arm64",
+    "cmake_options": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_OSX_ARCHITECTURES": "arm64",
+      "GGML_NATIVE": "ON",
+      "GGML_METAL": "ON",
+      "GGML_ACCELERATE": "ON",
+      "LLAMA_BUILD_SERVER": "ON",
+      "LLAMA_BUILD_EXAMPLES": "ON"
+    },
+    "targets": ["llama-server", "llama-bench"]
+  }
+}

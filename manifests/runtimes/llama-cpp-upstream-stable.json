@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "llama-cpp-upstream-stable",
+  "repository": "https://github.com/ggml-org/llama.cpp.git",
+  "base_revision": "de8656bd94f1163188125542534e4bcbc9f9fb1f",
+  "patches": [],
+  "tested_revision": "de8656bd94f1163188125542534e4bcbc9f9fb1f",
+  "tested_tree_sha": "ef599001012ff8bee837a832decde4c564702cc4",
+  "build": {
+    "generator": "Ninja",
+    "build_type": "Release",
+    "architecture": "arm64",
+    "cmake_options": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_OSX_ARCHITECTURES": "arm64",
+      "GGML_NATIVE": "ON",
+      "GGML_METAL": "ON",
+      "GGML_ACCELERATE": "ON",
+      "LLAMA_BUILD_SERVER": "ON",
+      "LLAMA_BUILD_EXAMPLES": "ON"
+    },
+    "targets": ["llama-server", "llama-bench"]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://metal-llm-lab.dev/schemas/hardware.schema.json",
+  "title": "Metal LLM Lab hardware manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "chip",
+    "architecture",
+    "gpu_cores",
+    "unified_memory_bytes",
+    "recommended_profile",
+    "tested"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "$ref": "#/$defs/id" },
+    "chip": { "type": "string", "minLength": 1 },
+    "architecture": { "const": "arm64" },
+    "gpu_cores": { "type": "integer", "minimum": 1 },
+    "unified_memory_bytes": { "type": "integer", "minimum": 1 },
+    "recommended_profile": { "$ref": "#/$defs/id" },
+    "tested": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["date", "operating_system"],
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "operating_system": { "const": "macOS" }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+    }
+  }
+}

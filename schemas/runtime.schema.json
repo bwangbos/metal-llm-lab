@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://metal-llm-lab.dev/schemas/runtime.schema.json",
+  "title": "Metal LLM Lab runtime manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "repository",
+    "base_revision",
+    "patches",
+    "tested_revision",
+    "tested_tree_sha",
+    "build"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "$ref": "#/$defs/id" },
+    "repository": { "type": "string", "format": "uri", "minLength": 1 },
+    "base_revision": { "$ref": "#/$defs/git_sha" },
+    "patches": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/patch" }
+    },
+    "tested_revision": { "$ref": "#/$defs/git_sha" },
+    "tested_tree_sha": { "$ref": "#/$defs/git_sha" },
+    "build": { "$ref": "#/$defs/build" }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+    },
+    "git_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "file"],
+      "properties": {
+        "revision": { "$ref": "#/$defs/git_sha" },
+        "file": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[a-z0-9-]+\\.patch$"
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generator", "build_type", "architecture", "cmake_options", "targets"],
+      "properties": {
+        "generator": { "type": "string", "minLength": 1 },
+        "build_type": { "enum": ["Release", "Debug", "RelWithDebInfo", "MinSizeRel"] },
+        "architecture": { "const": "arm64" },
+        "cmake_options": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
