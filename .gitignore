@@ -1,1 +1,15 @@
 .worktrees/
+/.lab/
+/models/
+/build/
+.env
+.env.*
+!.env.example
+*.gguf
+*.part
+*.partial
+*.tmp
+*.log
+.DS_Store
+.idea/
+.vscode/
