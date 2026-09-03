@@ -80,8 +80,10 @@ metal_llm_validate_vision_fixture() {
         metal_llm_die "vision fixture must stay under benchmarks/fixtures: $fixture"
         return 1
     }
+    local expected_mime
     case "$fixture" in
-        *.png|*.jpg|*.jpeg) ;;
+        *.png) expected_mime=image/png ;;
+        *.jpg|*.jpeg) expected_mime=image/jpeg ;;
         *) metal_llm_die "unsupported vision fixture type: $fixture"; return 1 ;;
     esac
     git -C "$METAL_LLM_ROOT" ls-files --error-unmatch -- "$fixture" >/dev/null 2>&1 || {
@@ -103,8 +105,8 @@ metal_llm_validate_vision_fixture() {
     command -v file >/dev/null 2>&1 || { metal_llm_die 'file is required for vision fixtures'; return 1; }
     local mime
     mime=$(file -b --mime-type "$canonical_path" 2>/dev/null) || return 1
-    [[ "$mime" == image/png || "$mime" == image/jpeg ]] || {
-        metal_llm_die "vision fixture content is not PNG or JPEG: $fixture"
+    [[ "$mime" == "$expected_mime" ]] || {
+        metal_llm_die "vision fixture extension and MIME do not match: $fixture"
         return 1
     }
     typeset -g METAL_LLM_VERIFIED_FIXTURE_PATH="$canonical_path"
@@ -284,15 +286,23 @@ metal_llm_bench() {
         fi
     fi
 
-    local now=${METAL_LLM_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
+    [[ -z "${METAL_LLM_NOW:-}" ]] || {
+        metal_llm_die 'METAL_LLM_NOW is not accepted; benchmark time comes from the system clock'
+        return 1
+    }
+    local now
+    now=$(date -u +%Y-%m-%dT%H:%M:%SZ) || {
+        metal_llm_die 'could not read the system UTC clock'
+        return 1
+    }
     [[ "$now" =~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' ]] || {
-        metal_llm_die 'METAL_LLM_NOW must be an RFC 3339 UTC timestamp'
+        metal_llm_die 'system UTC clock did not produce an RFC 3339 timestamp'
         return 1
     }
     jq -en --arg now "$now" '
       try (($now | fromdateiso8601 | strftime("%Y-%m-%dT%H:%M:%SZ")) == $now) catch false
     ' >/dev/null || {
-        metal_llm_die 'METAL_LLM_NOW must be a real RFC 3339 UTC calendar timestamp'
+        metal_llm_die 'system UTC clock did not produce a real RFC 3339 UTC calendar timestamp'
         return 1
     }
     [[ -z "${METAL_LLM_REPOSITORY_REVISION:-}" ]] || {
@@ -420,7 +430,7 @@ metal_llm_bench() {
 
     local case_record case_id case_kind optional prompt_tokens generated_tokens repetitions notes
     local max_tokens temperature seed prompt fixture bench_output throughput
-    local command_json payload response content output_sha image_data image_mime
+    local command_json payload response content output_sha image_data image_mime expected_fixture_sha
     local flash_value=off lazy_value=off
     typeset -a bench_arguments recorded_bench_arguments curl_arguments recorded_curl_arguments
     [[ "$flash_attention" == true ]] && flash_value=on
@@ -517,16 +527,19 @@ metal_llm_bench() {
                     metal_llm_die 'base64 is required for vision benchmark fixtures'
                     return 1
                 }
-                case "$fixture" in
-                    *.png) image_mime='image/png' ;;
-                    *.jpg|*.jpeg) image_mime='image/jpeg' ;;
-                    *)
-                        rm -f -- "$run_buffer"
-                        metal_llm_die "unsupported vision fixture type: $fixture"
-                        return 1
-                        ;;
-                esac
-                image_data=$(base64 < "$METAL_LLM_ROOT/$fixture" | tr -d '\r\n') || {
+                metal_llm_validate_vision_fixture "$fixture" || { rm -f -- "$run_buffer"; return 1; }
+                expected_fixture_sha=$(jq -er --arg path "$fixture" \
+                  'first(.[] | select(.path == $path)).sha256' <<< "$fixtures_json") || {
+                    rm -f -- "$run_buffer"
+                    return 1
+                }
+                [[ "$METAL_LLM_VERIFIED_FIXTURE_SHA256" == "$expected_fixture_sha" ]] || {
+                    rm -f -- "$run_buffer"
+                    metal_llm_die "vision fixture changed after verification: $fixture"
+                    return 1
+                }
+                image_mime=$METAL_LLM_VERIFIED_FIXTURE_MIME
+                image_data=$(base64 < "$METAL_LLM_VERIFIED_FIXTURE_PATH" | tr -d '\r\n') || {
                     rm -f -- "$run_buffer"
                     return 1
                 }

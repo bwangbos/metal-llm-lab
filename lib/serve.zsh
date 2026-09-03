@@ -32,6 +32,41 @@ metal_llm_print_serve_command() {
     metal_llm_print_command "${display_arguments[@]}"
 }
 
+metal_llm_validate_serve_extra_arguments() {
+    local argument value
+    while (( $# > 0 )); do
+        argument=$1
+        shift
+        case "$argument" in
+            -t|--threads|-tb|--threads-batch|--threads-http)
+                (( $# > 0 )) || {
+                    metal_llm_die 'unsupported serve passthrough option or value'
+                    return 1
+                }
+                value=$1
+                shift
+                [[ "$value" == <-> && "$value" -gt 0 ]] || {
+                    metal_llm_die 'unsupported serve passthrough option or value'
+                    return 1
+                }
+                ;;
+            --threads=*|--threads-batch=*|--threads-http=*)
+                value=${argument#*=}
+                [[ "$value" == <-> && "$value" -gt 0 ]] || {
+                    metal_llm_die 'unsupported serve passthrough option or value'
+                    return 1
+                }
+                ;;
+            --verbose|--log-colors)
+                ;;
+            *)
+                metal_llm_die 'unsupported serve passthrough option or value'
+                return 1
+                ;;
+        esac
+    done
+}
+
 metal_llm_serve() {
     local model_id='' profile_id='' dry_run=0 passthrough=0 argument
     typeset -a extra_arguments
@@ -67,6 +102,7 @@ metal_llm_serve() {
     done
 
     [[ -n "$model_id" && -n "$profile_id" ]] || { metal_llm_serve_usage; return $?; }
+    metal_llm_validate_serve_extra_arguments "${extra_arguments[@]}" || return 1
     metal_llm_valid_id "$model_id" || { metal_llm_die "invalid model id: $model_id"; return 1; }
     metal_llm_require_supported_host || return 1
     command -v jq >/dev/null 2>&1 || { metal_llm_die 'jq is required'; return 1; }

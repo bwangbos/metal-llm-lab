@@ -178,24 +178,8 @@ metal_llm_setup_runtime() {
         return
     fi
 
-    command -v git >/dev/null 2>&1 || { metal_llm_die 'git is required'; return 1; }
-    [[ -d "$source_dir" ]] || { metal_llm_die "runtime source is missing: $source_dir"; return 1; }
-    git -C "$source_dir" rev-parse --git-dir >/dev/null 2>&1 || {
-        metal_llm_die "runtime source is not a Git checkout: $source_dir"
-        return 1
-    }
-    local source_status ignored_files actual_tree
-    source_status=$(git -C "$source_dir" status --porcelain=v1 --untracked-files=all) || return 1
-    ignored_files=$(git -C "$source_dir" ls-files --others --ignored --exclude-standard) || return 1
-    [[ -z "$source_status" && -z "$ignored_files" ]] || {
-        metal_llm_die "runtime source is not clean: $runtime_id"
-        return 1
-    }
-    actual_tree=$(git -C "$source_dir" rev-parse 'HEAD^{tree}') || return 1
-    [[ "$actual_tree" == "$expected_tree" ]] || {
-        metal_llm_die "runtime source tree mismatch for $runtime_id: expected $expected_tree, got $actual_tree"
-        return 1
-    }
+    metal_llm_verify_runtime_source_checkout "$runtime_id" "$source_dir" "$expected_tree" || return 1
+    local actual_tree=$METAL_LLM_VERIFIED_SOURCE_TREE
 
     local manifest_sha server_sha bench_sha receipt_part="$receipt_path.part"
     manifest_sha=$(metal_llm_sha256 "$runtime_manifest") || return 1

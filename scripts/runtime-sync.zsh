@@ -114,11 +114,27 @@ if [[ -e "$source_dir" ]]; then
     am_state="$(git -C "$source_dir" rev-parse --absolute-git-dir)/rebase-apply"
     [[ ! -e "$am_state" ]] || die "runtime checkout already has an in-progress git am: $source_dir"
 
+    index_entry=''
+    index_tag=''
+    typeset -a tracked_index_entries
+    tracked_index_entries=("${(@0)$(git -C "$source_dir" ls-files -v -z)}") || \
+        die "could not inspect runtime source index: $source_dir"
+    for index_entry in "${tracked_index_entries[@]}"; do
+        [[ -n "$index_entry" ]] || continue
+        index_tag=${index_entry[1]}
+        [[ "$index_tag" != S && "$index_tag" != [a-z] ]] || \
+            die "runtime source has an unsafe tracked-file index flag: $source_dir"
+    done
+
     checkout_status=$(git -C "$source_dir" status --porcelain=v1 --untracked-files=all)
     ignored_files=$(git -C "$source_dir" ls-files --others --ignored --exclude-standard)
     if [[ -n "$checkout_status" || -n "$ignored_files" ]]; then
         die "refusing dirty runtime checkout: $source_dir"
     fi
+    git -C "$source_dir" diff-index --cached --quiet HEAD -- || \
+        die "runtime source index differs from HEAD: $source_dir"
+    git -C "$source_dir" diff-files --quiet -- || \
+        die "runtime source files differ from the index: $source_dir"
 
     current_tree=$(git -C "$source_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || true)
     if [[ "$current_tree" == "$tested_tree" ]]; then

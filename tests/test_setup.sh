@@ -146,7 +146,7 @@ while (( $# > 0 )); do
             fi
             exit 0
             ;;
-        status|ls-files) exit 0 ;;
+        status|ls-files|diff-index|diff-files) exit 0 ;;
         *) exit 2 ;;
     esac
 done

@@ -202,7 +202,13 @@ else
   exit 2
 fi
 EOF
-chmod +x "$fake_bin/system_profiler" "$fake_bin/ps" "$fake_bin/sw_vers" "$fake_bin/xcrun" "$fake_bin/pmset"
+cat > "$fake_bin/date" <<'EOF'
+#!/bin/zsh
+[[ "$*" == '-u +%Y-%m-%dT%H:%M:%SZ' ]] || exit 2
+print -- "${BENCH_TEST_NOW:-2026-09-03T12:34:56Z}"
+EOF
+chmod +x "$fake_bin/system_profiler" "$fake_bin/ps" "$fake_bin/sw_vers" "$fake_bin/xcrun" "$fake_bin/pmset" \
+  "$fake_bin/date"
 
 $real_git -C "$fixture_root" init -q
 $real_git -C "$fixture_root" add .gitignore bin lib schemas benchmarks manifests
@@ -220,7 +226,7 @@ common_environment=(
   PATH="$fake_bin:$PATH"
   TMPDIR="$managed_tmp"
   METAL_LLM_RESULTS_DIR="$results_dir"
-  METAL_LLM_NOW=2026-09-03T12:34:56Z
+  BENCH_TEST_NOW=2026-09-03T12:34:56Z
   FAKE_BENCH_LOG="$temporary_root/bench.log"
   FAKE_CURL_LOG="$temporary_root/curl.log"
   FAKE_AUTH_CAPTURE="$temporary_root/auth.capture"
@@ -333,10 +339,22 @@ assert_contains "$collision_output" 'benchmark result already exists'
 partial_files=("$results_dir"/*.part*(N))
 (( ${#partial_files} == 0 )) || fail 'benchmark collision leaked a temporary result'
 
+time_override_results="$temporary_root/time-override-results"
+mkdir -p "$time_override_results"
+if time_override_output=$(env "${common_environment[@]}" \
+    METAL_LLM_NOW=2026-09-03T12:34:59Z BENCH_TEST_NOW=2026-09-03T12:35:59Z \
+    METAL_LLM_RESULTS_DIR="$time_override_results" \
+    "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
+    fail 'benchmark accepted the METAL_LLM_NOW production timestamp override'
+fi
+assert_contains "$time_override_output" 'METAL_LLM_NOW is not accepted'
+time_override_files=("$time_override_results"/*(N))
+(( ${#time_override_files} == 0 )) || fail 'rejected timestamp override leaked result data'
+
 invalid_time_results="$temporary_root/invalid-time-results"
 mkdir -p "$invalid_time_results"
 if timestamp_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$invalid_time_results" \
-    METAL_LLM_NOW=2026-02-30T12:34:56Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
+    BENCH_TEST_NOW=2026-02-30T12:34:56Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
     fail 'benchmark accepted an impossible calendar timestamp'
 fi
 assert_contains "$timestamp_output" 'real RFC 3339 UTC calendar timestamp'
@@ -346,7 +364,7 @@ invalid_time_files=("$invalid_time_results"/*(N))
 hardware_results="$temporary_root/hardware-mismatch-results"
 mkdir -p "$hardware_results"
 if hardware_output=$(env "${common_environment[@]}" BENCH_TEST_MEMORY_GB=2 \
-    METAL_LLM_RESULTS_DIR="$hardware_results" METAL_LLM_NOW=2026-09-03T12:35:00Z \
+    METAL_LLM_RESULTS_DIR="$hardware_results" BENCH_TEST_NOW=2026-09-03T12:35:00Z \
     "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
     fail 'benchmark assumed a hardware manifest that did not match the detected memory'
 fi
@@ -356,7 +374,7 @@ revision_results="$temporary_root/revision-override-results"
 mkdir -p "$revision_results"
 if revision_output=$(env "${common_environment[@]}" \
     METAL_LLM_REPOSITORY_REVISION=4444444444444444444444444444444444444444 \
-    METAL_LLM_RESULTS_DIR="$revision_results" METAL_LLM_NOW=2026-09-03T12:35:01Z \
+    METAL_LLM_RESULTS_DIR="$revision_results" BENCH_TEST_NOW=2026-09-03T12:35:01Z \
     "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
     fail 'benchmark accepted an arbitrary repository revision claim'
 fi
@@ -367,7 +385,7 @@ print -- '# dirty benchmark checkout' >> "$fixture_root/.gitignore"
 dirty_results="$temporary_root/dirty-repository-results"
 mkdir -p "$dirty_results"
 if dirty_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$dirty_results" \
-    METAL_LLM_NOW=2026-09-03T12:35:02Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
+    BENCH_TEST_NOW=2026-09-03T12:35:02Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
     mv "$fixture_root/.gitignore.saved" "$fixture_root/.gitignore"
     fail 'benchmark accepted a dirty repository checkout'
 fi
@@ -377,7 +395,7 @@ assert_contains "$dirty_output" 'benchmark repository checkout is not clean'
 unavailable_results="$temporary_root/unavailable-environment-results"
 mkdir -p "$unavailable_results"
 env "${common_environment[@]}" BENCH_TEST_XCRUN_UNAVAILABLE=1 BENCH_TEST_PMSET_UNAVAILABLE=1 \
-  METAL_LLM_RESULTS_DIR="$unavailable_results" METAL_LLM_NOW=2026-09-03T12:35:03Z \
+  METAL_LLM_RESULTS_DIR="$unavailable_results" BENCH_TEST_NOW=2026-09-03T12:35:03Z \
   "$fixture_cli" bench fixture-model --suite qwen3.8-smoke >/dev/null
 unavailable_files=("$unavailable_results"/*.json(N))
 (( ${#unavailable_files} == 1 )) || fail 'unavailable-environment benchmark did not publish exactly one result'
@@ -418,13 +436,23 @@ fi
 assert_contains "$source_output" 'runtime source is not clean'
 rm "$runtime_source/untracked.txt"
 
+cp "$fake_server" "$fake_server.saved"
+print -- '# changed non-selected binary' >> "$fake_server"
+if binary_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+    --suite qwen3.8-smoke 2>&1); then
+    mv "$fake_server.saved" "$fake_server"
+    fail 'local benchmark accepted a changed non-selected server binary'
+fi
+assert_contains "$binary_output" 'server binary checksum mismatch for fixture-runtime'
+mv "$fake_server.saved" "$fake_server"
+
 sleep 60 &!
 managed_identity_pid=$!
 write_live_server_identity "$managed_identity_pid" vision true
 live_results="$temporary_root/live-conflict-results"
 mkdir -p "$live_results"
 if lease_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$live_results" \
-    METAL_LLM_NOW=2026-09-03T12:34:57Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
+    BENCH_TEST_NOW=2026-09-03T12:34:57Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
     kill "$managed_identity_pid" 2>/dev/null || true
     wait "$managed_identity_pid" 2>/dev/null || true
     fail 'local bench ran beside a live managed full-model process'
@@ -436,7 +464,7 @@ wait "$managed_identity_pid" 2>/dev/null || true
 stale_results="$temporary_root/stale-recovery-results"
 mkdir -p "$stale_results"
 env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$stale_results" \
-  METAL_LLM_NOW=2026-09-03T12:34:58Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke >/dev/null
+  BENCH_TEST_NOW=2026-09-03T12:34:58Z "$fixture_cli" bench fixture-model --suite qwen3.8-smoke >/dev/null
 [[ ! -e "$lease_dir" ]] || fail 'local bench did not release a recovered stale managed lease'
 
 if busy_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 "$fixture_cli" bench fixture-model --suite qwen3.8-smoke 2>&1); then
@@ -452,9 +480,8 @@ assert_contains "$injection_output" 'invalid model id'
 
 endpoint_results="$temporary_root/endpoint-results"
 mkdir -p "$endpoint_results"
-# Endpoint-only cases use the already loaded server and must not depend on a
-# standalone llama-bench executable being present locally.
-rm -f -- "$fake_bench"
+# Strict receipt verification checks both recorded runtime executables even
+# though endpoint mode invokes only the already loaded server.
 
 endpoint_dry=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
     METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
@@ -521,7 +548,7 @@ fi
 negative_usage_results="$temporary_root/negative-usage-results"
 mkdir -p "$negative_usage_results"
 if negative_usage_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 FAKE_NEGATIVE_USAGE=1 \
-    METAL_LLM_RESULTS_DIR="$negative_usage_results" METAL_LLM_NOW=2026-09-03T12:35:04Z \
+    METAL_LLM_RESULTS_DIR="$negative_usage_results" BENCH_TEST_NOW=2026-09-03T12:35:04Z \
     "$fixture_cli" bench fixture-model --suite qwen3.8-smoke --mode endpoint 2>&1); then
     fail 'endpoint benchmark published a result with negative API usage counters'
 fi
@@ -552,6 +579,10 @@ clear_managed_lease
 
 print -n -- 'outside-fixture' > "$fixture_root/outside.png"
 ln -s ../../outside.png "$fixture_root/benchmarks/fixtures/escape.png"
+cp "$fixture_root/$vision_fixture" "$fixture_root/benchmarks/fixtures/png-content.jpg"
+cp "$fixture_root/$vision_fixture" "$fixture_root/benchmarks/fixtures/uppercase.PNG"
+printf '\377\330\377\340\000\020JFIF\000\001\001\000\000\001\000\001\000\000\377\331' > \
+  "$fixture_root/benchmarks/fixtures/jpeg-content.png"
 $real_jq -n '{
   schema_version: 1, id: "traversal-fixture", default_mode: "endpoint", default_profile: "vision",
   cases: [{id: "traversal", mode: "endpoint", kind: "vision", prompt: "Describe it.",
@@ -564,15 +595,32 @@ $real_jq -n '{
     fixture: "benchmarks/fixtures/escape.png", max_tokens: 8, temperature: 0, seed: 1,
     notes: "Symlink fixture must be rejected"}]
 }' > "$fixture_root/benchmarks/suites/symlink-fixture.json"
+for fixture_suite in png-as-jpg jpeg-as-png uppercase-png; do
+    if [[ "$fixture_suite" == png-as-jpg ]]; then
+        mislabeled_fixture=benchmarks/fixtures/png-content.jpg
+    elif [[ "$fixture_suite" == jpeg-as-png ]]; then
+        mislabeled_fixture=benchmarks/fixtures/jpeg-content.png
+    else
+        mislabeled_fixture=benchmarks/fixtures/uppercase.PNG
+    fi
+    "$real_jq" -n --arg id "$fixture_suite" --arg fixture "$mislabeled_fixture" '{
+      schema_version: 1, id: $id, default_mode: "endpoint", default_profile: "vision",
+      cases: [{id: "mislabeled", mode: "endpoint", kind: "vision", prompt: "Describe it.",
+        fixture: $fixture, max_tokens: 8, temperature: 0, seed: 1,
+        notes: "Fixture extension and MIME must agree"}]
+    }' > "$fixture_root/benchmarks/suites/$fixture_suite.json"
+done
 $real_git -C "$fixture_root" add outside.png benchmarks/fixtures/escape.png \
-  benchmarks/suites/traversal-fixture.json benchmarks/suites/symlink-fixture.json
+  benchmarks/fixtures/png-content.jpg benchmarks/fixtures/jpeg-content.png benchmarks/fixtures/uppercase.PNG \
+  benchmarks/suites/traversal-fixture.json benchmarks/suites/symlink-fixture.json \
+  benchmarks/suites/png-as-jpg.json benchmarks/suites/jpeg-as-png.json benchmarks/suites/uppercase-png.json
 $real_git -C "$fixture_root" -c user.name='Bench Test' -c user.email='bench-test@localhost' \
   commit -qm 'add adversarial fixture cases'
 
 sleep 60 &!
 managed_identity_pid=$!
 write_live_server_identity "$managed_identity_pid" vision true
-for fixture_suite in traversal-fixture symlink-fixture; do
+for fixture_suite in traversal-fixture symlink-fixture png-as-jpg jpeg-as-png uppercase-png; do
     fixture_escape_results="$temporary_root/$fixture_suite-results"
     mkdir -p "$fixture_escape_results"
     if fixture_escape_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 \

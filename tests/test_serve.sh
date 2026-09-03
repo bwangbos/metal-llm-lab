@@ -18,6 +18,17 @@ assert_equals() {
     [[ "$actual" == "$expected" ]] || fail "expected:\n$expected\nactual:\n$actual"
 }
 
+assert_passthrough_rejected() {
+    local description=$1
+    shift
+    local passthrough_output
+    if passthrough_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long \
+        --dry-run -- "$@" 2>&1); then
+        fail "serve accepted identity-changing passthrough: $description"
+    fi
+    assert_contains "$passthrough_output" 'unsupported serve passthrough option'
+}
+
 assert_contains() {
     local haystack=$1
     local needle=$2
@@ -192,6 +203,32 @@ assert_equals "$auto_output" "$vision_output"
 override_output=$(METAL_LLM_HOST=0.0.0.0 METAL_LLM_PORT=9000 METAL_LLM_PARALLEL=4 METAL_LLM_CONTEXT=4096 \
     PATH="$test_path" "$cli" serve fixture-model --profile fast --dry-run -- --threads 8)
 assert_equals "$override_output" "$common_hybrid -c 4096 -np 4 --host 0.0.0.0 --port 9000 $mtp_flags --threads 8"
+benign_equals_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run -- --threads=8)
+assert_contains "$benign_equals_output" '--threads=8'
+
+assert_passthrough_rejected 'short model override' -m other.gguf
+assert_passthrough_rejected 'long model equals override' --model=other.gguf
+assert_passthrough_rejected 'host override' --host 0.0.0.0
+assert_passthrough_rejected 'port equals override' --port=9000
+assert_passthrough_rejected 'projector override' -mm other-projector.gguf
+assert_passthrough_rejected 'projector equals override' --mmproj=other-projector.gguf
+assert_passthrough_rejected 'draft model override' --spec-draft-model other-draft.gguf
+assert_passthrough_rejected 'draft count equals override' --spec-draft-n-max=8
+assert_passthrough_rejected 'draft GPU override' --spec-draft-ngl all
+assert_passthrough_rejected 'draft type override' --spec-type other
+assert_passthrough_rejected 'context override' -c 4096
+assert_passthrough_rejected 'batch-size override' --batch-size=128
+assert_passthrough_rejected 'micro-batch override' -ub 128
+assert_passthrough_rejected 'parallel equals override' --parallel=4
+assert_passthrough_rejected 'GPU offload override' -ngl 1
+assert_passthrough_rejected 'fit override' -fit on
+assert_passthrough_rejected 'flash-attention equals override' --flash-attn=off
+assert_passthrough_rejected 'vision token override' --image-min-tokens=64
+assert_passthrough_rejected 'profile semantic override' --chat-template=other
+assert_passthrough_rejected 'option smuggled as a tuning value' --threads -m
+assert_passthrough_rejected 'nonpositive tuning value' --threads=0
+assert_passthrough_rejected 'positional passthrough value' unexpected-value
+assert_passthrough_rejected 'nested option delimiter' --
 
 secret='serve-secret-must-not-leak'
 secret_output=$(METAL_LLM_API_KEY="$secret" PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run)
@@ -199,14 +236,17 @@ secret_output=$(METAL_LLM_API_KEY="$secret" PATH="$test_path" "$cli" serve fixtu
 assert_contains "$secret_output" '--api-key <redacted>'
 
 passthrough_secret='passthrough-secret-must-not-leak'
-passthrough_secret_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run -- \
-    --api-key "$passthrough_secret")
-[[ "$passthrough_secret_output" != *"$passthrough_secret"* ]] || fail 'dry-run exposed a passthrough API key'
-assert_contains "$passthrough_secret_output" '--api-key <redacted>'
+if passthrough_secret_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run -- \
+    --api-key "$passthrough_secret" 2>&1); then
+    fail 'serve accepted a passthrough API key instead of requiring METAL_LLM_API_KEY'
+fi
+[[ "$passthrough_secret_output" != *"$passthrough_secret"* ]] || fail 'rejection exposed a passthrough API key'
+assert_contains "$passthrough_secret_output" 'unsupported serve passthrough option'
 
 export SERVE_TEST_EXEC_LOG="$temporary_root/exec.log"
 METAL_LLM_API_KEY="$secret" PATH="$test_path" "$cli" serve fixture-model --profile stable
-assert_contains "$(<"$SERVE_TEST_EXEC_LOG")" "--api-key $secret"
+serve_exec_log=$(command cat "$SERVE_TEST_EXEC_LOG")
+assert_contains "$serve_exec_log" "--api-key $secret"
 
 lease_dir="$managed_tmp/metal-llm-lab/full-model.lease"
 lease_record="$lease_dir/identity.json"
@@ -291,6 +331,28 @@ fi
 assert_contains "$tree_output" 'runtime source tree mismatch for hybrid'
 "$real_git" -C "$hybrid_source" checkout -q --detach "$correct_head"
 
+"$real_git" -C "$hybrid_source" update-index --assume-unchanged runtime.txt
+print -- 'concealed assume-unchanged modification' > "$hybrid_source/runtime.txt"
+if flag_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run 2>&1); then
+    "$real_git" -C "$hybrid_source" update-index --no-assume-unchanged runtime.txt
+    "$real_git" -C "$hybrid_source" checkout -q -- runtime.txt
+    fail 'serve accepted a concealed assume-unchanged source modification'
+fi
+assert_contains "$flag_output" 'unsafe tracked-file index flag'
+"$real_git" -C "$hybrid_source" update-index --no-assume-unchanged runtime.txt
+"$real_git" -C "$hybrid_source" checkout -q -- runtime.txt
+
+"$real_git" -C "$hybrid_source" update-index --skip-worktree runtime.txt
+print -- 'concealed skip-worktree modification' > "$hybrid_source/runtime.txt"
+if flag_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run 2>&1); then
+    "$real_git" -C "$hybrid_source" update-index --no-skip-worktree runtime.txt
+    "$real_git" -C "$hybrid_source" checkout -q -- runtime.txt
+    fail 'serve accepted a concealed skip-worktree source modification'
+fi
+assert_contains "$flag_output" 'unsafe tracked-file index flag'
+"$real_git" -C "$hybrid_source" update-index --no-skip-worktree runtime.txt
+"$real_git" -C "$hybrid_source" checkout -q -- runtime.txt
+
 stable_binary="$fixture_root/.lab/runtimes/stable/build-metal/bin/llama-server"
 cp "$stable_binary" "$stable_binary.saved"
 print -- '# changed' >> "$stable_binary"
@@ -299,6 +361,16 @@ if binary_output=$(PATH="$test_path" "$cli" serve fixture-model --profile stable
 fi
 assert_contains "$binary_output" 'server binary checksum mismatch for stable'
 mv "$stable_binary.saved" "$stable_binary"
+
+stable_bench="$fixture_root/.lab/runtimes/stable/build-metal/bin/llama-bench"
+cp "$stable_bench" "$stable_bench.saved"
+print -- '# changed non-selected binary' >> "$stable_bench"
+if binary_output=$(PATH="$test_path" "$cli" serve fixture-model --profile stable --dry-run 2>&1); then
+    mv "$stable_bench.saved" "$stable_bench"
+    fail 'serve accepted a changed non-selected bench binary'
+fi
+assert_contains "$binary_output" 'bench binary checksum mismatch for stable'
+mv "$stable_bench.saved" "$stable_bench"
 
 mv "$artifact_dir/projector.gguf" "$artifact_dir/projector.gguf.missing"
 if missing_output=$(PATH="$test_path" "$cli" serve fixture-model --profile vision --dry-run 2>&1); then

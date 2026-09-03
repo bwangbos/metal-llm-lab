@@ -109,6 +109,107 @@ metal_llm_profile_artifact_identities() {
     typeset -g METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES="$identities"
 }
 
+metal_llm_verify_runtime_source_checkout() {
+    local runtime_id=$1
+    local source_dir=$2
+    local expected_tree=$3
+
+    command -v git >/dev/null 2>&1 || { metal_llm_die 'git is required'; return 1; }
+    [[ -d "$source_dir" ]] || { metal_llm_die "runtime source is missing: $source_dir"; return 1; }
+    git -C "$source_dir" rev-parse --git-dir >/dev/null 2>&1 || {
+        metal_llm_die "runtime source is not a Git checkout: $source_dir"
+        return 1
+    }
+
+    local index_entry index_tag
+    typeset -a index_entries
+    index_entries=("${(@0)$(git -C "$source_dir" ls-files -v -z)}") || return 1
+    for index_entry in "${index_entries[@]}"; do
+        [[ -n "$index_entry" ]] || continue
+        index_tag=${index_entry[1]}
+        if [[ "$index_tag" == S || "$index_tag" == [a-z] ]]; then
+            metal_llm_die "runtime source has an unsafe tracked-file index flag: $runtime_id"
+            return 1
+        fi
+    done
+
+    local source_status ignored_files actual_tree
+    source_status=$(git -C "$source_dir" status --porcelain=v1 --untracked-files=all) || return 1
+    ignored_files=$(git -C "$source_dir" ls-files --others --ignored --exclude-standard) || return 1
+    [[ -z "$source_status" && -z "$ignored_files" ]] || {
+        metal_llm_die "runtime source is not clean: $runtime_id"
+        return 1
+    }
+    git -C "$source_dir" diff-index --cached --quiet HEAD -- || {
+        metal_llm_die "runtime source index differs from HEAD: $runtime_id"
+        return 1
+    }
+    git -C "$source_dir" diff-files --quiet -- || {
+        metal_llm_die "runtime source files differ from the index: $runtime_id"
+        return 1
+    }
+    actual_tree=$(git -C "$source_dir" rev-parse 'HEAD^{tree}') || return 1
+    [[ "$actual_tree" == "$expected_tree" ]] || {
+        metal_llm_die "runtime source tree mismatch for $runtime_id: expected $expected_tree, got $actual_tree"
+        return 1
+    }
+
+    local index_record index_metadata file_mode expected_blob stage tracked_path actual_blob link_target
+    index_entries=("${(@0)$(git -C "$source_dir" ls-files --stage -z)}") || return 1
+    for index_record in "${index_entries[@]}"; do
+        [[ -n "$index_record" ]] || continue
+        index_metadata=${index_record%%$'\t'*}
+        tracked_path=${index_record#*$'\t'}
+        IFS=' ' read -r file_mode expected_blob stage <<< "$index_metadata"
+        [[ "$stage" == 0 ]] || {
+            metal_llm_die "runtime source index contains an unmerged entry: $runtime_id"
+            return 1
+        }
+        case "$file_mode" in
+            100644|100755)
+                [[ -f "$source_dir/$tracked_path" && ! -L "$source_dir/$tracked_path" ]] || {
+                    metal_llm_die "runtime source tracked path is not a regular file: $runtime_id"
+                    return 1
+                }
+                if [[ "$file_mode" == 100755 ]]; then
+                    [[ -x "$source_dir/$tracked_path" ]] || {
+                        metal_llm_die "runtime source executable mode mismatch: $runtime_id"
+                        return 1
+                    }
+                else
+                    [[ ! -x "$source_dir/$tracked_path" ]] || {
+                        metal_llm_die "runtime source executable mode mismatch: $runtime_id"
+                        return 1
+                    }
+                fi
+                actual_blob=$(git -C "$source_dir" hash-object --path="$tracked_path" -- "$tracked_path") || return 1
+                ;;
+            120000)
+                [[ -L "$source_dir/$tracked_path" ]] || {
+                    metal_llm_die "runtime source symlink mode mismatch: $runtime_id"
+                    return 1
+                }
+                link_target=$(readlink "$source_dir/$tracked_path") || return 1
+                actual_blob=$(print -rn -- "$link_target" | git hash-object --stdin) || return 1
+                ;;
+            160000)
+                metal_llm_die "runtime source submodules are unsupported: $runtime_id"
+                return 1
+                ;;
+            *)
+                metal_llm_die "runtime source index contains an unsupported mode: $runtime_id"
+                return 1
+                ;;
+        esac
+        [[ "$actual_blob" == "$expected_blob" ]] || {
+            metal_llm_die "runtime source content differs from the index: $runtime_id"
+            return 1
+        }
+    done
+
+    typeset -g METAL_LLM_VERIFIED_SOURCE_TREE="$actual_tree"
+}
+
 metal_llm_verify_runtime_build() {
     local runtime_id=$1
     local runtime_manifest=$2
@@ -173,39 +274,34 @@ metal_llm_verify_runtime_build() {
         return 1
     }
 
-    command -v git >/dev/null 2>&1 || { metal_llm_die 'git is required'; return 1; }
-    [[ -d "$source_dir" ]] || { metal_llm_die "runtime source is missing: $source_dir"; return 1; }
-    git -C "$source_dir" rev-parse --git-dir >/dev/null 2>&1 || {
-        metal_llm_die "runtime source is not a Git checkout: $source_dir"
-        return 1
-    }
-    local source_status ignored_files actual_tree
-    source_status=$(git -C "$source_dir" status --porcelain=v1 --untracked-files=all) || return 1
-    ignored_files=$(git -C "$source_dir" ls-files --others --ignored --exclude-standard) || return 1
-    [[ -z "$source_status" && -z "$ignored_files" ]] || {
-        metal_llm_die "runtime source is not clean: $runtime_id"
-        return 1
-    }
-    actual_tree=$(git -C "$source_dir" rev-parse 'HEAD^{tree}') || return 1
-    [[ "$actual_tree" == "$expected_tree" && "$actual_tree" == "$receipt_source_tree" ]] || {
-        metal_llm_die "runtime source tree mismatch for $runtime_id: expected $expected_tree, got $actual_tree"
+    metal_llm_verify_runtime_source_checkout "$runtime_id" "$source_dir" "$expected_tree" || return 1
+    local actual_tree=$METAL_LLM_VERIFIED_SOURCE_TREE
+    [[ "$actual_tree" == "$receipt_source_tree" ]] || {
+        metal_llm_die "runtime source tree does not match build receipt: $runtime_id"
         return 1
     }
 
-    [[ -e "$executable" ]] || {
-        metal_llm_die "${executable_name#llama-} executable is missing: $executable"
-        return 1
-    }
-    [[ -f "$executable" && -x "$executable" && ! -L "$executable" ]] || {
-        metal_llm_die "runtime executable is not a regular executable: $executable"
-        return 1
-    }
-    local executable_sha
-    executable_sha=$(metal_llm_sha256 "$executable") || return 1
-    [[ "$executable_sha" == "$receipt_executable_sha" ]] || {
-        metal_llm_die "${executable_name#llama-} binary checksum mismatch for $runtime_id"
-        return 1
-    }
+    local binary_name binary_path recorded_binary_sha actual_binary_sha executable_sha=''
+    for binary_name in llama-server llama-bench; do
+        binary_path="$build_dir/bin/$binary_name"
+        [[ -e "$binary_path" ]] || {
+            metal_llm_die "${binary_name#llama-} executable is missing: $binary_path"
+            return 1
+        }
+        [[ -f "$binary_path" && -x "$binary_path" && ! -L "$binary_path" ]] || {
+            metal_llm_die "runtime executable is not a regular executable: $binary_path"
+            return 1
+        }
+        recorded_binary_sha=$(jq -er --arg binary "$binary_name" '.binaries[$binary].sha256' \
+          "$receipt_path") || return 1
+        actual_binary_sha=$(metal_llm_sha256 "$binary_path") || return 1
+        [[ "$actual_binary_sha" == "$recorded_binary_sha" ]] || {
+            metal_llm_die "${binary_name#llama-} binary checksum mismatch for $runtime_id"
+            return 1
+        }
+        [[ "$binary_name" != "$executable_name" ]] || executable_sha=$actual_binary_sha
+    done
+    [[ -n "$executable_sha" && "$executable_sha" == "$receipt_executable_sha" ]] || return 1
 
     typeset -g METAL_LLM_VERIFIED_EXECUTABLE="$executable"
     typeset -g METAL_LLM_VERIFIED_RUNTIME_REVISION="$expected_revision"

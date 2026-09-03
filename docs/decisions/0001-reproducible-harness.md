@@ -23,15 +23,20 @@ Setup can fetch, verify, patch, build, and smoke-test declared inputs while
 benchmark records retain verified provenance and sanitized exact argument
 arrays. Serving and local benchmarks accept only a strict build receipt tied to
 the current runtime manifest, tested revision/tree, clean source checkout, and
-both expected executable hashes. New benchmark publication validates the full
-document and refuses a filename collision.
+both expected executable hashes. Source verification rejects hidden index flags,
+checks actual tracked content and executable modes against the index, and does
+not support submodules. Serve passthrough is limited to positive thread tuning
+and logging flags, leaving identity and profile semantics manifest-controlled.
+Benchmark timestamps come only from the system UTC clock. New benchmark
+publication validates the full document and refuses a filename collision.
 
 A full-model lease under the per-user/session temporary root coordinates only
 `metal-llm` managed serving and local benchmark processes across checkouts using
 that same root. Endpoint benchmarks additionally bind to the live managed server
 identity. This does not detect or control unrelated model processes. Vision
 fixtures are tracked, checksum-recorded, regular non-symlink PNG/JPEG files
-confined to the repository fixture directory.
+confined to the repository fixture directory. Their lowercase extensions must
+match detected MIME exactly, and upload payloads use the detected MIME.
 
 The repository remains compact and auditable, but maintainers must update
 manifests and patch applicability deliberately when upstream changes. Evidence

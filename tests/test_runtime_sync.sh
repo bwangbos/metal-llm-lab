@@ -125,6 +125,28 @@ good_source="$fixture_root/.lab/runtimes/fixture-good/source"
 [[ $(git -C "$good_source" config --get remote.origin.partialclonefilter) == 'blob:none' ]] || \
     fail "fixture clone did not request blob filtering"
 
+git -C "$good_source" update-index --assume-unchanged model.txt
+print -- 'concealed assume-unchanged content' > "$good_source/model.txt"
+if flag_output=$("$fixture_root/scripts/runtime-sync.zsh" fixture-good 2>&1); then
+    git -C "$good_source" update-index --no-assume-unchanged model.txt
+    git -C "$good_source" checkout -q -- model.txt
+    fail 'runtime sync accepted a concealed assume-unchanged modification'
+fi
+assert_contains "$flag_output" 'unsafe tracked-file index flag'
+git -C "$good_source" update-index --no-assume-unchanged model.txt
+git -C "$good_source" checkout -q -- model.txt
+
+git -C "$good_source" update-index --skip-worktree model.txt
+print -- 'concealed skip-worktree content' > "$good_source/model.txt"
+if flag_output=$("$fixture_root/scripts/runtime-sync.zsh" fixture-good 2>&1); then
+    git -C "$good_source" update-index --no-skip-worktree model.txt
+    git -C "$good_source" checkout -q -- model.txt
+    fail 'runtime sync accepted a concealed skip-worktree modification'
+fi
+assert_contains "$flag_output" 'unsafe tracked-file index flag'
+git -C "$good_source" update-index --no-skip-worktree model.txt
+git -C "$good_source" checkout -q -- model.txt
+
 print -- 'user file' > "$good_source/user-untracked.txt"
 dirty_head=$(git -C "$good_source" rev-parse HEAD)
 dirty_status=$(git -C "$good_source" status --porcelain=v1 --untracked-files=all)

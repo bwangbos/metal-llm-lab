@@ -70,7 +70,13 @@ size. Set `METAL_LLM_API_KEY` to require an API key; its value is passed to the
 server and forwarded by endpoint benchmarks to health and completion requests.
 It is omitted from dry-run output, process records, recorded commands, and
 results; recorded HTTP argument arrays use a `<redacted>` placeholder. Extra
-llama-server arguments may follow `--`, for example `-- --threads 8`.
+llama-server arguments may follow `--`, but are deliberately limited to positive
+thread-count tuning (`-t`/`--threads`, `-tb`/`--threads-batch`, and
+`--threads-http`) plus `--verbose` and `--log-colors`; for example,
+`-- --threads 8`. Model, projector, draft/MTP, context, batching/parallel,
+network, GPU/offload, flash-attention, authentication, and other behavioral
+options are rejected in both separate-value and `--flag=value` forms. Use the
+profile manifest or the documented environment variables above instead.
 
 Normal `serve` and local benchmark runs share one managed full-model lease at
 `${TMPDIR:-/tmp}/metal-llm-lab/full-model.lease`. The lease is per user/session
@@ -100,6 +106,10 @@ New harness benchmarks require a clean Git checkout and record its actual commit
 and tree, an exact detected chip/memory hardware-manifest match, the verified
 runtime revision/tree/manifest/receipt/executable, model manifest and artifact
 identities, suite and fixture checksums, and sanitized exact argument arrays.
+Runtime verification rejects hidden Git index flags and compares every tracked
+path's content and executable mode with the index; every call also verifies both
+`llama-server` and `llama-bench` as regular, non-symlink executables against the
+build receipt. Benchmark timestamps always come from the system UTC clock.
 OS, compiler, SDK, and power evidence is recorded from the host; unavailable
 values are explicit JSON `null`, never guessed. Hardware and repository identity
 overrides are rejected. The imported initial case-study result predates this
@@ -108,7 +118,9 @@ capture contract and therefore carries explicit `provenance: null` and
 
 Vision benchmark fixtures must be Git-tracked regular, non-symlink PNG or JPEG
 files confined to `benchmarks/fixtures/`; both extension and detected MIME type
-are checked before use, and the result records the fixture checksum. Read the
+are checked for an exact match before use. Extensions are lowercase only
+(`.png`, `.jpg`, or `.jpeg`), and the detected MIME type—not the filename—is used
+in the uploaded data URL. The result records the fixture checksum. Read the
 [harness decision](docs/decisions/0001-reproducible-harness.md) before extending
 the workflow.
 
