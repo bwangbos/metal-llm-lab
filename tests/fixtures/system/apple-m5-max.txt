@@ -1,0 +1,19 @@
+Hardware:
+
+    Hardware Overview:
+
+      Model Name: MacBook Pro
+      Chip: Apple M5 Max
+      Total Number of Cores: 18 (6 Super and 12 Performance)
+      Memory: 128 GB
+
+Graphics/Displays:
+
+    Apple M5 Max:
+
+      Chipset Model: Apple M5 Max
+      Type: GPU
+      Bus: Built-In
+      Total Number of Cores: 40
+      Vendor: Apple (0x106b)
+      Metal: Supported
