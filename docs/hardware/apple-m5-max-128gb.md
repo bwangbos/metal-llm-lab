@@ -18,7 +18,11 @@ settings, or other system settings.
 
 Only one full-model process is supported. A second process failed prompt-batch
 decoding with result `-3` while the server held the model, then succeeded after
-the server stopped. Stop the active server before running local `llama-bench`.
+the server stopped. Normal `metal-llm serve` and local `metal-llm bench` runs
+share a live-process lease across checkouts using the same per-user/session
+`TMPDIR`; local benchmarking also refuses a responding configured lab endpoint.
+The lease does not cover model processes started outside the harness, so stop
+those manually before running local `llama-bench`.
 
 Machine-readable identity is in
 [`manifests/hardware/apple-m5-max-128gb.json`](../../manifests/hardware/apple-m5-max-128gb.json),

@@ -105,6 +105,16 @@ write_manifest \
     "$fixture_root/manifests/runtimes/fixture-good.json" \
     fixture-good "$repository_url" "$base_revision" "$patch_revision" "$patch_file" "$tested_tree"
 
+good_manifest="$fixture_root/manifests/runtimes/fixture-good.json"
+cp "$good_manifest" "$good_manifest.saved"
+jq '.tested_revision = .base_revision' "$good_manifest.saved" > "$good_manifest"
+if linkage_output=$("$fixture_root/scripts/runtime-sync.zsh" fixture-good --dry-run 2>&1); then
+    mv "$good_manifest.saved" "$good_manifest"
+    fail 'runtime sync accepted a patched manifest whose tested revision was not the final patch revision'
+fi
+mv "$good_manifest.saved" "$good_manifest"
+assert_contains "$linkage_output" 'invalid runtime manifest'
+
 "$fixture_root/scripts/runtime-sync.zsh" fixture-good --dry-run >/dev/null
 [[ ! -e "$fixture_root/.lab" ]] || fail "dry-run wrote runtime state"
 

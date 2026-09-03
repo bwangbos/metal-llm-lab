@@ -44,6 +44,13 @@ metal_llm_validate_runtime_manifest() {
         (.id == $expected_id) and
         (.repository | type == "string" and length > 0) and
         (.base_revision | type == "string" and test("^[0-9a-f]{40}$")) and
+        (.patches | type == "array" and all(.[ ];
+            type == "object" and (keys | sort) == (["file", "revision"] | sort) and
+            (.revision | type == "string" and test("^[0-9a-f]{40}$")) and
+            (.file | type == "string" and test("^[0-9]{4}-[a-z0-9-]+\\.patch$")))) and
+        (.tested_revision | type == "string" and test("^[0-9a-f]{40}$")) and
+        (.tested_tree_sha | type == "string" and test("^[0-9a-f]{40}$")) and
+        (.tested_revision == (if (.patches | length) == 0 then .base_revision else .patches[-1].revision end)) and
         (.build.generator | type == "string" and length > 0) and
         (.build.cmake_options | type == "object" and all(keys[]; test("^[A-Z][A-Z0-9_]*$"))) and
         (.build.targets | type == "array" and length > 0 and all(.[ ];
@@ -159,8 +166,9 @@ metal_llm_setup_runtime() {
         fi
     done
 
-    local expected_tree receipt_path="$build_dir/build-receipt.json"
+    local expected_tree tested_revision receipt_path="$build_dir/build-receipt.json"
     expected_tree=$(jq -er '.tested_tree_sha' "$runtime_manifest") || return 1
+    tested_revision=$(jq -er '.tested_revision' "$runtime_manifest") || return 1
     if (( dry_run == 1 )); then
         print -- "verify runtime source tree: $expected_tree"
         print -- "verify runtime source is clean: $source_dir"
@@ -196,6 +204,7 @@ metal_llm_setup_runtime() {
     if ! jq -n \
         --arg runtime_id "$runtime_id" \
         --arg manifest_sha "$manifest_sha" \
+        --arg tested_revision "$tested_revision" \
         --arg source_tree "$actual_tree" \
         --arg tested_tree "$expected_tree" \
         --arg server_sha "$server_sha" \
@@ -204,6 +213,7 @@ metal_llm_setup_runtime() {
           schema_version: 1,
           runtime_id: $runtime_id,
           runtime_manifest_sha256: $manifest_sha,
+          tested_revision: $tested_revision,
           source_tree_sha: $source_tree,
           tested_tree_sha: $tested_tree,
           binaries: {

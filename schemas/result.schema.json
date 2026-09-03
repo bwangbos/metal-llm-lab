@@ -4,7 +4,7 @@
   "title": "Metal LLM Lab benchmark result",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "experiment_id", "date", "model_id", "runs"],
+  "required": ["schema_version", "experiment_id", "date", "model_id", "provenance", "runs"],
   "properties": {
     "schema_version": { "const": 1 },
     "experiment_id": { "$ref": "#/$defs/id" },
@@ -12,6 +12,7 @@
     "model_id": { "$ref": "#/$defs/id" },
     "suite_id": { "$ref": "#/$defs/id" },
     "benchmark_mode": { "enum": ["local", "endpoint"] },
+    "provenance": { "$ref": "#/$defs/provenance" },
     "summary": {
       "type": "object",
       "additionalProperties": false,
@@ -44,6 +45,104 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
+    "provenance": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["repository", "hardware", "system", "profile_id", "runtime", "model_manifest_sha256", "artifacts", "suite"],
+      "properties": {
+        "repository": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["revision", "tree_sha", "clean"],
+          "properties": {
+            "revision": { "$ref": "#/$defs/git_sha" },
+            "tree_sha": { "$ref": "#/$defs/git_sha" },
+            "clean": { "const": true }
+          }
+        },
+        "hardware": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "chip", "unified_memory_bytes"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "chip": { "type": "string", "minLength": 1 },
+            "unified_memory_bytes": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "system": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operating_system", "operating_system_version", "compiler", "sdk", "power_source", "low_power_mode"],
+          "properties": {
+            "operating_system": { "const": "macOS" },
+            "operating_system_version": { "type": ["string", "null"], "minLength": 1 },
+            "compiler": { "type": ["string", "null"], "minLength": 1 },
+            "sdk": { "type": ["string", "null"], "minLength": 1 },
+            "power_source": { "type": ["string", "null"], "minLength": 1 },
+            "low_power_mode": { "type": ["boolean", "null"] }
+          }
+        },
+        "profile_id": { "$ref": "#/$defs/id" },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "tested_revision", "tested_tree_sha", "manifest_sha256", "build_receipt_sha256", "executable"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "tested_revision": { "$ref": "#/$defs/git_sha" },
+            "tested_tree_sha": { "$ref": "#/$defs/git_sha" },
+            "manifest_sha256": { "$ref": "#/$defs/sha256" },
+            "build_receipt_sha256": { "$ref": "#/$defs/sha256" },
+            "executable": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "sha256"],
+              "properties": {
+                "name": { "enum": ["llama-server", "llama-bench"] },
+                "sha256": { "$ref": "#/$defs/sha256" }
+              }
+            }
+          }
+        },
+        "model_manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "bytes", "sha256"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "bytes": { "type": "integer", "minimum": 1 },
+              "sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        },
+        "suite": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "sha256", "fixtures"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "fixtures": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "sha256"],
+                "properties": {
+                  "path": { "type": "string", "pattern": "^benchmarks/fixtures/[A-Za-z0-9][A-Za-z0-9._/-]*\\.(?:png|jpg|jpeg)$" },
+                  "sha256": { "$ref": "#/$defs/sha256" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "run": {
       "type": "object",
       "additionalProperties": false,
@@ -62,6 +161,7 @@
         "prompt_tokens_per_second",
         "generation_tokens_per_second",
         "generation_settings",
+        "command",
         "notes"
       ],
       "properties": {
@@ -99,6 +199,11 @@
         "draft_acceptance": { "type": "string", "pattern": "^[0-9]+/[0-9]+$" },
         "output_sha256": { "$ref": "#/$defs/sha256" },
         "output_equivalence": { "enum": ["byte_identical", "diverged", "not_compared"] },
+        "command": {
+          "type": ["array", "null"],
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
         "generation_settings": {
           "type": "object",
           "additionalProperties": false,

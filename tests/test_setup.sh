@@ -213,6 +213,18 @@ assert_contains "$unsupported_output" 'unsupported operating system: Linux (requ
 [[ ! -e "$temporary_root/runtime-sync.log" ]] || fail 'unsupported-OS rejection synchronized the runtime'
 [[ ! -e "$temporary_root/cmake.log" ]] || fail 'unsupported-OS rejection invoked CMake'
 
+runtime_manifest="$fixture_root/manifests/runtimes/fixture-runtime.json"
+cp "$runtime_manifest" "$runtime_manifest.saved"
+"$real_jq" '.tested_revision = "3333333333333333333333333333333333333333"' \
+    "$runtime_manifest.saved" > "$runtime_manifest"
+if runtime_linkage_output=$(PATH="$test_path" "$fixture_root/bin/metal-llm" setup fixture-model --dry-run 2>&1); then
+    mv "$runtime_manifest.saved" "$runtime_manifest"
+    fail 'setup accepted a patchless runtime whose tested revision differs from its base revision'
+fi
+mv "$runtime_manifest.saved" "$runtime_manifest"
+assert_contains "$runtime_linkage_output" 'invalid runtime manifest'
+[[ ! -e "$fixture_root/.lab" ]] || fail 'invalid runtime linkage created .lab state'
+
 dry_output=$(HF_TOKEN='secret-token-must-not-leak' PATH="$test_path" "$fixture_root/bin/metal-llm" setup dry-model --dry-run)
 assert_contains "$dry_output" 'runtime-sync fixture-runtime --dry-run'
 assert_contains "$dry_output" 'runtime-sync fixture-stable --dry-run'
@@ -274,6 +286,7 @@ for runtime_id in fixture-runtime fixture-stable; do
     [[ ! -e "$receipt.part" ]] || fail "setup left a partial receipt for $runtime_id"
     "$real_jq" -e --arg id "$runtime_id" '
         .schema_version == 1 and .runtime_id == $id and
+        .tested_revision == "1111111111111111111111111111111111111111" and
         .source_tree_sha == "2222222222222222222222222222222222222222" and
         .tested_tree_sha == "2222222222222222222222222222222222222222" and
         (.runtime_manifest_sha256 | test("^[0-9a-f]{64}$")) and

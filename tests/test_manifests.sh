@@ -45,6 +45,7 @@ for manifest_file in "${runtime_files[@]}"; do
         (.tested_revision | test("^[0-9a-f]{40}$")) and
         (.tested_tree_sha | test("^[0-9a-f]{40}$")) and
         (.patches | type == "array") and
+        (.tested_revision == (if (.patches | length) == 0 then .base_revision else .patches[-1].revision end)) and
         (.build.generator | type == "string" and length > 0) and
         (.build.targets | type == "array" and length > 0 and all(type == "string" and length > 0))
     ' "$manifest_file" >/dev/null

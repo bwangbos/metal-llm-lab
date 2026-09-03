@@ -4,10 +4,15 @@
 
 Stop every other full-model process, then retry. This failure was reproduced
 when `llama-bench` ran beside an active server and disappeared after the server
-stopped. One loaded target is the supported configuration. `metal-llm bench`
-checks the configured lab port before starting `--mode local`. Use `--mode
-endpoint` for API checks against the already running server; the modes never run
-together.
+stopped. One loaded target is the supported configuration. Normal harness
+serving and local benchmarks share a managed lease across checkouts that use the
+same per-user/session `TMPDIR`, and `metal-llm bench --mode local` also checks the
+configured lab endpoint. A stale lease is recovered only after its PID/start
+identity is no longer live; the harness never kills that process. Processes
+started outside `metal-llm` are not represented by the lease and must be stopped
+manually. Use `--mode endpoint` for API checks against a live server started by
+`metal-llm serve`; the recorded server identity must match the requested model,
+profile, verified build, artifacts, host, and port.
 
 ## Structured JSON is empty or clipped
 
@@ -42,4 +47,7 @@ macOS memory or power settings automatically.
 
 Use the `vision` profile and confirm its dry-run command includes the pinned F16
 projector and `--image-min-tokens 1024`. The recorded six-case suite passed, but
-it is local integration evidence rather than a lightweight CI test.
+it is local integration evidence rather than a lightweight CI test. Harness
+vision fixtures must be Git-tracked regular non-symlink PNG/JPEG files beneath
+`benchmarks/fixtures/`; path confinement, MIME, and checksum are checked before
+the fixture is sent.

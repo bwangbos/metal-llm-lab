@@ -30,45 +30,98 @@ metal_llm_validate_benchmark_suite() {
     ' "$suite_file" >/dev/null 2>&1
 }
 
-metal_llm_verified_bench_path() {
-    local runtime_id=$1
-    local runtime_manifest=$2
-    local build_dir="$METAL_LLM_ROOT/.lab/runtimes/$runtime_id/build-metal"
-    local receipt_path="$build_dir/build-receipt.json"
-    local bench_executable="$build_dir/bin/llama-bench"
+metal_llm_command_json() {
+    jq -cn --args '$ARGS.positional' -- "$@"
+}
 
-    [[ -f "$receipt_path" ]] || {
-        metal_llm_die "build receipt is missing: $runtime_id ($receipt_path)"
+metal_llm_benchmark_system_provenance() {
+    local os_version='' compiler_output='' compiler='' sdk='' power_output='' power_source=''
+    local power_settings='' low_power_mode_json=null
+    if command -v sw_vers >/dev/null 2>&1; then
+        os_version=$(sw_vers -productVersion 2>/dev/null || true)
+    fi
+    typeset -a compiler_lines
+    if command -v xcrun >/dev/null 2>&1; then
+        compiler_output=$(xcrun clang --version 2>/dev/null || true)
+        if [[ -n "$compiler_output" ]]; then
+            compiler_lines=("${(@f)compiler_output}")
+            compiler=$compiler_lines[1]
+        fi
+        sdk=$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || true)
+    fi
+    if command -v pmset >/dev/null 2>&1; then
+        power_output=$(pmset -g batt 2>/dev/null || true)
+        if [[ "$power_output" =~ "Now drawing from '([^']+)'" ]]; then
+            power_source=$match[1]
+        fi
+        power_settings=$(pmset -g custom 2>/dev/null || true)
+        if [[ "$power_settings" =~ '(^|\n)[[:space:]]*lowpowermode[[:space:]]+([01])([[:space:]]|$)' ]]; then
+            [[ "$match[2]" == 1 ]] && low_power_mode_json=true || low_power_mode_json=false
+        fi
+    fi
+    jq -cn --arg os_version "$os_version" --arg compiler "$compiler" --arg sdk "$sdk" \
+      --arg power_source "$power_source" --argjson low_power_mode "$low_power_mode_json" '
+      {
+        operating_system: "macOS",
+        operating_system_version: (if $os_version == "" then null else $os_version end),
+        compiler: (if $compiler == "" then null else $compiler end),
+        sdk: (if $sdk == "" then null else $sdk end),
+        power_source: (if $power_source == "" then null else $power_source end),
+        low_power_mode: $low_power_mode
+      }
+    '
+}
+
+metal_llm_validate_vision_fixture() {
+    local fixture=$1
+    local fixture_root="$METAL_LLM_ROOT/benchmarks/fixtures"
+    [[ "$fixture" == benchmarks/fixtures/* && "$fixture" != /* && "$fixture" != *'/../'* && \
+      "$fixture" != '../'* && "$fixture" != *'/./'* && "$fixture" != './'* ]] || {
+        metal_llm_die "vision fixture must stay under benchmarks/fixtures: $fixture"
         return 1
     }
-    local expected_tree expected_revision receipt_runtime receipt_tree receipt_bench_sha
-    expected_tree=$(jq -er '.tested_tree_sha' "$runtime_manifest") || return 1
-    expected_revision=$(jq -er '.tested_revision' "$runtime_manifest") || return 1
-    IFS=$'\t' read -r receipt_runtime receipt_tree receipt_bench_sha <<< "$(jq -er '[
-      .runtime_id, .tested_tree_sha, .binaries["llama-bench"].sha256
-    ] | @tsv' "$receipt_path")" || return 1
-    [[ "$receipt_runtime" == "$runtime_id" && "$receipt_tree" == "$expected_tree" ]] || {
-        metal_llm_die "build receipt does not match runtime manifest: $runtime_id"
+    case "$fixture" in
+        *.png|*.jpg|*.jpeg) ;;
+        *) metal_llm_die "unsupported vision fixture type: $fixture"; return 1 ;;
+    esac
+    git -C "$METAL_LLM_ROOT" ls-files --error-unmatch -- "$fixture" >/dev/null 2>&1 || {
+        metal_llm_die "vision fixture is not tracked: $fixture"
         return 1
     }
-    [[ -x "$bench_executable" ]] || {
-        metal_llm_die "benchmark executable is missing: $bench_executable"
+    local fixture_path="$METAL_LLM_ROOT/$fixture"
+    [[ -e "$fixture_path" ]] || { metal_llm_die "vision fixture is missing: $fixture"; return 1; }
+    [[ -f "$fixture_path" && ! -L "$fixture_path" ]] || {
+        metal_llm_die "vision fixture is not a regular file: $fixture"
         return 1
     }
-    local actual_sha
-    actual_sha=$(metal_llm_sha256 "$bench_executable") || return 1
-    [[ "$actual_sha" == "$receipt_bench_sha" ]] || {
-        metal_llm_die "benchmark binary checksum mismatch for $runtime_id"
+    local canonical_root=${fixture_root:A}
+    local canonical_path=${fixture_path:A}
+    [[ "$canonical_path" == "$canonical_root"/* ]] || {
+        metal_llm_die "vision fixture escapes benchmarks/fixtures: $fixture"
         return 1
     }
-    print -- "$bench_executable"
+    command -v file >/dev/null 2>&1 || { metal_llm_die 'file is required for vision fixtures'; return 1; }
+    local mime
+    mime=$(file -b --mime-type "$canonical_path" 2>/dev/null) || return 1
+    [[ "$mime" == image/png || "$mime" == image/jpeg ]] || {
+        metal_llm_die "vision fixture content is not PNG or JPEG: $fixture"
+        return 1
+    }
+    typeset -g METAL_LLM_VERIFIED_FIXTURE_PATH="$canonical_path"
+    typeset -g METAL_LLM_VERIFIED_FIXTURE_MIME="$mime"
+    typeset -g METAL_LLM_VERIFIED_FIXTURE_SHA256
+    METAL_LLM_VERIFIED_FIXTURE_SHA256=$(metal_llm_sha256 "$canonical_path") || return 1
 }
 
 metal_llm_bench_port_is_owned() {
     local host=$1
     local port=$2
     command -v curl >/dev/null 2>&1 || return 1
-    curl -fsS --connect-timeout 1 --max-time 1 "http://$host:$port/health" >/dev/null 2>&1
+    typeset -a health_arguments
+    health_arguments=(-fsS --connect-timeout 1 --max-time 1)
+    [[ -z "${METAL_LLM_API_KEY:-}" ]] || health_arguments+=(-H "Authorization: Bearer $METAL_LLM_API_KEY")
+    health_arguments+=("http://$host:$port/health")
+    curl "${health_arguments[@]}" >/dev/null 2>&1
 }
 
 metal_llm_bench() {
@@ -124,7 +177,26 @@ metal_llm_bench() {
         return 1
     fi
 
-    local profile_id=${METAL_LLM_PROFILE:-}
+    local requested_profile=${METAL_LLM_PROFILE:-}
+    local profile_id=$requested_profile
+    local managed_identity_record=''
+    if [[ "$mode" == endpoint && "$dry_run" == 0 ]]; then
+        metal_llm_read_live_managed_identity || return 1
+        managed_identity_record=$METAL_LLM_MANAGED_IDENTITY_RECORD
+        jq -e --arg model "$model_id" '
+          .owner_kind == "serve" and .model_id == $model
+        ' "$managed_identity_record" >/dev/null || {
+            metal_llm_die "managed endpoint identity does not match model: $model_id"
+            return 1
+        }
+        local active_profile
+        active_profile=$(jq -er '.profile_id' "$managed_identity_record") || return 1
+        if [[ -n "$requested_profile" && "$requested_profile" != "$active_profile" ]]; then
+            metal_llm_die "managed endpoint profile mismatch: requested $requested_profile, active $active_profile"
+            return 1
+        fi
+        profile_id=$active_profile
+    fi
     [[ -n "$profile_id" ]] || profile_id=$(jq -er '.default_profile' "$suite_file") || return 1
     local profile_record
     profile_record=$(jq -er --arg id "$profile_id" '
@@ -154,29 +226,26 @@ metal_llm_bench() {
     }
     local bench_executable='' model_path='' mtp_path=''
     if [[ "$mode" == local ]]; then
-        bench_executable=$(metal_llm_verified_bench_path "$runtime_id" "$runtime_manifest") || return 1
+        metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-bench || return 1
+        bench_executable=$METAL_LLM_VERIFIED_EXECUTABLE
         local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
+        metal_llm_profile_artifact_identities "$model_manifest" "$artifact_dir" "$profile_id" || return 1
         model_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$model_artifact_id") || return 1
         if [[ "$mtp_enabled" == true ]]; then
             mtp_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$mtp_artifact_id") || return 1
         fi
+    elif (( dry_run == 0 )); then
+        metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-server || return 1
+        local endpoint_artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
+        metal_llm_profile_artifact_identities "$model_manifest" "$endpoint_artifact_dir" "$profile_id" || return 1
     fi
 
-    local hardware_id=${METAL_LLM_HARDWARE_ID:-}
-    if [[ -z "$hardware_id" ]]; then
-        typeset -a hardware_manifests
-        hardware_manifests=("$METAL_LLM_ROOT"/manifests/hardware/*.json(N))
-        (( ${#hardware_manifests} == 1 )) || {
-            metal_llm_die 'METAL_LLM_HARDWARE_ID is required when more than one hardware manifest exists'
-            return 1
-        }
-        hardware_id=$(jq -er '.id' "$hardware_manifests[1]") || return 1
-    fi
-    metal_llm_valid_id "$hardware_id" || { metal_llm_die "invalid hardware id: $hardware_id"; return 1; }
-    [[ -f "$METAL_LLM_ROOT/manifests/hardware/$hardware_id.json" ]] || {
-        metal_llm_die "unknown hardware id: $hardware_id"
+    [[ -z "${METAL_LLM_HARDWARE_ID:-}" ]] || {
+        metal_llm_die 'METAL_LLM_HARDWARE_ID is not accepted; hardware is detected and matched exactly'
         return 1
     }
+    metal_llm_detect_hardware_manifest || return 1
+    local hardware_id=$METAL_LLM_DETECTED_HARDWARE_ID
 
     local host=${METAL_LLM_HOST:-127.0.0.1}
     local port=${METAL_LLM_PORT:-8080}
@@ -184,6 +253,27 @@ metal_llm_bench() {
         metal_llm_die 'METAL_LLM_PORT must be an integer from 1 to 65535'
         return 1
     }
+    if [[ "$mode" == endpoint && "$dry_run" == 0 ]]; then
+        local current_model_manifest_sha
+        current_model_manifest_sha=$(metal_llm_sha256 "$model_manifest") || return 1
+        jq -e --arg host "$host" --argjson port "$port" --arg runtime "$runtime_id" \
+          --arg revision "$METAL_LLM_VERIFIED_RUNTIME_REVISION" \
+          --arg tree "$METAL_LLM_VERIFIED_RUNTIME_TREE" \
+          --arg manifest_sha "$METAL_LLM_VERIFIED_RUNTIME_MANIFEST_SHA256" \
+          --arg receipt_sha "$METAL_LLM_VERIFIED_BUILD_RECEIPT_SHA256" \
+          --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
+          --arg model_manifest_sha "$current_model_manifest_sha" \
+          --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" '
+          .host == $host and .port == $port and .runtime_id == $runtime and
+          .runtime_revision == $revision and .runtime_tree_sha == $tree and
+          .runtime_manifest_sha256 == $manifest_sha and .build_receipt_sha256 == $receipt_sha and
+          .executable_name == "llama-server" and .executable_sha256 == $executable_sha and
+          .model_manifest_sha256 == $model_manifest_sha and .artifacts == $artifacts
+        ' "$managed_identity_record" >/dev/null || {
+            metal_llm_die "managed endpoint identity does not match verified profile/build/artifacts at $host:$port"
+            return 1
+        }
+    fi
     if (( dry_run == 0 )); then
         if [[ "$mode" == local ]] && metal_llm_bench_port_is_owned "$host" "$port"; then
             metal_llm_die "configured port is owned by a running lab server: $host:$port"
@@ -199,8 +289,28 @@ metal_llm_bench() {
         metal_llm_die 'METAL_LLM_NOW must be an RFC 3339 UTC timestamp'
         return 1
     }
-    local repository_revision=${METAL_LLM_REPOSITORY_REVISION:-}
-    [[ -n "$repository_revision" ]] || repository_revision=$(git -C "$METAL_LLM_ROOT" rev-parse HEAD 2>/dev/null) || {
+    jq -en --arg now "$now" '
+      try (($now | fromdateiso8601 | strftime("%Y-%m-%dT%H:%M:%SZ")) == $now) catch false
+    ' >/dev/null || {
+        metal_llm_die 'METAL_LLM_NOW must be a real RFC 3339 UTC calendar timestamp'
+        return 1
+    }
+    [[ -z "${METAL_LLM_REPOSITORY_REVISION:-}" ]] || {
+        metal_llm_die 'METAL_LLM_REPOSITORY_REVISION is not accepted; the checked-out revision is recorded'
+        return 1
+    }
+    command -v git >/dev/null 2>&1 || { metal_llm_die 'git is required'; return 1; }
+    git -C "$METAL_LLM_ROOT" rev-parse --git-dir >/dev/null 2>&1 || {
+        metal_llm_die 'benchmark repository is not a Git checkout'
+        return 1
+    }
+    local repository_status repository_revision repository_tree
+    repository_status=$(git -C "$METAL_LLM_ROOT" status --porcelain=v1 --untracked-files=all) || return 1
+    [[ -z "$repository_status" ]] || {
+        metal_llm_die 'benchmark repository checkout is not clean'
+        return 1
+    }
+    repository_revision=$(git -C "$METAL_LLM_ROOT" rev-parse HEAD 2>/dev/null) || {
         metal_llm_die 'could not resolve repository revision'
         return 1
     }
@@ -208,8 +318,13 @@ metal_llm_bench() {
         metal_llm_die 'repository revision must be a 40-character Git SHA'
         return 1
     }
+    repository_tree=$(git -C "$METAL_LLM_ROOT" rev-parse 'HEAD^{tree}') || return 1
     local runtime_revision
-    runtime_revision=$(jq -er '.tested_revision' "$runtime_manifest") || return 1
+    if (( dry_run == 1 )) && [[ "$mode" == endpoint ]]; then
+        runtime_revision=$(jq -er '.tested_revision' "$runtime_manifest") || return 1
+    else
+        runtime_revision=$METAL_LLM_VERIFIED_RUNTIME_REVISION
+    fi
     local measurement_kind=single_run
 
     local include_optional=${METAL_LLM_INCLUDE_OPTIONAL:-0}
@@ -217,13 +332,97 @@ metal_llm_bench() {
         metal_llm_die 'METAL_LLM_INCLUDE_OPTIONAL must be 0 or 1'
         return 1
     }
+    if [[ "$mode" == endpoint && "$dry_run" == 0 ]] && jq -e --argjson include "$include_optional" '
+      any(.cases[]; .mode == "endpoint" and .kind == "vision" and
+        ((.optional // false) == false or $include == 1))
+    ' "$suite_file" >/dev/null; then
+        jq -e '.vision == true' "$managed_identity_record" >/dev/null || {
+            metal_llm_die 'vision benchmark requires a vision-capable managed profile'
+            return 1
+        }
+    fi
+    local fixture_record fixture_relative fixtures_json='[]'
+    while IFS= read -r fixture_record; do
+        fixture_relative=$(jq -er '.fixture' <<< "$fixture_record") || return 1
+        metal_llm_validate_vision_fixture "$fixture_relative" || return 1
+        fixtures_json=$(jq -c --arg path "$fixture_relative" \
+          --arg sha "$METAL_LLM_VERIFIED_FIXTURE_SHA256" \
+          '. + [{path: $path, sha256: $sha}]' <<< "$fixtures_json") || return 1
+    done < <(jq -c --arg mode "$mode" --argjson include "$include_optional" '
+      .cases[] | select(.mode == $mode and .kind == "vision" and
+        ((.optional // false) == false or $include == 1))
+    ' "$suite_file")
+
+    local model_manifest_sha suite_sha system_provenance provenance_json
+    model_manifest_sha=$(metal_llm_sha256 "$model_manifest") || return 1
+    suite_sha=$(metal_llm_sha256 "$suite_file") || return 1
+    system_provenance=$(metal_llm_benchmark_system_provenance) || return 1
+    if (( dry_run == 0 )); then
+        provenance_json=$(jq -cn \
+          --arg repository_revision "$repository_revision" --arg repository_tree "$repository_tree" \
+          --arg hardware "$hardware_id" --arg chip "$METAL_LLM_DETECTED_CHIP" \
+          --argjson memory "$METAL_LLM_DETECTED_MEMORY_BYTES" --argjson system "$system_provenance" \
+          --arg profile "$profile_id" \
+          --arg runtime "$runtime_id" --arg runtime_revision "$runtime_revision" \
+          --arg runtime_tree "$METAL_LLM_VERIFIED_RUNTIME_TREE" \
+          --arg runtime_manifest_sha "$METAL_LLM_VERIFIED_RUNTIME_MANIFEST_SHA256" \
+          --arg receipt_sha "$METAL_LLM_VERIFIED_BUILD_RECEIPT_SHA256" \
+          --arg executable_name "${METAL_LLM_VERIFIED_EXECUTABLE:t}" \
+          --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
+          --arg model_manifest_sha "$model_manifest_sha" \
+          --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
+          --arg suite "$suite_id" --arg suite_sha "$suite_sha" --argjson fixtures "$fixtures_json" '
+          {
+            repository: {revision: $repository_revision, tree_sha: $repository_tree, clean: true},
+            hardware: {id: $hardware, chip: $chip, unified_memory_bytes: $memory},
+            system: $system,
+            profile_id: $profile,
+            runtime: {
+              id: $runtime, tested_revision: $runtime_revision, tested_tree_sha: $runtime_tree,
+              manifest_sha256: $runtime_manifest_sha, build_receipt_sha256: $receipt_sha,
+              executable: {name: $executable_name, sha256: $executable_sha}
+            },
+            model_manifest_sha256: $model_manifest_sha,
+            artifacts: $artifacts,
+            suite: {id: $suite, sha256: $suite_sha, fixtures: $fixtures}
+          }
+        ') || return 1
+    fi
+    if [[ "$mode" == local && "$dry_run" == 0 ]]; then
+        local identity_json
+        identity_json=$(jq -cn \
+          --arg owner_kind local-bench --arg model "$model_id" --arg profile "$profile_id" \
+          --argjson vision false --arg runtime "$runtime_id" \
+          --arg runtime_revision "$METAL_LLM_VERIFIED_RUNTIME_REVISION" \
+          --arg runtime_tree "$METAL_LLM_VERIFIED_RUNTIME_TREE" \
+          --arg runtime_manifest_sha "$METAL_LLM_VERIFIED_RUNTIME_MANIFEST_SHA256" \
+          --arg receipt_sha "$METAL_LLM_VERIFIED_BUILD_RECEIPT_SHA256" \
+          --arg executable_name llama-bench --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
+          --arg model_manifest_sha "$model_manifest_sha" \
+          --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
+          --arg host "$host" --argjson port "$port" '
+          {
+            owner_kind: $owner_kind, model_id: $model, profile_id: $profile, vision: $vision,
+            runtime_id: $runtime, runtime_revision: $runtime_revision, runtime_tree_sha: $runtime_tree,
+            runtime_manifest_sha256: $runtime_manifest_sha, build_receipt_sha256: $receipt_sha,
+            executable_name: $executable_name, executable_sha256: $executable_sha,
+            model_manifest_sha256: $model_manifest_sha, artifacts: $artifacts, host: $host, port: $port
+          }
+        ') || return 1
+        metal_llm_acquire_managed_lease "$identity_json" || return 1
+        local managed_owner_token=$METAL_LLM_MANAGED_OWNER_TOKEN
+        trap "metal_llm_release_managed_lease '$managed_owner_token'" EXIT
+        trap "metal_llm_release_managed_lease '$managed_owner_token'; exit 130" HUP INT TERM
+    fi
     local run_buffer
     run_buffer=$(mktemp "${TMPDIR:-/tmp}/metal-llm-bench-runs.XXXXXX") || return 1
     : > "$run_buffer"
 
     local case_record case_id case_kind optional prompt_tokens generated_tokens repetitions notes
     local max_tokens temperature seed prompt fixture bench_output throughput
+    local command_json payload response content output_sha image_data image_mime
     local flash_value=off lazy_value=off
+    typeset -a bench_arguments recorded_bench_arguments curl_arguments recorded_curl_arguments
     [[ "$flash_attention" == true ]] && flash_value=on
     [[ "$lazy_mmap" == true ]] && lazy_value=on
     while IFS= read -r case_record; do
@@ -238,7 +437,6 @@ metal_llm_bench() {
             generated_tokens=$(jq -r '.generated_tokens' <<< "$case_record")
             repetitions=$(jq -r '.repetitions' <<< "$case_record")
             (( repetitions == 3 )) && measurement_kind=three_run_mean || measurement_kind=single_run
-            typeset -a bench_arguments
             bench_arguments=(
               "$bench_executable" -m "$model_path" -ngl "$gpu_layers"
               -p "$prompt_tokens" -n "$generated_tokens" -b 512 -ub 512
@@ -247,6 +445,17 @@ metal_llm_bench() {
             if [[ "$mtp_enabled" == true ]]; then
                 bench_arguments+=(
                   -md "$mtp_path" --spec-type "$spec_type"
+                  --spec-draft-n-max "$draft_n_max" -ngld "$draft_gpu_layers"
+                )
+            fi
+            recorded_bench_arguments=(
+              llama-bench -m "artifact:$model_artifact_id" -ngl "$gpu_layers"
+              -p "$prompt_tokens" -n "$generated_tokens" -b 512 -ub 512
+              -r "$repetitions" -fa "$flash_value" -lm "$load_mode" -lzm "$lazy_value" -o json
+            )
+            if [[ "$mtp_enabled" == true ]]; then
+                recorded_bench_arguments+=(
+                  -md "artifact:$mtp_artifact_id" --spec-type "$spec_type"
                   --spec-draft-n-max "$draft_n_max" -ngld "$draft_gpu_layers"
                 )
             fi
@@ -261,12 +470,17 @@ metal_llm_bench() {
                 metal_llm_die "could not parse llama-bench output for case: $case_id"
                 return 1
             }
+            command_json=$(metal_llm_command_json "${recorded_bench_arguments[@]}") || {
+                rm -f -- "$run_buffer"
+                return 1
+            }
             jq -n \
               --arg id "$case_id" --arg timestamp "$now" --arg repo "$repository_revision" \
               --arg hardware "$hardware_id" --arg runtime "$runtime_id" --arg runtime_revision "$runtime_revision" \
               --arg profile "$profile_id" --arg notes "$notes" --arg kind "$measurement_kind" \
               --argjson prompt "$prompt_tokens" --argjson generated "$generated_tokens" --argjson throughput "$throughput" \
-              --argjson repetitions "$repetitions" --argjson mtp "$mtp_enabled" '
+              --argjson repetitions "$repetitions" --argjson mtp "$mtp_enabled" \
+              --argjson command "$command_json" '
               {
                 id: $id, experiment: "suite-run", measurement_kind: $kind,
                 timestamp: $timestamp, repository_revision: $repo,
@@ -275,6 +489,7 @@ metal_llm_bench() {
                 prompt_tokens_per_second: (if $prompt > 0 then $throughput else null end),
                 generation_tokens_per_second: (if $generated > 0 then $throughput else null end),
                 mtp: $mtp,
+                command: $command,
                 generation_settings: {temperature: 0, seed: 1234, max_tokens: $generated, reasoning: false, repetitions: $repetitions},
                 notes: $notes
               }
@@ -294,7 +509,8 @@ metal_llm_bench() {
                 metal_llm_die "vision fixture is missing: $fixture"
                 return 1
             fi
-            local payload response content output_sha image_data='' image_mime=''
+            image_data=''
+            image_mime=''
             if [[ "$case_kind" == vision ]]; then
                 command -v base64 >/dev/null 2>&1 || {
                     rm -f -- "$run_buffer"
@@ -328,7 +544,13 @@ metal_llm_bench() {
                    temperature: $temperature, seed: $seed}
                 ') || { rm -f -- "$run_buffer"; return 1; }
             fi
-            response=$(curl -fsS "http://$host:$port/v1/chat/completions" -H 'Content-Type: application/json' -d "$payload") || {
+            curl_arguments=(-fsS "http://$host:$port/v1/chat/completions" -H 'Content-Type: application/json')
+            [[ -z "${METAL_LLM_API_KEY:-}" ]] || curl_arguments+=(-H "Authorization: Bearer $METAL_LLM_API_KEY")
+            curl_arguments+=(-d "$payload")
+            recorded_curl_arguments=(curl -fsS "http://$host:$port/v1/chat/completions" -H 'Content-Type: application/json')
+            [[ -z "${METAL_LLM_API_KEY:-}" ]] || recorded_curl_arguments+=(-H 'Authorization: Bearer <redacted>')
+            recorded_curl_arguments+=(-d "$payload")
+            response=$(curl "${curl_arguments[@]}") || {
                 rm -f -- "$run_buffer"
                 metal_llm_die "API benchmark failed for case: $case_id"
                 return 1
@@ -344,13 +566,17 @@ metal_llm_bench() {
             }
             prompt_tokens=$(jq -er '.usage.prompt_tokens' <<< "$response") || prompt_tokens=null
             generated_tokens=$(jq -er '.usage.completion_tokens' <<< "$response") || generated_tokens=null
+            command_json=$(metal_llm_command_json "${recorded_curl_arguments[@]}") || {
+                rm -f -- "$run_buffer"
+                return 1
+            }
             jq -n \
               --arg id "$case_id" --arg timestamp "$now" --arg repo "$repository_revision" \
               --arg hardware "$hardware_id" --arg runtime "$runtime_id" --arg runtime_revision "$runtime_revision" \
               --arg profile "$profile_id" --arg notes "$notes; API response did not expose phase throughput" \
               --arg sha "$output_sha" --argjson prompt "$prompt_tokens" --argjson generated "$generated_tokens" \
               --argjson temperature "$temperature" --argjson seed "$seed" --argjson max_tokens "$max_tokens" \
-              --argjson mtp "$mtp_enabled" '
+              --argjson mtp "$mtp_enabled" --argjson command "$command_json" '
               {
                 id: $id, experiment: "suite-run", measurement_kind: "single_run",
                 timestamp: $timestamp, repository_revision: $repo,
@@ -358,6 +584,7 @@ metal_llm_bench() {
                 profile: $profile, effective_prompt_tokens: $prompt, generated_tokens: $generated,
                 prompt_tokens_per_second: null, generation_tokens_per_second: null,
                 mtp: $mtp, output_sha256: $sha,
+                command: $command,
                 generation_settings: {temperature: $temperature, seed: $seed, max_tokens: $max_tokens, reasoning: false},
                 notes: $notes
               }
@@ -379,14 +606,24 @@ metal_llm_bench() {
     result_part=$(mktemp "$result_path.part.XXXXXX") || { rm -f -- "$run_buffer"; return 1; }
     if ! jq -s \
       --arg experiment_id "$compact_timestamp-$suite_id" --arg date "${now[1,10]}" \
-      --arg model "$model_id" --arg suite "$suite_id" --arg mode "$mode" '
+      --arg model "$model_id" --arg suite "$suite_id" --arg mode "$mode" \
+      --argjson provenance "$provenance_json" '
       {schema_version: 1, experiment_id: ($experiment_id | ascii_downcase), date: $date,
-       model_id: $model, suite_id: $suite, benchmark_mode: $mode, runs: .}
+       model_id: $model, suite_id: $suite, benchmark_mode: $mode, provenance: $provenance, runs: .}
     ' "$run_buffer" > "$result_part"; then
         rm -f -- "$run_buffer" "$result_part"
         return 1
     fi
     rm -f -- "$run_buffer"
-    mv -f -- "$result_part" "$result_path" || return 1
+    if ! metal_llm_validate_result "$result_part" 'pending benchmark result'; then
+        rm -f -- "$result_part"
+        return 1
+    fi
+    if ! ln "$result_part" "$result_path" 2>/dev/null; then
+        rm -f -- "$result_part"
+        metal_llm_die "benchmark result already exists: ${result_path:t}"
+        return 1
+    fi
+    rm -f -- "$result_part" || return 1
     print -- "wrote benchmark result: $result_path"
 }

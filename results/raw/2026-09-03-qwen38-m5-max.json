@@ -3,6 +3,7 @@
   "experiment_id": "2026-09-03-qwen38-m5-max",
   "date": "2026-09-03",
   "model_id": "qwen3.8-flash-next",
+  "provenance": null,
   "summary": {
     "output": "qwen3.8-flash-next-m5-max.md",
     "title": "Qwen3.8-Flash-Next on Apple M5 Max (128 GB)"
@@ -149,6 +150,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -175,6 +177,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -201,6 +204,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -227,6 +231,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -253,6 +258,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -279,6 +285,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -305,6 +312,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -331,6 +339,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -357,6 +366,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -383,6 +393,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -409,6 +420,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -434,6 +446,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -460,6 +473,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -484,6 +498,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -510,6 +525,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -536,6 +552,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -563,6 +580,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -589,6 +607,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -616,6 +635,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -642,6 +662,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -669,6 +690,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -695,6 +717,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -722,6 +745,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -748,6 +772,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -775,6 +800,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -801,6 +827,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -828,6 +855,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -854,6 +882,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -881,6 +910,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -907,6 +937,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -934,6 +965,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -960,6 +992,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -987,6 +1020,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1013,6 +1047,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1040,6 +1075,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1066,6 +1102,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1093,6 +1130,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1119,6 +1157,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1146,6 +1185,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1172,6 +1212,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1199,6 +1240,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1226,6 +1268,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1254,6 +1297,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1281,6 +1325,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1309,6 +1354,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1336,6 +1382,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1364,6 +1411,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1391,6 +1439,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1420,6 +1469,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1447,6 +1497,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1475,6 +1526,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1501,6 +1553,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1527,6 +1580,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1553,6 +1607,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1579,6 +1634,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1605,6 +1661,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1631,6 +1688,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1657,6 +1715,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1683,6 +1742,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1709,6 +1769,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1735,6 +1796,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,
@@ -1761,6 +1823,7 @@
       "repository_revision": "c34eb54fce250a711f1f55277487230740e38322",
       "hardware_id": "apple-m5-max-128gb",
       "profile": null,
+      "command": null,
       "generation_settings": {
         "temperature": 0,
         "seed": 1234,

@@ -1,5 +1,6 @@
 #!/bin/zsh
 set -euo pipefail
+unsetopt bg_nice
 
 source_root=${0:A:h:h}
 real_jq=$(command -v jq)
@@ -27,8 +28,10 @@ temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-serve.XXXXXX")
 trap 'rm -rf -- "$temporary_root"' EXIT
 fixture_root="$temporary_root/repository"
 fake_bin="$temporary_root/bin"
+managed_tmp="$temporary_root/managed-tmp"
 mkdir -p "$fixture_root"/{bin,lib,manifests/models,manifests/runtimes,manifests/hardware} \
-    "$fake_bin" "$fixture_root/.lab/artifacts/fixture-model"
+    "$fake_bin" "$managed_tmp" "$fixture_root/.lab/artifacts/fixture-model"
+export TMPDIR="$managed_tmp"
 fixture_root=${fixture_root:A}
 artifact_dir="$fixture_root/.lab/artifacts/fixture-model"
 cp "$source_root/bin/metal-llm" "$fixture_root/bin/metal-llm"
@@ -88,6 +91,10 @@ for runtime_id in hybrid stable; do
     source_tree=$($real_git -C "$source_dir" rev-parse 'HEAD^{tree}')
     print -r -- '#!/bin/zsh' > "$build_dir/bin/llama-server"
     print -r -- 'print -r -- "$@" > "$SERVE_TEST_EXEC_LOG"' >> "$build_dir/bin/llama-server"
+    print -r -- 'if [[ "${SERVE_TEST_HOLD:-0}" == 1 ]]; then' >> "$build_dir/bin/llama-server"
+    print -r -- '  print ready > "$SERVE_TEST_READY"' >> "$build_dir/bin/llama-server"
+    print -r -- '  while true; do sleep 1; done' >> "$build_dir/bin/llama-server"
+    print -r -- 'fi' >> "$build_dir/bin/llama-server"
     print -r -- '#!/bin/zsh' > "$build_dir/bin/llama-bench"
     print -r -- 'exit 0' >> "$build_dir/bin/llama-bench"
     chmod +x "$build_dir/bin/llama-server" "$build_dir/bin/llama-bench"
@@ -106,6 +113,7 @@ for runtime_id in hybrid stable; do
         --arg id "$runtime_id" --arg tree "$source_tree" --arg manifest "$manifest_sha" \
         --arg server "$server_sha" --arg bench "$bench_sha" '{
           schema_version: 1, runtime_id: $id, runtime_manifest_sha256: $manifest,
+          tested_revision: "1111111111111111111111111111111111111111",
           source_tree_sha: $tree, tested_tree_sha: $tree,
           binaries: {
             "llama-server": {sha256: $server},
@@ -140,7 +148,17 @@ cat > "$fake_bin/system_profiler" <<'EOF'
 print -- '      Chip: Apple M5 Max'
 print -- '      Memory: 128 GB'
 EOF
-chmod +x "$fake_bin/uname" "$fake_bin/system_profiler"
+cat > "$fake_bin/ps" <<'EOF'
+#!/bin/zsh
+pid=''
+while (( $# > 0 )); do
+  [[ "$1" == -p ]] && { pid=$2; shift 2; continue; }
+  shift
+done
+[[ -n "$pid" ]] || exit 2
+print -- "fixture-start-$pid"
+EOF
+chmod +x "$fake_bin/uname" "$fake_bin/system_profiler" "$fake_bin/ps"
 ln -s "$real_jq" "$fake_bin/jq"
 ln -s "$real_shasum" "$fake_bin/shasum"
 test_path="$fake_bin:/bin:/usr/bin"
@@ -189,6 +207,55 @@ assert_contains "$passthrough_secret_output" '--api-key <redacted>'
 export SERVE_TEST_EXEC_LOG="$temporary_root/exec.log"
 METAL_LLM_API_KEY="$secret" PATH="$test_path" "$cli" serve fixture-model --profile stable
 assert_contains "$(<"$SERVE_TEST_EXEC_LOG")" "--api-key $secret"
+
+lease_dir="$managed_tmp/metal-llm-lab/full-model.lease"
+lease_record="$lease_dir/identity.json"
+[[ -f "$lease_record" ]] || fail 'serve did not publish a managed full-model identity record'
+"$real_jq" -e --arg model fixture-model --arg profile stable --arg host 127.0.0.1 --argjson port 8080 '
+  .schema_version == 1 and .owner_kind == "serve" and
+  .model_id == $model and .profile_id == $profile and
+  .host == $host and .port == $port and
+  (.pid | type == "number" and . > 1 and floor == .) and
+  (.process_started_at | type == "string" and length > 0) and
+  (.runtime_id == "stable") and
+  (.runtime_revision == "1111111111111111111111111111111111111111") and
+  (.runtime_tree_sha | test("^[0-9a-f]{40}$")) and
+  (.runtime_manifest_sha256 | test("^[0-9a-f]{64}$")) and
+  (.build_receipt_sha256 | test("^[0-9a-f]{64}$")) and
+  (.executable_sha256 | test("^[0-9a-f]{64}$")) and
+  (.model_manifest_sha256 | test("^[0-9a-f]{64}$")) and
+  (.artifacts | type == "array" and length == 1 and .[0].id == "model" and
+    (.[0].sha256 | test("^[0-9a-f]{64}$")))
+' "$lease_record" >/dev/null || fail 'serve published an incomplete managed identity record'
+
+# A dead exec owner leaves a stale record; the next managed launch must recover
+# it without signaling the recorded PID.
+stale_pid=$("$real_jq" -r '.pid' "$lease_record")
+METAL_LLM_API_KEY="$secret" PATH="$test_path" "$cli" serve fixture-model --profile stable
+new_stale_pid=$("$real_jq" -r '.pid' "$lease_record")
+[[ "$new_stale_pid" != "$stale_pid" ]] || fail 'serve did not replace a stale managed lease'
+
+export SERVE_TEST_READY="$temporary_root/server.ready"
+SERVE_TEST_HOLD=1 PATH="$test_path" "$cli" serve fixture-model --profile stable &
+managed_server_pid=$!
+for _ in {1..50}; do
+    [[ -f "$SERVE_TEST_READY" && -f "$lease_record" ]] && break
+    sleep 0.1
+done
+[[ -f "$SERVE_TEST_READY" && -f "$lease_record" ]] || fail 'managed fixture server did not start'
+if second_output=$(PATH="$test_path" "$cli" serve fixture-model --profile stable 2>&1); then
+    kill "$managed_server_pid" 2>/dev/null || true
+    wait "$managed_server_pid" 2>/dev/null || true
+    fail 'serve allowed a second live managed full-model process'
+fi
+assert_contains "$second_output" 'managed full-model process is already active'
+kill "$managed_server_pid" 2>/dev/null || true
+wait "$managed_server_pid" 2>/dev/null || true
+rm -f -- "$SERVE_TEST_READY"
+
+# The dead server record is stale and must not prevent a later dry verification
+# or normal managed launch.
+PATH="$test_path" "$cli" serve fixture-model --profile stable >/dev/null
 
 if invalid_output=$(PATH="$test_path" "$cli" serve fixture-model --profile impossible --dry-run 2>&1); then
     fail 'serve accepted an invalid profile'

@@ -5,6 +5,7 @@ metal_llm_report_usage() {
 
 metal_llm_validate_result() {
     local result_file=$1
+    local result_label=${2:-${result_file#$METAL_LLM_ROOT/}}
     local schema_file="$METAL_LLM_ROOT/schemas/result.schema.json"
 
     [[ -f "$schema_file" ]] || {
@@ -62,21 +63,22 @@ metal_llm_validate_result() {
          else true end);
       valid(.; $schema[0])
     ' "$result_file" >/dev/null 2>&1 || {
-        metal_llm_die "invalid result document: ${result_file#$METAL_LLM_ROOT/}"
+        metal_llm_die "invalid result document: $result_label"
         return 1
     }
 
     local unsafe_path secret_key
-    unsafe_path=$(jq -r '[.. | strings | select(startswith("/" + "Users" + "/"))][0] // empty' "$result_file") || return 1
+    unsafe_path=$(jq -r '[.. | strings | select(test("/" + "Users" + "/[^/[:space:]]+/"))][0] // empty' \
+      "$result_file") || return 1
     [[ -z "$unsafe_path" ]] || {
-        metal_llm_die "unsafe private path in ${result_file#$METAL_LLM_ROOT/}"
+        metal_llm_die "unsafe private path in $result_label"
         return 1
     }
     secret_key=$(jq -r '[.. | objects | keys[] |
       select(test("(^|[_-])(api[_-]?key|access[_-]?token|token|password|secret)($|[_-])"; "i"))][0] // empty' \
       "$result_file") || return 1
     [[ -z "$secret_key" ]] || {
-        metal_llm_die "secret-like key in ${result_file#$METAL_LLM_ROOT/}: $secret_key"
+        metal_llm_die "secret-like key in $result_label: $secret_key"
         return 1
     }
 

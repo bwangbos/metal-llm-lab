@@ -47,7 +47,8 @@ if ! jq -er --arg runtime_id "$runtime_id" '
         (.file | type == "string" and test("^[0-9]{4}-[a-z0-9-]+\\.patch$"))
     )) and
     (.tested_revision | type == "string" and test("^[0-9a-f]{40}$")) and
-    (.tested_tree_sha | type == "string" and test("^[0-9a-f]{40}$"))
+    (.tested_tree_sha | type == "string" and test("^[0-9a-f]{40}$")) and
+    (.tested_revision == (if (.patches | length) == 0 then .base_revision else .patches[-1].revision end))
 ' "$manifest" >/dev/null; then
     die "invalid runtime manifest: $manifest"
 fi

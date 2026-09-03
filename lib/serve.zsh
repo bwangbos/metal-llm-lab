@@ -4,154 +4,12 @@ metal_llm_serve_usage() {
 }
 
 metal_llm_detect_recommended_profile() {
-    command -v system_profiler >/dev/null 2>&1 || {
-        metal_llm_die 'system_profiler is required to resolve profile auto'
+    metal_llm_detect_hardware_manifest || return 1
+    jq -er '.recommended_profile | select(type == "string" and length > 0)' \
+        "$METAL_LLM_DETECTED_HARDWARE_MANIFEST" || {
+        metal_llm_die 'detected hardware manifest has no recommended profile'
         return 1
     }
-
-    local system_details chip='' memory='' line memory_gib memory_bytes
-    system_details=$(system_profiler SPHardwareDataType 2>/dev/null) || {
-        metal_llm_die 'could not detect hardware for profile auto'
-        return 1
-    }
-    for line in "${(@f)system_details}"; do
-        if [[ -z "$chip" && "$line" =~ '^[[:space:]]*Chip: (.+)$' ]]; then
-            chip=$match[1]
-        elif [[ -z "$memory" && "$line" =~ '^[[:space:]]*Memory: (.+)$' ]]; then
-            memory=$match[1]
-        fi
-    done
-    [[ -n "$chip" && "$memory" =~ '^([0-9]+) GB$' ]] || {
-        metal_llm_die 'could not match detected hardware for profile auto'
-        return 1
-    }
-    memory_gib=$match[1]
-    memory_bytes=$(( memory_gib * 1024 * 1024 * 1024 ))
-
-    local architecture hardware_manifest recommended_profile=''
-    architecture=$(uname -m 2>/dev/null || print -- unknown)
-    for hardware_manifest in "$METAL_LLM_ROOT"/manifests/hardware/*.json(N); do
-        if jq -e --arg chip "$chip" --arg architecture "$architecture" --argjson memory "$memory_bytes" '
-            .chip == $chip and .architecture == $architecture and .unified_memory_bytes == $memory and
-            (.recommended_profile | type == "string" and length > 0)
-        ' "$hardware_manifest" >/dev/null 2>&1; then
-            recommended_profile=$(jq -er '.recommended_profile' "$hardware_manifest") || return 1
-            break
-        fi
-    done
-    [[ -n "$recommended_profile" ]] || {
-        metal_llm_die "no hardware manifest matches $chip with $memory"
-        return 1
-    }
-    print -- "$recommended_profile"
-}
-
-metal_llm_artifact_path() {
-    local manifest=$1
-    local artifact_dir=$2
-    local artifact_id=$3
-    local artifact_record artifact_filename expected_bytes expected_sha artifact_path actual_bytes actual_sha
-
-    artifact_record=$(jq -er --arg id "$artifact_id" '
-        first(.artifacts[] | select(.id == $id)) |
-        [.filename, (.bytes | tostring), .sha256] | @tsv
-    ' "$manifest" 2>/dev/null) || {
-        metal_llm_die "artifact not found in manifest: $artifact_id"
-        return 1
-    }
-    IFS=$'\t' read -r artifact_filename expected_bytes expected_sha <<< "$artifact_record"
-    artifact_path="$artifact_dir/$artifact_filename"
-    [[ -f "$artifact_path" ]] || {
-        metal_llm_die "artifact is missing: $artifact_id ($artifact_path)"
-        return 1
-    }
-    actual_bytes=$(metal_llm_file_size "$artifact_path") || return 1
-    [[ "$actual_bytes" == "$expected_bytes" ]] || {
-        metal_llm_die "byte count mismatch for $artifact_id: expected $expected_bytes, got $actual_bytes"
-        return 1
-    }
-    actual_sha=$(metal_llm_sha256 "$artifact_path") || return 1
-    [[ "$actual_sha" == "$expected_sha" ]] || {
-        metal_llm_die "checksum mismatch for $artifact_id: expected $expected_sha, got $actual_sha"
-        return 1
-    }
-    print -- "$artifact_path"
-}
-
-metal_llm_verified_server_path() {
-    local runtime_id=$1
-    local runtime_manifest=$2
-    local runtime_dir="$METAL_LLM_ROOT/.lab/runtimes/$runtime_id"
-    local source_dir="$runtime_dir/source"
-    local build_dir="$runtime_dir/build-metal"
-    local receipt_path="$build_dir/build-receipt.json"
-    local server_executable="$build_dir/bin/llama-server"
-
-    [[ -f "$receipt_path" ]] || {
-        metal_llm_die "build receipt is missing: $runtime_id ($receipt_path)"
-        return 1
-    }
-    jq -e --arg runtime_id "$runtime_id" '
-        .schema_version == 1 and .runtime_id == $runtime_id and
-        (.runtime_manifest_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
-        (.source_tree_sha | type == "string" and test("^[0-9a-f]{40}$")) and
-        (.tested_tree_sha | type == "string" and test("^[0-9a-f]{40}$")) and
-        (.binaries["llama-server"].sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
-        (.binaries["llama-bench"].sha256 | type == "string" and test("^[0-9a-f]{64}$"))
-    ' "$receipt_path" >/dev/null 2>&1 || {
-        metal_llm_die "invalid build receipt: $receipt_path"
-        return 1
-    }
-
-    local expected_tree manifest_sha receipt_record
-    local receipt_manifest_sha receipt_source_tree receipt_tested_tree receipt_server_sha
-    expected_tree=$(jq -er '.tested_tree_sha' "$runtime_manifest") || return 1
-    manifest_sha=$(metal_llm_sha256 "$runtime_manifest") || return 1
-    receipt_record=$(jq -er '[
-        .runtime_manifest_sha256, .source_tree_sha, .tested_tree_sha,
-        .binaries["llama-server"].sha256
-    ] | @tsv' "$receipt_path") || return 1
-    IFS=$'\t' read -r receipt_manifest_sha receipt_source_tree receipt_tested_tree receipt_server_sha \
-        <<< "$receipt_record"
-    [[ "$receipt_manifest_sha" == "$manifest_sha" ]] || {
-        metal_llm_die "build receipt does not match runtime manifest: $runtime_id"
-        return 1
-    }
-    [[ "$receipt_source_tree" == "$expected_tree" && "$receipt_tested_tree" == "$expected_tree" ]] || {
-        metal_llm_die "build receipt has stale source tree: $runtime_id"
-        return 1
-    }
-
-    command -v git >/dev/null 2>&1 || { metal_llm_die 'git is required'; return 1; }
-    [[ -d "$source_dir" ]] || { metal_llm_die "runtime source is missing: $source_dir"; return 1; }
-    git -C "$source_dir" rev-parse --git-dir >/dev/null 2>&1 || {
-        metal_llm_die "runtime source is not a Git checkout: $source_dir"
-        return 1
-    }
-    local source_status ignored_files actual_tree
-    source_status=$(git -C "$source_dir" status --porcelain=v1 --untracked-files=all) || return 1
-    ignored_files=$(git -C "$source_dir" ls-files --others --ignored --exclude-standard) || return 1
-    [[ -z "$source_status" && -z "$ignored_files" ]] || {
-        metal_llm_die "runtime source is not clean: $runtime_id"
-        return 1
-    }
-    actual_tree=$(git -C "$source_dir" rev-parse 'HEAD^{tree}') || return 1
-    [[ "$actual_tree" == "$expected_tree" && "$actual_tree" == "$receipt_source_tree" ]] || {
-        metal_llm_die "runtime source tree mismatch for $runtime_id: expected $expected_tree, got $actual_tree"
-        return 1
-    }
-
-    [[ -x "$server_executable" ]] || {
-        metal_llm_die "server executable is missing: $server_executable"
-        return 1
-    }
-    local server_sha
-    server_sha=$(metal_llm_sha256 "$server_executable") || return 1
-    [[ "$server_sha" == "$receipt_server_sha" ]] || {
-        metal_llm_die "server binary checksum mismatch for $runtime_id"
-        return 1
-    }
-    print -- "$server_executable"
 }
 
 metal_llm_print_serve_command() {
@@ -257,14 +115,11 @@ metal_llm_serve() {
         metal_llm_die "invalid runtime manifest: $runtime_manifest"
         return 1
     }
-    local server_executable
-    server_executable=$(metal_llm_verified_server_path "$runtime_id" "$runtime_manifest") || return 1
+    metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-server || return 1
+    local server_executable=$METAL_LLM_VERIFIED_EXECUTABLE
 
     local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
-    local text_artifact_id
-    while IFS= read -r text_artifact_id; do
-        metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$text_artifact_id" >/dev/null || return 1
-    done < <(jq -er '.text_model.artifact_ids[]' "$model_manifest")
+    metal_llm_profile_artifact_identities "$model_manifest" "$artifact_dir" "$profile_id" || return 1
 
     local model_path projector_path='' mtp_path=''
     model_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$model_artifact_id") || return 1
@@ -313,5 +168,27 @@ metal_llm_serve() {
         metal_llm_print_serve_command "${command_arguments[@]}"
         return
     fi
+    local model_manifest_sha identity_json
+    model_manifest_sha=$(metal_llm_sha256 "$model_manifest") || return 1
+    identity_json=$(jq -cn \
+        --arg owner_kind serve --arg model "$model_id" --arg profile "$profile_id" \
+        --argjson vision "$vision_enabled" --arg runtime "$runtime_id" \
+        --arg runtime_revision "$METAL_LLM_VERIFIED_RUNTIME_REVISION" \
+        --arg runtime_tree "$METAL_LLM_VERIFIED_RUNTIME_TREE" \
+        --arg runtime_manifest_sha "$METAL_LLM_VERIFIED_RUNTIME_MANIFEST_SHA256" \
+        --arg receipt_sha "$METAL_LLM_VERIFIED_BUILD_RECEIPT_SHA256" \
+        --arg executable_name llama-server --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
+        --arg model_manifest_sha "$model_manifest_sha" \
+        --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
+        --arg host "$host" --argjson port "$port" '
+      {
+        owner_kind: $owner_kind, model_id: $model, profile_id: $profile, vision: $vision,
+        runtime_id: $runtime, runtime_revision: $runtime_revision, runtime_tree_sha: $runtime_tree,
+        runtime_manifest_sha256: $runtime_manifest_sha, build_receipt_sha256: $receipt_sha,
+        executable_name: $executable_name, executable_sha256: $executable_sha,
+        model_manifest_sha256: $model_manifest_sha, artifacts: $artifacts, host: $host, port: $port
+      }
+    ') || return 1
+    metal_llm_acquire_managed_lease "$identity_json" || return 1
     exec "${command_arguments[@]}"
 }

@@ -27,11 +27,12 @@ done
 
 jq -e '
     .["$defs"].run.required as $required |
+    (.required | index("provenance") != null) and
     all([
       "timestamp", "repository_revision", "hardware_id", "runtime_id",
       "runtime_revision", "profile", "effective_prompt_tokens",
       "generated_tokens", "prompt_tokens_per_second",
-      "generation_tokens_per_second", "generation_settings", "notes"
+      "generation_tokens_per_second", "generation_settings", "command", "notes"
     ][]; $required | index(.) != null)
 ' "$schema" >/dev/null
 
@@ -142,6 +143,13 @@ if unsafe_output=$($fixture_cli report --check 2>&1); then
     fail 'report accepted a private absolute path'
 fi
 assert_contains "$unsafe_output" 'unsafe private path'
+
+jq '.runs[0].notes = ("diagnostic text embeds /" + "Users" + "/example/private within a longer value")' \
+    "$raw_result" > "$fixture_root/results/raw/result.json"
+if embedded_unsafe_output=$($fixture_cli report --check 2>&1); then
+    fail 'report accepted an embedded private absolute path'
+fi
+assert_contains "$embedded_unsafe_output" 'unsafe private path'
 
 jq '.runs[0].notes = "safe" | .environment.api_key = "not-a-real-key"' \
     "$raw_result" > "$fixture_root/results/raw/result.json"

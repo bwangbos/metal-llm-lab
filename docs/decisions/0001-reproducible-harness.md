@@ -20,6 +20,19 @@ against pinned revisions until a dedicated fork is warranted.
 ## Consequences
 
 Setup can fetch, verify, patch, build, and smoke-test declared inputs while
-benchmark records retain their command and environment. The repository remains
-compact and auditable, but maintainers must update manifests and patch
-applicability deliberately when upstream changes.
+benchmark records retain verified provenance and sanitized exact argument
+arrays. Serving and local benchmarks accept only a strict build receipt tied to
+the current runtime manifest, tested revision/tree, clean source checkout, and
+both expected executable hashes. New benchmark publication validates the full
+document and refuses a filename collision.
+
+A full-model lease under the per-user/session temporary root coordinates only
+`metal-llm` managed serving and local benchmark processes across checkouts using
+that same root. Endpoint benchmarks additionally bind to the live managed server
+identity. This does not detect or control unrelated model processes. Vision
+fixtures are tracked, checksum-recorded, regular non-symlink PNG/JPEG files
+confined to the repository fixture directory.
+
+The repository remains compact and auditable, but maintainers must update
+manifests and patch applicability deliberately when upstream changes. Evidence
+that was not captured is stored as `null`, not inferred later.

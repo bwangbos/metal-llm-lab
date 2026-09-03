@@ -67,27 +67,50 @@ manifest's recommendation:
 `METAL_LLM_HOST`, `METAL_LLM_PORT`, `METAL_LLM_PARALLEL`, and
 `METAL_LLM_CONTEXT` override the bind address, port, request slots, and context
 size. Set `METAL_LLM_API_KEY` to require an API key; its value is passed to the
-server but omitted from dry-run output. Extra llama-server arguments may follow
-`--`, for example `-- --threads 8`.
+server and forwarded by endpoint benchmarks to health and completion requests.
+It is omitted from dry-run output, process records, recorded commands, and
+results; recorded HTTP argument arrays use a `<redacted>` placeholder. Extra
+llama-server arguments may follow `--`, for example `-- --threads 8`.
 
-Only one managed server may run at a time. Stop the current process before
-switching profiles or running local `llama-bench`. `bench MODEL --suite SUITE`
-runs a versioned suite and atomically saves raw JSON. The shipped suite defaults
-to `--mode local`, which runs only standalone `llama-bench` cases and refuses an
-active endpoint. `--mode endpoint` runs only API cases and requires an already
-running endpoint; set `METAL_LLM_INCLUDE_OPTIONAL=1` to include its PNG vision
-case. `--dry-run` prints only the selected mode's actions without running them.
-The modes are mutually exclusive so the harness never loads a second full model.
-`report` validates raw results and regenerates Markdown summaries; `report
---check` detects drift without rewriting files and is appropriate for CI.
+Normal `serve` and local benchmark runs share one managed full-model lease at
+`${TMPDIR:-/tmp}/metal-llm-lab/full-model.lease`. The lease is per user/session
+temporary root and coordinates all repository checkouts that use the same
+`TMPDIR`; it records the live PID/start identity, model, profile, verified build,
+artifact identities, and endpoint. Stale and PID-reused records are recovered,
+but the harness never kills the recorded process. This lease covers only
+processes started by `metal-llm`; it cannot identify an arbitrary model process
+started another way.
+
+`bench MODEL --suite SUITE` runs a versioned suite and validates a complete raw
+JSON document before publishing it atomically without replacing an existing
+same-name measurement. The shipped suite defaults to `--mode local`, which runs
+only standalone `llama-bench` cases, acquires the shared lease, and also refuses
+a responding server on the configured lab endpoint. `--mode endpoint` runs only
+API cases and requires both a live matching `metal-llm serve` identity and a
+responding configured endpoint; it cannot silently benchmark an unrelated or
+differently configured server. Set `METAL_LLM_INCLUDE_OPTIONAL=1` to include its
+PNG vision case. `--dry-run` prints only the selected mode's actions without
+running them. `report` validates raw results and regenerates Markdown summaries;
+`report --check` detects drift without rewriting files and is appropriate for
+CI.
 
 ## Reproducible work
 
-Every benchmark preserves raw results and provenance: repository and upstream
-revisions, patches and checksums, artifacts, hardware and OS state, build flags,
-commands, fixtures, generation parameters, timings, and known anomalies. Read
-the [harness decision](docs/decisions/0001-reproducible-harness.md) before
-extending the workflow.
+New harness benchmarks require a clean Git checkout and record its actual commit
+and tree, an exact detected chip/memory hardware-manifest match, the verified
+runtime revision/tree/manifest/receipt/executable, model manifest and artifact
+identities, suite and fixture checksums, and sanitized exact argument arrays.
+OS, compiler, SDK, and power evidence is recorded from the host; unavailable
+values are explicit JSON `null`, never guessed. Hardware and repository identity
+overrides are rejected. The imported initial case-study result predates this
+capture contract and therefore carries explicit `provenance: null` and
+`command: null` markers instead of reconstructed claims.
+
+Vision benchmark fixtures must be Git-tracked regular, non-symlink PNG or JPEG
+files confined to `benchmarks/fixtures/`; both extension and detected MIME type
+are checked before use, and the result records the fixture checksum. Read the
+[harness decision](docs/decisions/0001-reproducible-harness.md) before extending
+the workflow.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for reproducibility defect reports and
 [SECURITY.md](SECURITY.md) for responsible vulnerability reporting.
