@@ -19,6 +19,9 @@ metal_llm_help() {
     print -- '  metal-llm bench MODEL --suite SUITE'
     print -- '  metal-llm report'
     print -- '  metal-llm help'
+    print -- ''
+    print -- 'environment:'
+    print -- '  METAL_LLM_BUILD_RESERVE_BYTES  build-space reserve for setup (default: 5368709120)'
 }
 
 command_name=${1:-help}

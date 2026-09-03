@@ -56,6 +56,50 @@ metal_llm_setup_usage() {
     return 2
 }
 
+metal_llm_remaining_artifact_bytes() {
+    local model_manifest=$1
+    local artifact_dir=$2
+    local remaining_bytes=0
+    local artifact_id artifact_filename artifact_bytes artifact_sha
+    local final_path part_path present_bytes present_sha
+
+    while IFS=$'\t' read -r artifact_id artifact_filename artifact_bytes artifact_sha; do
+        final_path="$artifact_dir/$artifact_filename"
+        part_path="$final_path.part"
+
+        if [[ -e "$final_path" ]]; then
+            [[ -f "$final_path" ]] || {
+                metal_llm_die "artifact path is not a regular file: $final_path"
+                return 1
+            }
+            present_bytes=$(metal_llm_file_size "$final_path") || return 1
+            present_sha=$(metal_llm_sha256 "$final_path") || return 1
+            if [[ "$present_bytes" != "$artifact_bytes" || "$present_sha" != "$artifact_sha" ]]; then
+                metal_llm_die "refusing to overwrite unverified artifact: $final_path"
+                return 1
+            fi
+            continue
+        fi
+
+        if [[ -e "$part_path" ]]; then
+            [[ -f "$part_path" ]] || {
+                metal_llm_die "partial artifact is not a regular file: $part_path"
+                return 1
+            }
+            present_bytes=$(metal_llm_file_size "$part_path") || return 1
+            if (( present_bytes > artifact_bytes )); then
+                metal_llm_die "byte count mismatch for $artifact_id: expected $artifact_bytes, got $present_bytes"
+                return 1
+            fi
+            remaining_bytes=$(( remaining_bytes + artifact_bytes - present_bytes ))
+        else
+            remaining_bytes=$(( remaining_bytes + artifact_bytes ))
+        fi
+    done < <(jq -er '.artifacts[] | [.id, .filename, (.bytes | tostring), .sha256] | @tsv' "$model_manifest")
+
+    print -- "$remaining_bytes"
+}
+
 metal_llm_setup() {
     local model_id=''
     local dry_run=0
@@ -82,6 +126,7 @@ metal_llm_setup() {
 
     [[ -n "$model_id" ]] || { metal_llm_setup_usage; return $?; }
     metal_llm_valid_id "$model_id" || { metal_llm_die "invalid model id: $model_id"; return 1; }
+    metal_llm_require_supported_host || return 1
     command -v jq >/dev/null 2>&1 || { metal_llm_die 'jq is required'; return 1; }
 
     local model_manifest="$METAL_LLM_ROOT/manifests/models/$model_id.json"
@@ -100,13 +145,22 @@ metal_llm_setup() {
         return 1
     }
 
-    local required_bytes available_bytes
-    required_bytes=$(jq -er '[.artifacts[].bytes] | add' "$model_manifest") || return 1
+    local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
+    local remaining_bytes build_reserve_bytes required_bytes available_bytes
+    remaining_bytes=$(metal_llm_remaining_artifact_bytes "$model_manifest" "$artifact_dir") || return 1
+    build_reserve_bytes=${METAL_LLM_BUILD_RESERVE_BYTES:-5368709120}
+    [[ "$build_reserve_bytes" == <-> ]] || {
+        metal_llm_die 'METAL_LLM_BUILD_RESERVE_BYTES must be a non-negative integer'
+        return 1
+    }
+    required_bytes=$(( remaining_bytes + build_reserve_bytes ))
     available_bytes=$(metal_llm_disk_bytes "$METAL_LLM_ROOT") || {
         metal_llm_die 'could not determine free disk space'
         return 1
     }
-    print -- "required artifact bytes: $required_bytes"
+    print -- "remaining artifact bytes: $remaining_bytes"
+    print -- "build reserve bytes: $build_reserve_bytes"
+    print -- "total required disk bytes: $required_bytes"
     print -- "available disk bytes: $available_bytes"
     if (( available_bytes < required_bytes )); then
         metal_llm_die "insufficient disk space: $available_bytes bytes available, $required_bytes bytes required"
@@ -114,7 +168,7 @@ metal_llm_setup() {
     fi
 
     if (( dry_run == 0 && assume_yes == 0 )) && [[ -t 0 ]]; then
-        print -n -- "Set up $model_id and download $required_bytes bytes? [y/N] "
+        print -n -- "Set up $model_id with $remaining_bytes artifact bytes remaining? [y/N] "
         local confirmation=''
         read -r confirmation
         [[ "$confirmation" == [yY] || "$confirmation" == [yY][eE][sS] ]] || {
@@ -160,17 +214,42 @@ metal_llm_setup() {
         cmake --build "$build_dir" --target "${build_targets[@]}" || return 1
     fi
 
-    local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
+    local smoke_name smoke_executable
+    for smoke_name in llama-server llama-bench; do
+        smoke_executable="$build_dir/bin/$smoke_name"
+        print -- "smoke test executable: $smoke_name --help"
+        if (( dry_run == 1 )); then
+            metal_llm_print_command "$smoke_executable" --help
+        else
+            [[ -x "$smoke_executable" ]] || {
+                metal_llm_die "smoke test executable is missing: $smoke_executable"
+                return 1
+            }
+            if ! "$smoke_executable" --help >/dev/null 2>&1; then
+                metal_llm_die "smoke test failed: $smoke_name"
+                return 1
+            fi
+        fi
+    done
+
     local artifact_id artifact_filename artifact_url artifact_bytes artifact_sha artifact_license
+    local final_path part_path existing_bytes existing_sha download_required partial_bytes
+    local actual_bytes actual_sha
+    typeset -a curl_arguments
     while IFS=$'\t' read -r artifact_id artifact_filename artifact_url artifact_bytes artifact_sha artifact_license; do
-        local final_path="$artifact_dir/$artifact_filename"
-        local part_path="$final_path.part"
+        final_path="$artifact_dir/$artifact_filename"
+        part_path="$final_path.part"
 
         if (( dry_run == 1 )); then
             print -- "download artifact: $artifact_id"
-            print -- "source: $artifact_url"
-            print -- "license: $artifact_license"
-            print -- "expected bytes: $artifact_bytes"
+        else
+            print -- "artifact: $artifact_id"
+        fi
+        print -- "source: $artifact_url"
+        print -- "license: $artifact_license"
+        print -- "expected bytes: $artifact_bytes"
+
+        if (( dry_run == 1 )); then
             [[ -n "${HF_TOKEN:-}" ]] && print -- 'authorization: Bearer <redacted>'
             print -- "verify bytes: $part_path"
             print -- "verify sha256: $part_path"
@@ -180,7 +259,6 @@ metal_llm_setup() {
 
         if [[ -e "$final_path" ]]; then
             [[ -f "$final_path" ]] || { metal_llm_die "artifact path is not a regular file: $final_path"; return 1; }
-            local existing_bytes existing_sha
             existing_bytes=$(metal_llm_file_size "$final_path") || return 1
             existing_sha=$(metal_llm_sha256 "$final_path") || return 1
             if [[ "$existing_bytes" == "$artifact_bytes" && "$existing_sha" == "$artifact_sha" ]]; then
@@ -192,10 +270,9 @@ metal_llm_setup() {
         fi
 
         mkdir -p "$artifact_dir"
-        local download_required=1
+        download_required=1
         if [[ -e "$part_path" ]]; then
             [[ -f "$part_path" ]] || { metal_llm_die "partial artifact is not a regular file: $part_path"; return 1; }
-            local partial_bytes
             partial_bytes=$(metal_llm_file_size "$part_path") || return 1
             if (( partial_bytes > artifact_bytes )); then
                 metal_llm_die "byte count mismatch for $artifact_id: expected $artifact_bytes, got $partial_bytes"
@@ -212,14 +289,12 @@ metal_llm_setup() {
 
         if (( download_required == 1 )); then
             command -v curl >/dev/null 2>&1 || { metal_llm_die 'curl is required'; return 1; }
-            typeset -a curl_arguments
             curl_arguments=(--fail --location --continue-at - --silent --show-error --output "$part_path")
             [[ -n "${HF_TOKEN:-}" ]] && curl_arguments+=(--header "Authorization: Bearer $HF_TOKEN")
             curl_arguments+=(-- "$artifact_url")
             curl "${curl_arguments[@]}" || return 1
         fi
 
-        local actual_bytes actual_sha
         actual_bytes=$(metal_llm_file_size "$part_path") || return 1
         if [[ "$actual_bytes" != "$artifact_bytes" ]]; then
             metal_llm_die "byte count mismatch for $artifact_id: expected $artifact_bytes, got $actual_bytes"

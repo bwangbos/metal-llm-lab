@@ -22,6 +22,7 @@ for command_name in doctor setup serve bench report help; do
     assert_contains "$help_output" "$command_name"
 done
 assert_contains "$help_output" 'metal-llm setup MODEL [--dry-run] [--yes]'
+assert_contains "$help_output" 'METAL_LLM_BUILD_RESERVE_BYTES'
 
 if unknown_output=$("$cli" definitely-not-a-command 2>&1); then
     fail 'unknown command succeeded'

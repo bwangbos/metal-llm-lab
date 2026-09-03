@@ -11,6 +11,23 @@ metal_llm_valid_id() {
     [[ "$1" =~ '^[a-z0-9]+([.-][a-z0-9]+)*$' ]]
 }
 
+metal_llm_require_supported_host() {
+    local operating_system architecture
+    local unsupported=0
+
+    operating_system=$(uname -s 2>/dev/null || print -- unknown)
+    architecture=$(uname -m 2>/dev/null || print -- unknown)
+    if [[ "$operating_system" != Darwin ]]; then
+        metal_llm_error "unsupported operating system: $operating_system (requires macOS)"
+        unsupported=1
+    fi
+    if [[ "$architecture" != arm64 ]]; then
+        metal_llm_error "unsupported architecture: $architecture (requires arm64)"
+        unsupported=1
+    fi
+    (( unsupported == 0 ))
+}
+
 metal_llm_file_size() {
     local file_path=$1
     local byte_count
