@@ -15,10 +15,11 @@
     { "revision": "811160ef1a6ca6362c78e74797a946b05590f1b6", "file": "0009-convert-declare-mtp-shared-embd-on-qwen-mtp-mixin.patch" },
     { "revision": "a38a256463cf2454dac1954bf129850cf767723c", "file": "0010-ggml-cuda-guard-graph-key-against-empty-graph.patch" },
     { "revision": "f9aa445300b8fcf12cec0834ab6b39b1be3f19a0", "file": "0011-qwen4exp-reject-draft-only-export-without-target.patch" },
-    { "revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528", "file": "0012-qwen4exp-expose-optimized-graph-helpers-to-mtp.patch" }
+    { "revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528", "file": "0012-qwen4exp-expose-optimized-graph-helpers-to-mtp.patch" },
+    { "revision": "202d4be9fdc0535ee22dcf04c4559118d7748001", "file": "0013-server-gate-mtp-by-effective-prompt.patch" }
   ],
-  "tested_revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528",
-  "tested_tree_sha": "50ea300c34ee161a7008ca5d7b3cef8e2a77360b",
+  "tested_revision": "202d4be9fdc0535ee22dcf04c4559118d7748001",
+  "tested_tree_sha": "3eaf84fd5e0f7a29ce9395aa0283b9ade26f7f7c",
   "build": {
     "generator": "Ninja",
     "build_type": "Release",

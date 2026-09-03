@@ -10,3 +10,4 @@
 0010-ggml-cuda-guard-graph-key-against-empty-graph.patch
 0011-qwen4exp-reject-draft-only-export-without-target.patch
 0012-qwen4exp-expose-optimized-graph-helpers-to-mtp.patch
+0013-server-gate-mtp-by-effective-prompt.patch

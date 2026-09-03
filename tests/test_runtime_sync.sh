@@ -21,24 +21,24 @@ write_manifest() {
     local id=$2
     local repository=$3
     local base_revision=$4
-    local patch_revision=$5
-    local patch_file=$6
+    local patches_json=$5
+    local tested_revision=$6
     local tested_tree=$7
 
     jq -n \
         --arg id "$id" \
         --arg repository "$repository" \
         --arg base_revision "$base_revision" \
-        --arg patch_revision "$patch_revision" \
-        --arg patch_file "$patch_file" \
+        --argjson patches "$patches_json" \
+        --arg tested_revision "$tested_revision" \
         --arg tested_tree "$tested_tree" \
         '{
             schema_version: 1,
             id: $id,
             repository: $repository,
             base_revision: $base_revision,
-            patches: [{revision: $patch_revision, file: $patch_file}],
-            tested_revision: $patch_revision,
+            patches: $patches,
+            tested_revision: $tested_revision,
             tested_tree_sha: $tested_tree,
             build: {
                 generator: "Ninja",
@@ -51,6 +51,18 @@ write_manifest() {
 }
 
 [[ -x "$sync_script" ]] || fail "missing executable scripts/runtime-sync.zsh"
+grep -Fqx '0013-server-gate-mtp-by-effective-prompt.patch' \
+    "$root/patches/llama.cpp/qwen3.8-hybrid/series" || \
+    fail 'missing dynamic MTP patch from tuned runtime series'
+patch_13="$root/patches/llama.cpp/qwen3.8-hybrid/0013-server-gate-mtp-by-effective-prompt.patch"
+grep -Fq -- '--spec-draft-max-prompt-tokens' "$patch_13" || \
+    fail 'dynamic MTP patch is missing the server option'
+grep -Fq 'effective_prompt_tokens' "$patch_13" || \
+    fail 'dynamic MTP patch is missing effective prompt accounting'
+grep -Fq 'speculative_threshold' "$patch_13" || \
+    fail 'dynamic MTP patch is missing threshold provenance'
+grep -Fq 'speculative_policy' "$patch_13" || \
+    fail 'dynamic MTP patch is missing policy provenance'
 
 expected_dry_run=$'runtime: llama-cpp-qwen38-hybrid\n'
 expected_dry_run+=$'repository: https://github.com/ggml-org/llama.cpp.git\n'
@@ -67,7 +79,8 @@ expected_dry_run+=$'patch: 0009-convert-declare-mtp-shared-embd-on-qwen-mtp-mixi
 expected_dry_run+=$'patch: 0010-ggml-cuda-guard-graph-key-against-empty-graph.patch\n'
 expected_dry_run+=$'patch: 0011-qwen4exp-reject-draft-only-export-without-target.patch\n'
 expected_dry_run+=$'patch: 0012-qwen4exp-expose-optimized-graph-helpers-to-mtp.patch\n'
-expected_dry_run+='tested tree: 50ea300c34ee161a7008ca5d7b3cef8e2a77360b'
+expected_dry_run+=$'patch: 0013-server-gate-mtp-by-effective-prompt.patch\n'
+expected_dry_run+='tested tree: 3eaf84fd5e0f7a29ce9395aa0283b9ade26f7f7c'
 actual_dry_run=$("$sync_script" "$runtime_id" --dry-run)
 [[ "$actual_dry_run" == "$expected_dry_run" ]] || {
     diff -u <(print -r -- "$expected_dry_run") <(print -r -- "$actual_dry_run") || true
@@ -89,25 +102,65 @@ git -C "$origin" config user.email 'runtime-fixture@example.invalid'
 git -C "$origin" config uploadpack.allowFilter true
 repository_url="file://$origin"
 print -- 'base' > "$origin/model.txt"
-git -C "$origin" add model.txt
+mkdir -p "$origin/tests"
+print -- 'fixed' > "$origin/tests/server-route.cpp"
+git -C "$origin" add model.txt tests/server-route.cpp
 git -C "$origin" commit -q -m 'fixture: base'
 base_revision=$(git -C "$origin" rev-parse HEAD)
 
+patches_json='[]'
+series_file="$fixture_root/patches/llama.cpp/fixture-good/series"
 print -- 'patched' > "$origin/model.txt"
 git -C "$origin" commit -qam 'fixture: patch model'
 patch_revision=$(git -C "$origin" rev-parse HEAD)
-tested_tree=$(git -C "$origin" rev-parse 'HEAD^{tree}')
+first_patch_revision=$patch_revision
+first_patch_tree=$(git -C "$origin" rev-parse 'HEAD^{tree}')
 patch_file=0001-fixture-patch-model.patch
 git -C "$origin" format-patch -1 --stdout "$patch_revision" > \
     "$fixture_root/patches/llama.cpp/fixture-good/$patch_file"
-print -- "$patch_file" > "$fixture_root/patches/llama.cpp/fixture-good/series"
+print -- "$patch_file" > "$series_file"
+patches_json=$(jq -c \
+    --arg revision "$patch_revision" \
+    --arg file "$patch_file" \
+    '. + [{revision: $revision, file: $file}]' <<< "$patches_json")
+
+for patch_index in {2..12}; do
+    print -- "history $patch_index" >> "$origin/history.txt"
+    git -C "$origin" add history.txt
+    git -C "$origin" commit -q -m "fixture: patch $patch_index"
+    patch_revision=$(git -C "$origin" rev-parse HEAD)
+    patch_file=$(printf '%04d-fixture-patch-%02d.patch' "$patch_index" "$patch_index")
+    git -C "$origin" format-patch -1 --stdout "$patch_revision" > \
+        "$fixture_root/patches/llama.cpp/fixture-good/$patch_file"
+    print -- "$patch_file" >> "$series_file"
+    patches_json=$(jq -c \
+        --arg revision "$patch_revision" \
+        --arg file "$patch_file" \
+        '. + [{revision: $revision, file: $file}]' <<< "$patches_json")
+done
+penultimate_revision=$patch_revision
+
+print -- 'dynamic' > "$origin/tests/server-route.cpp"
+git -C "$origin" commit -qam 'fixture: patch server route test'
+patch_revision=$(git -C "$origin" rev-parse HEAD)
+patch_file=0013-fixture-patch-server-route-test.patch
+git -C "$origin" format-patch -1 --stdout "$patch_revision" > \
+    "$fixture_root/patches/llama.cpp/fixture-good/$patch_file"
+print -- "$patch_file" >> "$series_file"
+patches_json=$(jq -c \
+    --arg revision "$patch_revision" \
+    --arg file "$patch_file" \
+    '. + [{revision: $revision, file: $file}]' <<< "$patches_json")
+tested_tree=$(git -C "$origin" rev-parse 'HEAD^{tree}')
+
 write_manifest \
     "$fixture_root/manifests/runtimes/fixture-good.json" \
-    fixture-good "$repository_url" "$base_revision" "$patch_revision" "$patch_file" "$tested_tree"
+    fixture-good "$repository_url" "$base_revision" "$patches_json" "$patch_revision" "$tested_tree"
 
 good_manifest="$fixture_root/manifests/runtimes/fixture-good.json"
 cp "$good_manifest" "$good_manifest.saved"
-jq '.tested_revision = .base_revision' "$good_manifest.saved" > "$good_manifest"
+jq --arg penultimate_revision "$penultimate_revision" \
+    '.tested_revision = $penultimate_revision' "$good_manifest.saved" > "$good_manifest"
 if linkage_output=$("$fixture_root/scripts/runtime-sync.zsh" fixture-good --dry-run 2>&1); then
     mv "$good_manifest.saved" "$good_manifest"
     fail 'runtime sync accepted a patched manifest whose tested revision was not the final patch revision'
@@ -161,12 +214,17 @@ assert_contains "$dirty_output" 'refusing dirty runtime checkout'
 
 bad_patch_file=0001-fixture-unappliable.patch
 sed 's/^-base$/-not-the-base/' \
-    "$fixture_root/patches/llama.cpp/fixture-good/$patch_file" > \
+    "$fixture_root/patches/llama.cpp/fixture-good/0001-fixture-patch-model.patch" > \
     "$fixture_root/patches/llama.cpp/fixture-bad/$bad_patch_file"
 print -- "$bad_patch_file" > "$fixture_root/patches/llama.cpp/fixture-bad/series"
+bad_patches_json=$(jq -cn \
+    --arg revision "$first_patch_revision" \
+    --arg file "$bad_patch_file" \
+    '[{revision: $revision, file: $file}]')
 write_manifest \
     "$fixture_root/manifests/runtimes/fixture-bad.json" \
-    fixture-bad "$repository_url" "$base_revision" "$patch_revision" "$bad_patch_file" "$tested_tree"
+    fixture-bad "$repository_url" "$base_revision" "$bad_patches_json" \
+    "$first_patch_revision" "$first_patch_tree"
 
 bad_source="$fixture_root/.lab/runtimes/fixture-bad/source"
 mkdir -p "$bad_source:h"
