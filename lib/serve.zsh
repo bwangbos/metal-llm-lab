@@ -78,6 +78,82 @@ metal_llm_artifact_path() {
     print -- "$artifact_path"
 }
 
+metal_llm_verified_server_path() {
+    local runtime_id=$1
+    local runtime_manifest=$2
+    local runtime_dir="$METAL_LLM_ROOT/.lab/runtimes/$runtime_id"
+    local source_dir="$runtime_dir/source"
+    local build_dir="$runtime_dir/build-metal"
+    local receipt_path="$build_dir/build-receipt.json"
+    local server_executable="$build_dir/bin/llama-server"
+
+    [[ -f "$receipt_path" ]] || {
+        metal_llm_die "build receipt is missing: $runtime_id ($receipt_path)"
+        return 1
+    }
+    jq -e --arg runtime_id "$runtime_id" '
+        .schema_version == 1 and .runtime_id == $runtime_id and
+        (.runtime_manifest_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+        (.source_tree_sha | type == "string" and test("^[0-9a-f]{40}$")) and
+        (.tested_tree_sha | type == "string" and test("^[0-9a-f]{40}$")) and
+        (.binaries["llama-server"].sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+        (.binaries["llama-bench"].sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+    ' "$receipt_path" >/dev/null 2>&1 || {
+        metal_llm_die "invalid build receipt: $receipt_path"
+        return 1
+    }
+
+    local expected_tree manifest_sha receipt_record
+    local receipt_manifest_sha receipt_source_tree receipt_tested_tree receipt_server_sha
+    expected_tree=$(jq -er '.tested_tree_sha' "$runtime_manifest") || return 1
+    manifest_sha=$(metal_llm_sha256 "$runtime_manifest") || return 1
+    receipt_record=$(jq -er '[
+        .runtime_manifest_sha256, .source_tree_sha, .tested_tree_sha,
+        .binaries["llama-server"].sha256
+    ] | @tsv' "$receipt_path") || return 1
+    IFS=$'\t' read -r receipt_manifest_sha receipt_source_tree receipt_tested_tree receipt_server_sha \
+        <<< "$receipt_record"
+    [[ "$receipt_manifest_sha" == "$manifest_sha" ]] || {
+        metal_llm_die "build receipt does not match runtime manifest: $runtime_id"
+        return 1
+    }
+    [[ "$receipt_source_tree" == "$expected_tree" && "$receipt_tested_tree" == "$expected_tree" ]] || {
+        metal_llm_die "build receipt has stale source tree: $runtime_id"
+        return 1
+    }
+
+    command -v git >/dev/null 2>&1 || { metal_llm_die 'git is required'; return 1; }
+    [[ -d "$source_dir" ]] || { metal_llm_die "runtime source is missing: $source_dir"; return 1; }
+    git -C "$source_dir" rev-parse --git-dir >/dev/null 2>&1 || {
+        metal_llm_die "runtime source is not a Git checkout: $source_dir"
+        return 1
+    }
+    local source_status ignored_files actual_tree
+    source_status=$(git -C "$source_dir" status --porcelain=v1 --untracked-files=all) || return 1
+    ignored_files=$(git -C "$source_dir" ls-files --others --ignored --exclude-standard) || return 1
+    [[ -z "$source_status" && -z "$ignored_files" ]] || {
+        metal_llm_die "runtime source is not clean: $runtime_id"
+        return 1
+    }
+    actual_tree=$(git -C "$source_dir" rev-parse 'HEAD^{tree}') || return 1
+    [[ "$actual_tree" == "$expected_tree" && "$actual_tree" == "$receipt_source_tree" ]] || {
+        metal_llm_die "runtime source tree mismatch for $runtime_id: expected $expected_tree, got $actual_tree"
+        return 1
+    }
+
+    [[ -x "$server_executable" ]] || {
+        metal_llm_die "server executable is missing: $server_executable"
+        return 1
+    }
+    local server_sha
+    server_sha=$(metal_llm_sha256 "$server_executable") || return 1
+    [[ "$server_sha" == "$receipt_server_sha" ]] || {
+        metal_llm_die "server binary checksum mismatch for $runtime_id"
+        return 1
+    }
+    print -- "$server_executable"
+}
+
 metal_llm_print_serve_command() {
     typeset -a command_arguments display_arguments
     command_arguments=("$@")
@@ -181,11 +257,8 @@ metal_llm_serve() {
         metal_llm_die "invalid runtime manifest: $runtime_manifest"
         return 1
     }
-    local server_executable="$METAL_LLM_ROOT/.lab/runtimes/$runtime_id/build-metal/bin/llama-server"
-    [[ -x "$server_executable" ]] || {
-        metal_llm_die "server executable is missing: $server_executable"
-        return 1
-    }
+    local server_executable
+    server_executable=$(metal_llm_verified_server_path "$runtime_id" "$runtime_manifest") || return 1
 
     local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
     local text_artifact_id

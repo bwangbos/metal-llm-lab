@@ -100,85 +100,12 @@ metal_llm_remaining_artifact_bytes() {
     print -- "$remaining_bytes"
 }
 
-metal_llm_setup() {
-    local model_id=''
-    local dry_run=0
-    local assume_yes=0
-    local argument
+metal_llm_setup_runtime() {
+    local runtime_id=$1
+    local dry_run=$2
+    local sync_script=$3
+    local runtime_manifest="$METAL_LLM_ROOT/manifests/runtimes/$runtime_id.json"
 
-    for argument in "$@"; do
-        case "$argument" in
-            --dry-run)
-                (( dry_run == 0 )) || { metal_llm_setup_usage; return $?; }
-                dry_run=1
-                ;;
-            --yes)
-                (( assume_yes == 0 )) || { metal_llm_setup_usage; return $?; }
-                assume_yes=1
-                ;;
-            -*) metal_llm_setup_usage; return $? ;;
-            *)
-                [[ -z "$model_id" ]] || { metal_llm_setup_usage; return $?; }
-                model_id=$argument
-                ;;
-        esac
-    done
-
-    [[ -n "$model_id" ]] || { metal_llm_setup_usage; return $?; }
-    metal_llm_valid_id "$model_id" || { metal_llm_die "invalid model id: $model_id"; return 1; }
-    metal_llm_require_supported_host || return 1
-    command -v jq >/dev/null 2>&1 || { metal_llm_die 'jq is required'; return 1; }
-
-    local model_manifest="$METAL_LLM_ROOT/manifests/models/$model_id.json"
-    [[ -f "$model_manifest" ]] || { metal_llm_die "model manifest not found: $model_id"; return 1; }
-    metal_llm_validate_model_manifest "$model_manifest" "$model_id" || {
-        metal_llm_die "invalid model manifest: $model_manifest"
-        return 1
-    }
-
-    local runtime_id runtime_manifest
-    runtime_id=$(jq -er '.profiles[0].runtime_id' "$model_manifest") || return 1
-    runtime_manifest="$METAL_LLM_ROOT/manifests/runtimes/$runtime_id.json"
-    [[ -f "$runtime_manifest" ]] || { metal_llm_die "runtime manifest not found: $runtime_id"; return 1; }
-    metal_llm_validate_runtime_manifest "$runtime_manifest" "$runtime_id" || {
-        metal_llm_die "invalid runtime manifest: $runtime_manifest"
-        return 1
-    }
-
-    local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
-    local remaining_bytes build_reserve_bytes required_bytes available_bytes
-    remaining_bytes=$(metal_llm_remaining_artifact_bytes "$model_manifest" "$artifact_dir") || return 1
-    build_reserve_bytes=${METAL_LLM_BUILD_RESERVE_BYTES:-5368709120}
-    [[ "$build_reserve_bytes" == <-> ]] || {
-        metal_llm_die 'METAL_LLM_BUILD_RESERVE_BYTES must be a non-negative integer'
-        return 1
-    }
-    required_bytes=$(( remaining_bytes + build_reserve_bytes ))
-    available_bytes=$(metal_llm_disk_bytes "$METAL_LLM_ROOT") || {
-        metal_llm_die 'could not determine free disk space'
-        return 1
-    }
-    print -- "remaining artifact bytes: $remaining_bytes"
-    print -- "build reserve bytes: $build_reserve_bytes"
-    print -- "total required disk bytes: $required_bytes"
-    print -- "available disk bytes: $available_bytes"
-    if (( available_bytes < required_bytes )); then
-        metal_llm_die "insufficient disk space: $available_bytes bytes available, $required_bytes bytes required"
-        return 1
-    fi
-
-    if (( dry_run == 0 && assume_yes == 0 )) && [[ -t 0 ]]; then
-        print -n -- "Set up $model_id with $remaining_bytes artifact bytes remaining? [y/N] "
-        local confirmation=''
-        read -r confirmation
-        [[ "$confirmation" == [yY] || "$confirmation" == [yY][eE][sS] ]] || {
-            metal_llm_die 'setup cancelled'
-            return 1
-        }
-    fi
-
-    local sync_script="$METAL_LLM_ROOT/scripts/runtime-sync.zsh"
-    [[ -x "$sync_script" ]] || { metal_llm_die "missing executable runtime sync: $sync_script"; return 1; }
     if (( dry_run == 1 )); then
         "$sync_script" "$runtime_id" --dry-run || return 1
     else
@@ -230,6 +157,154 @@ metal_llm_setup() {
                 return 1
             fi
         fi
+    done
+
+    local expected_tree receipt_path="$build_dir/build-receipt.json"
+    expected_tree=$(jq -er '.tested_tree_sha' "$runtime_manifest") || return 1
+    if (( dry_run == 1 )); then
+        print -- "verify runtime source tree: $expected_tree"
+        print -- "verify runtime source is clean: $source_dir"
+        print -- "verify executable sha256: $build_dir/bin/llama-server"
+        print -- "verify executable sha256: $build_dir/bin/llama-bench"
+        print -- "write build receipt atomically: $receipt_path.part -> $receipt_path"
+        return
+    fi
+
+    command -v git >/dev/null 2>&1 || { metal_llm_die 'git is required'; return 1; }
+    [[ -d "$source_dir" ]] || { metal_llm_die "runtime source is missing: $source_dir"; return 1; }
+    git -C "$source_dir" rev-parse --git-dir >/dev/null 2>&1 || {
+        metal_llm_die "runtime source is not a Git checkout: $source_dir"
+        return 1
+    }
+    local source_status ignored_files actual_tree
+    source_status=$(git -C "$source_dir" status --porcelain=v1 --untracked-files=all) || return 1
+    ignored_files=$(git -C "$source_dir" ls-files --others --ignored --exclude-standard) || return 1
+    [[ -z "$source_status" && -z "$ignored_files" ]] || {
+        metal_llm_die "runtime source is not clean: $runtime_id"
+        return 1
+    }
+    actual_tree=$(git -C "$source_dir" rev-parse 'HEAD^{tree}') || return 1
+    [[ "$actual_tree" == "$expected_tree" ]] || {
+        metal_llm_die "runtime source tree mismatch for $runtime_id: expected $expected_tree, got $actual_tree"
+        return 1
+    }
+
+    local manifest_sha server_sha bench_sha receipt_part="$receipt_path.part"
+    manifest_sha=$(metal_llm_sha256 "$runtime_manifest") || return 1
+    server_sha=$(metal_llm_sha256 "$build_dir/bin/llama-server") || return 1
+    bench_sha=$(metal_llm_sha256 "$build_dir/bin/llama-bench") || return 1
+    if ! jq -n \
+        --arg runtime_id "$runtime_id" \
+        --arg manifest_sha "$manifest_sha" \
+        --arg source_tree "$actual_tree" \
+        --arg tested_tree "$expected_tree" \
+        --arg server_sha "$server_sha" \
+        --arg bench_sha "$bench_sha" '
+        {
+          schema_version: 1,
+          runtime_id: $runtime_id,
+          runtime_manifest_sha256: $manifest_sha,
+          source_tree_sha: $source_tree,
+          tested_tree_sha: $tested_tree,
+          binaries: {
+            "llama-server": {sha256: $server_sha},
+            "llama-bench": {sha256: $bench_sha}
+          }
+        }
+    ' > "$receipt_part"; then
+        rm -f -- "$receipt_part"
+        return 1
+    fi
+    mv -f -- "$receipt_part" "$receipt_path" || return 1
+    print -- "verified build receipt: $receipt_path"
+}
+
+metal_llm_setup() {
+    local model_id=''
+    local dry_run=0
+    local assume_yes=0
+    local argument
+
+    for argument in "$@"; do
+        case "$argument" in
+            --dry-run)
+                (( dry_run == 0 )) || { metal_llm_setup_usage; return $?; }
+                dry_run=1
+                ;;
+            --yes)
+                (( assume_yes == 0 )) || { metal_llm_setup_usage; return $?; }
+                assume_yes=1
+                ;;
+            -*) metal_llm_setup_usage; return $? ;;
+            *)
+                [[ -z "$model_id" ]] || { metal_llm_setup_usage; return $?; }
+                model_id=$argument
+                ;;
+        esac
+    done
+
+    [[ -n "$model_id" ]] || { metal_llm_setup_usage; return $?; }
+    metal_llm_valid_id "$model_id" || { metal_llm_die "invalid model id: $model_id"; return 1; }
+    metal_llm_require_supported_host || return 1
+    command -v jq >/dev/null 2>&1 || { metal_llm_die 'jq is required'; return 1; }
+
+    local model_manifest="$METAL_LLM_ROOT/manifests/models/$model_id.json"
+    [[ -f "$model_manifest" ]] || { metal_llm_die "model manifest not found: $model_id"; return 1; }
+    metal_llm_validate_model_manifest "$model_manifest" "$model_id" || {
+        metal_llm_die "invalid model manifest: $model_manifest"
+        return 1
+    }
+
+    local runtime_id runtime_manifest
+    typeset -a runtime_ids
+    runtime_ids=("${(@f)$(jq -er '
+        reduce .profiles[].runtime_id as $id ([]; if index($id) then . else . + [$id] end)[]
+    ' "$model_manifest")}")
+    for runtime_id in "${runtime_ids[@]}"; do
+        runtime_manifest="$METAL_LLM_ROOT/manifests/runtimes/$runtime_id.json"
+        [[ -f "$runtime_manifest" ]] || { metal_llm_die "runtime manifest not found: $runtime_id"; return 1; }
+        metal_llm_validate_runtime_manifest "$runtime_manifest" "$runtime_id" || {
+            metal_llm_die "invalid runtime manifest: $runtime_manifest"
+            return 1
+        }
+    done
+
+    local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
+    local remaining_bytes build_reserve_bytes required_bytes available_bytes
+    remaining_bytes=$(metal_llm_remaining_artifact_bytes "$model_manifest" "$artifact_dir") || return 1
+    build_reserve_bytes=${METAL_LLM_BUILD_RESERVE_BYTES:-5368709120}
+    [[ "$build_reserve_bytes" == <-> ]] || {
+        metal_llm_die 'METAL_LLM_BUILD_RESERVE_BYTES must be a non-negative integer'
+        return 1
+    }
+    required_bytes=$(( remaining_bytes + build_reserve_bytes ))
+    available_bytes=$(metal_llm_disk_bytes "$METAL_LLM_ROOT") || {
+        metal_llm_die 'could not determine free disk space'
+        return 1
+    }
+    print -- "remaining artifact bytes: $remaining_bytes"
+    print -- "build reserve bytes: $build_reserve_bytes"
+    print -- "total required disk bytes: $required_bytes"
+    print -- "available disk bytes: $available_bytes"
+    if (( available_bytes < required_bytes )); then
+        metal_llm_die "insufficient disk space: $available_bytes bytes available, $required_bytes bytes required"
+        return 1
+    fi
+
+    if (( dry_run == 0 && assume_yes == 0 )) && [[ -t 0 ]]; then
+        print -n -- "Set up $model_id with $remaining_bytes artifact bytes remaining? [y/N] "
+        local confirmation=''
+        read -r confirmation
+        [[ "$confirmation" == [yY] || "$confirmation" == [yY][eE][sS] ]] || {
+            metal_llm_die 'setup cancelled'
+            return 1
+        }
+    fi
+
+    local sync_script="$METAL_LLM_ROOT/scripts/runtime-sync.zsh"
+    [[ -x "$sync_script" ]] || { metal_llm_die "missing executable runtime sync: $sync_script"; return 1; }
+    for runtime_id in "${runtime_ids[@]}"; do
+        metal_llm_setup_runtime "$runtime_id" "$dry_run" "$sync_script" || return 1
     done
 
     local artifact_id artifact_filename artifact_url artifact_bytes artifact_sha artifact_license

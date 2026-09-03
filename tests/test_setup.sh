@@ -17,6 +17,15 @@ assert_contains() {
     [[ "$haystack" == *"$needle"* ]] || fail "missing expected output: $needle"
 }
 
+assert_count() {
+    local haystack=$1
+    local needle=$2
+    local expected=$3
+    local actual
+    actual=$(print -r -- "$haystack" | /usr/bin/grep -F -c -- "$needle" || true)
+    (( actual == expected )) || fail "expected $expected occurrences of '$needle', got $actual"
+}
+
 temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-setup.XXXXXX")
 trap 'rm -rf -- "$temporary_root"' EXIT
 fixture_root="$temporary_root/repository"
@@ -64,6 +73,22 @@ write_model_manifest() {
                 vision: {enabled: false, projector_artifact_id: null, image_min_tokens: null},
                 mtp: {enabled: false, artifact_id: null, spec_type: null, draft_n_max: null, gpu_layers: null},
                 metal: {gpu_layers: "all", fit: false, flash_attention: true, load_mode: "mmap", lazy_mmap: true}
+            }, {
+                id: "long",
+                runtime_id: "fixture-runtime",
+                model_artifact_id: "fixture-artifact",
+                context: 256,
+                vision: {enabled: false, projector_artifact_id: null, image_min_tokens: null},
+                mtp: {enabled: false, artifact_id: null, spec_type: null, draft_n_max: null, gpu_layers: null},
+                metal: {gpu_layers: "all", fit: false, flash_attention: true, load_mode: "mmap", lazy_mmap: true}
+            }, {
+                id: "stable",
+                runtime_id: "fixture-stable",
+                model_artifact_id: "fixture-artifact",
+                context: 128,
+                vision: {enabled: false, projector_artifact_id: null, image_min_tokens: null},
+                mtp: {enabled: false, artifact_id: null, spec_type: null, draft_n_max: null, gpu_layers: null},
+                metal: {gpu_layers: "all", fit: false, flash_attention: true, load_mode: "mmap", lazy_mmap: true}
             }]
         }' > "$destination"
 }
@@ -90,13 +115,16 @@ cat > "$fixture_root/manifests/runtimes/fixture-runtime.json" <<'EOF'
   }
 }
 EOF
+"$real_jq" '.id = "fixture-stable"' "$fixture_root/manifests/runtimes/fixture-runtime.json" > \
+    "$fixture_root/manifests/runtimes/fixture-stable.json"
 
 cat > "$fixture_root/scripts/runtime-sync.zsh" <<EOF
 #!/bin/zsh
 set -eu
+runtime_id=\$1
 print -r -- "runtime-sync \$*"
 [[ " \$* " == *' --dry-run '* ]] && exit 0
-mkdir -p '$fixture_root/.lab/runtimes/fixture-runtime/source'
+mkdir -p '$fixture_root/.lab/runtimes/'"\$runtime_id"'/source/.git'
 print -r -- "\$*" >> '$temporary_root/runtime-sync.log'
 EOF
 chmod +x "$fixture_root/scripts/runtime-sync.zsh"
@@ -104,6 +132,26 @@ chmod +x "$fixture_root/scripts/runtime-sync.zsh"
 ln -s "$real_curl" "$fake_bin/curl"
 ln -s "$real_jq" "$fake_bin/jq"
 ln -s "$real_shasum" "$fake_bin/shasum"
+
+cat > "$fake_bin/git" <<'EOF'
+#!/bin/zsh
+set -eu
+while (( $# > 0 )); do
+    case "$1" in
+        -C) shift 2 ;;
+        rev-parse)
+            if [[ "$2" == '--git-dir' ]]; then
+                print -- '.git'
+            else
+                print -- '2222222222222222222222222222222222222222'
+            fi
+            exit 0
+            ;;
+        status|ls-files) exit 0 ;;
+        *) exit 2 ;;
+    esac
+done
+EOF
 
 cat > "$fake_bin/cmake" <<EOF
 #!/bin/zsh
@@ -137,7 +185,7 @@ cat > "$fake_bin/df" <<'EOF'
 print -- 'Filesystem 1024-blocks Used Available Capacity Mounted on'
 print -- "/dev/test 20000000 1 ${SETUP_TEST_BLOCKS:-10000000} 1% /"
 EOF
-chmod +x "$fake_bin/cmake" "$fake_bin/smoke-executable" "$fake_bin/uname" "$fake_bin/df"
+chmod +x "$fake_bin/cmake" "$fake_bin/smoke-executable" "$fake_bin/uname" "$fake_bin/df" "$fake_bin/git"
 
 test_path="$fake_bin:/bin:/usr/bin"
 export SETUP_TEST_SMOKE_LOG="$temporary_root/smoke.log"
@@ -168,7 +216,11 @@ assert_contains "$unsupported_output" 'unsupported operating system: Linux (requ
 
 dry_output=$(HF_TOKEN='secret-token-must-not-leak' PATH="$test_path" "$fixture_root/bin/metal-llm" setup dry-model --dry-run)
 assert_contains "$dry_output" 'runtime-sync fixture-runtime --dry-run'
+assert_contains "$dry_output" 'runtime-sync fixture-stable --dry-run'
+assert_count "$dry_output" 'runtime-sync fixture-runtime --dry-run' 1
 assert_contains "$dry_output" 'configure runtime: fixture-runtime'
+assert_contains "$dry_output" 'configure runtime: fixture-stable'
+assert_count "$dry_output" 'configure runtime: fixture-runtime' 1
 assert_contains "$dry_output" 'build targets: llama-server llama-bench'
 assert_contains "$dry_output" 'smoke test executable: llama-server --help'
 assert_contains "$dry_output" 'smoke test executable: llama-bench --help'
@@ -178,6 +230,7 @@ assert_contains "$dry_output" 'download artifact: fixture-artifact-two'
 assert_contains "$dry_output" 'verify bytes:'
 assert_contains "$dry_output" 'verify sha256:'
 assert_contains "$dry_output" 'publish artifact atomically:'
+assert_contains "$dry_output" 'write build receipt atomically:'
 [[ "$dry_output" != *'secret-token-must-not-leak'* ]] || fail 'dry-run exposed HF_TOKEN'
 [[ ! -e "$fixture_root/.lab" ]] || fail 'dry-run created .lab state'
 
@@ -213,8 +266,22 @@ assert_contains "$success_output" './bin/metal-llm serve fixture-model --profile
 assert_contains "$(<"$temporary_root/cmake.log")" '-G Ninja'
 assert_contains "$(<"$temporary_root/cmake.log")" '-DGGML_METAL=ON'
 assert_contains "$(<"$temporary_root/cmake.log")" '--target llama-server llama-bench'
+assert_count "$(<"$temporary_root/cmake.log")" '--target llama-server llama-bench' 2
 assert_contains "$(<"$temporary_root/smoke.log")" 'llama-server --help'
 assert_contains "$(<"$temporary_root/smoke.log")" 'llama-bench --help'
+for runtime_id in fixture-runtime fixture-stable; do
+    receipt="$fixture_root/.lab/runtimes/$runtime_id/build-metal/build-receipt.json"
+    [[ -f "$receipt" ]] || fail "setup did not write receipt for $runtime_id"
+    [[ ! -e "$receipt.part" ]] || fail "setup left a partial receipt for $runtime_id"
+    "$real_jq" -e --arg id "$runtime_id" '
+        .schema_version == 1 and .runtime_id == $id and
+        .source_tree_sha == "2222222222222222222222222222222222222222" and
+        .tested_tree_sha == "2222222222222222222222222222222222222222" and
+        (.runtime_manifest_sha256 | test("^[0-9a-f]{64}$")) and
+        (.binaries["llama-server"].sha256 | test("^[0-9a-f]{64}$")) and
+        (.binaries["llama-bench"].sha256 | test("^[0-9a-f]{64}$"))
+    ' "$receipt" >/dev/null || fail "invalid build receipt for $runtime_id"
+done
 
 rm "$source_artifact"
 reuse_output=$(METAL_LLM_BUILD_RESERVE_BYTES=1024 SETUP_TEST_BLOCKS=1 \

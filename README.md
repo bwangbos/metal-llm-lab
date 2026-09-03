@@ -40,8 +40,9 @@ cd metal-llm-lab
 ```
 
 Setup downloads approximately **100 GB**, checks every artifact checksum, and
-builds the pinned runtime locally. Its duration depends on network speed,
-machine load, and compiler performance; no fixed completion time is guaranteed.
+builds every unique pinned runtime required by the model's profiles, including
+the stable fallback. Its duration depends on network speed, machine load, and
+compiler performance; no fixed completion time is guaranteed.
 The server listens only on `127.0.0.1:8080` by default. Once it is ready, test
 its OpenAI-compatible API from another terminal:
 

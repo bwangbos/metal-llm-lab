@@ -4,6 +4,7 @@ set -euo pipefail
 source_root=${0:A:h:h}
 real_jq=$(command -v jq)
 real_shasum=$(command -v shasum)
+real_git=$(command -v git)
 
 fail() {
     print -u2 -- "$1"
@@ -76,19 +77,42 @@ mtp_sha=$($real_shasum -a 256 "$artifact_dir/mtp.gguf" | awk '{print $1}')
     }' > "$fixture_root/manifests/models/fixture-model.json"
 
 for runtime_id in hybrid stable; do
-    mkdir -p "$fixture_root/.lab/runtimes/$runtime_id/build-metal/bin"
-    "$real_jq" -n --arg id "$runtime_id" '{
+    runtime_dir="$fixture_root/.lab/runtimes/$runtime_id"
+    source_dir="$runtime_dir/source"
+    build_dir="$runtime_dir/build-metal"
+    mkdir -p "$source_dir" "$build_dir/bin"
+    "$real_git" -C "$source_dir" init -q
+    print -- "$runtime_id source" > "$source_dir/runtime.txt"
+    "$real_git" -C "$source_dir" add runtime.txt
+    "$real_git" -C "$source_dir" -c user.name='Serve Test' -c user.email='serve-test@localhost' \
+        commit -qm 'fixture runtime'
+    source_tree=$($real_git -C "$source_dir" rev-parse 'HEAD^{tree}')
+    print -r -- '#!/bin/zsh' > "$build_dir/bin/llama-server"
+    print -r -- 'print -r -- "$@" > "$SERVE_TEST_EXEC_LOG"' >> "$build_dir/bin/llama-server"
+    print -r -- '#!/bin/zsh' > "$build_dir/bin/llama-bench"
+    print -r -- 'exit 0' >> "$build_dir/bin/llama-bench"
+    chmod +x "$build_dir/bin/llama-server" "$build_dir/bin/llama-bench"
+    "$real_jq" -n --arg id "$runtime_id" --arg tree "$source_tree" '{
       schema_version: 1, id: $id, repository: "https://example.invalid/runtime.git",
       base_revision: "1111111111111111111111111111111111111111", patches: [],
       tested_revision: "1111111111111111111111111111111111111111",
-      tested_tree_sha: "2222222222222222222222222222222222222222",
+      tested_tree_sha: $tree,
       build: {generator: "Ninja", build_type: "Release", architecture: "arm64",
               cmake_options: {CMAKE_BUILD_TYPE: "Release"}, targets: ["llama-server"]}
     }' > "$fixture_root/manifests/runtimes/$runtime_id.json"
-    print -r -- '#!/bin/zsh' > "$fixture_root/.lab/runtimes/$runtime_id/build-metal/bin/llama-server"
-    print -r -- 'print -r -- "$@" > "$SERVE_TEST_EXEC_LOG"' >> \
-        "$fixture_root/.lab/runtimes/$runtime_id/build-metal/bin/llama-server"
-    chmod +x "$fixture_root/.lab/runtimes/$runtime_id/build-metal/bin/llama-server"
+    manifest_sha=$($real_shasum -a 256 "$fixture_root/manifests/runtimes/$runtime_id.json" | awk '{print $1}')
+    server_sha=$($real_shasum -a 256 "$build_dir/bin/llama-server" | awk '{print $1}')
+    bench_sha=$($real_shasum -a 256 "$build_dir/bin/llama-bench" | awk '{print $1}')
+    "$real_jq" -n \
+        --arg id "$runtime_id" --arg tree "$source_tree" --arg manifest "$manifest_sha" \
+        --arg server "$server_sha" --arg bench "$bench_sha" '{
+          schema_version: 1, runtime_id: $id, runtime_manifest_sha256: $manifest,
+          source_tree_sha: $tree, tested_tree_sha: $tree,
+          binaries: {
+            "llama-server": {sha256: $server},
+            "llama-bench": {sha256: $bench}
+          }
+        }' > "$build_dir/build-receipt.json"
 done
 
 cat > "$fixture_root/manifests/hardware/apple-m5-max-128gb.json" <<'EOF'
@@ -171,6 +195,44 @@ if invalid_output=$(PATH="$test_path" "$cli" serve fixture-model --profile impos
     fail 'serve accepted an invalid profile'
 fi
 assert_contains "$invalid_output" 'profile not found: impossible'
+
+hybrid_receipt="$fixture_root/.lab/runtimes/hybrid/build-metal/build-receipt.json"
+mv "$hybrid_receipt" "$hybrid_receipt.missing"
+if receipt_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run 2>&1); then
+    fail 'serve accepted a missing build receipt'
+fi
+assert_contains "$receipt_output" 'build receipt is missing: hybrid'
+mv "$hybrid_receipt.missing" "$hybrid_receipt"
+
+cp "$hybrid_receipt" "$hybrid_receipt.saved"
+"$real_jq" '.runtime_manifest_sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
+    "$hybrid_receipt.saved" > "$hybrid_receipt"
+if receipt_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run 2>&1); then
+    fail 'serve accepted a stale build receipt'
+fi
+assert_contains "$receipt_output" 'build receipt does not match runtime manifest: hybrid'
+mv "$hybrid_receipt.saved" "$hybrid_receipt"
+
+hybrid_source="$fixture_root/.lab/runtimes/hybrid/source"
+correct_head=$($real_git -C "$hybrid_source" rev-parse HEAD)
+print -- 'different clean source tree' > "$hybrid_source/runtime.txt"
+"$real_git" -C "$hybrid_source" add runtime.txt
+"$real_git" -C "$hybrid_source" -c user.name='Serve Test' -c user.email='serve-test@localhost' \
+    commit -qm 'wrong fixture tree'
+if tree_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run 2>&1); then
+    fail 'serve accepted the wrong clean source tree'
+fi
+assert_contains "$tree_output" 'runtime source tree mismatch for hybrid'
+"$real_git" -C "$hybrid_source" checkout -q --detach "$correct_head"
+
+stable_binary="$fixture_root/.lab/runtimes/stable/build-metal/bin/llama-server"
+cp "$stable_binary" "$stable_binary.saved"
+print -- '# changed' >> "$stable_binary"
+if binary_output=$(PATH="$test_path" "$cli" serve fixture-model --profile stable --dry-run 2>&1); then
+    fail 'serve accepted a changed server binary'
+fi
+assert_contains "$binary_output" 'server binary checksum mismatch for stable'
+mv "$stable_binary.saved" "$stable_binary"
 
 mv "$artifact_dir/projector.gguf" "$artifact_dir/projector.gguf.missing"
 if missing_output=$(PATH="$test_path" "$cli" serve fixture-model --profile vision --dry-run 2>&1); then
