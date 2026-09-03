@@ -1,0 +1,30 @@
+From a38a256463cf2454dac1954bf129850cf767723c Mon Sep 17 00:00:00 2001
+From: danielhanchen <danielhanchen@gmail.com>
+Date: Wed, 2 Sep 2026 12:36:18 +0000
+Subject: [PATCH 10/12] ggml-cuda: guard the graph key against an empty graph
+
+The previous key returned cgraph->nodes[0] without dereferencing it, so
+an empty graph was harmless. The shape-aware key reads nodes[0]->ne[],
+which is not, and neither call site checks n_nodes.
+
+Assisted-by: Claude
+---
+ ggml/src/ggml-cuda/ggml-cuda.cu | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/ggml/src/ggml-cuda/ggml-cuda.cu b/ggml/src/ggml-cuda/ggml-cuda.cu
+index 2a3a6d851..731fd005b 100644
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -2587,6 +2587,11 @@ static bool ggml_cuda_graph_check_compability(ggml_cgraph * cgraph) {
+ // (a speculative verify batch) resets warmup forever. O(1) on purpose: walking nodes undoes the
+ // point of a cuda graph. A shape this fails to separate re-captures as before, so it cannot regress.
+ static uint64_t ggml_cuda_graph_get_key(ggml_cgraph * cgraph) {
++    // unlike the previous key this dereferences nodes[0], so an empty graph is not safe here
++    if (cgraph->n_nodes <= 0) {
++        return 0;
++    }
++
+     uint64_t key = (uint64_t) (uintptr_t) cgraph->nodes[0];
+ 
+     auto mix = [&key](uint64_t v) {

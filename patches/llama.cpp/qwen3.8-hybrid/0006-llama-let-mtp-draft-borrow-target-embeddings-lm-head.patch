@@ -1,0 +1,416 @@
+From 6cce65a486b5d86992c84f81e3b2730f9f8d4adb Mon Sep 17 00:00:00 2001
+From: Daniel Han <danielhanchen@gmail.com>
+Date: Fri, 28 Aug 2026 20:10:49 +0000
+Subject: [PATCH 06/12] llama: let an MTP draft borrow the target's embeddings
+ and lm head
+
+A NextN/MTP draft exported with --mtp carries the token embeddings, output
+norm and lm head so it can be loaded as a standalone model. For every current
+sidecar those three tensors are most of the file: ggml-org/Qwen3.8-27B-GGUF
+mtp-Qwen3.8-27B-Q4_0.gguf is 1.565 GiB, of which 1.332 GiB (85%) is the copy,
+against 0.223 GiB for the MTP block itself.
+
+Add an opt-in --mtp-shared-embd that leaves them out and marks the file with
+nextn_shared_target_tensors. The loader then resolves those names against the
+already loaded target model. The graph side needs no change: the nextn blocks
+of twelve archs already fall back to model.tok_embd and model.output.
+
+The borrow is gated on the new key, so a sidecar published before this change
+cannot reach it and keeps its current behaviour. Shapes are checked against
+the target and a mismatch is refused, as is loading such a file on its own.
+---
+ common/speculative.cpp      |  3 ++
+ conversion/bailingmoe3.py   |  4 +--
+ conversion/base.py          |  6 ++++
+ conversion/command_r.py     |  4 +--
+ conversion/dots3.py         |  4 +--
+ conversion/glm.py           | 12 +++----
+ conversion/qwen.py          |  2 +-
+ convert_hf_to_gguf.py       | 10 ++++++
+ gguf-py/gguf/constants.py   |  1 +
+ gguf-py/gguf/gguf_writer.py |  3 ++
+ include/llama.h             |  4 +++
+ src/llama-arch.cpp          |  1 +
+ src/llama-arch.h            |  1 +
+ src/llama-model-loader.cpp  | 71 +++++++++++++++++++++++++++++++++++++
+ src/llama-model-loader.h    | 11 ++++++
+ src/llama-model.cpp         |  1 +
+ src/llama.cpp               |  3 +-
+ 17 files changed, 127 insertions(+), 14 deletions(-)
+
+diff --git a/common/speculative.cpp b/common/speculative.cpp
+index 851a47b9a..70dcb2e41 100644
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -2542,6 +2542,9 @@ common_speculative_init_result::common_speculative_init_result(
+         model_path = params.speculative.draft.mparams.path;
+         LOG_INF("%s: loading draft model '%s'\n", __func__, model_path.c_str());
+ 
++        // a draft head can leave out the embeddings and lm head and use the target's
++        mparams.model_shared = model_tgt;
++
+         llama_model * model_dft = llama_model_load_from_file(params.model.path.c_str(), mparams);
+         if (model_dft == NULL) {
+             LOG_ERR("%s: failed to load draft model, '%s'\n", __func__, model_path.c_str());
+diff --git a/conversion/bailingmoe3.py b/conversion/bailingmoe3.py
+index 20bba23e5..9ba3112eb 100644
+--- a/conversion/bailingmoe3.py
++++ b/conversion/bailingmoe3.py
+@@ -121,9 +121,9 @@ class BailingMoeV3Model(TextModel):
+ 
+         if is_mtp and cls.no_mtp:
+             return None
+-        if cls.mtp_only and not is_mtp and name not in (
++        if cls.mtp_only and not is_mtp and (cls.mtp_shared_embd or name not in (
+             "model.word_embeddings.weight", "model.norm.weight", "lm_head.weight",
+-        ):
++        )):
+             return None
+ 
+         return super().filter_tensors((name, gen))
+diff --git a/conversion/base.py b/conversion/base.py
+index daae28e92..b3205f11a 100644
+--- a/conversion/base.py
++++ b/conversion/base.py
+@@ -120,6 +120,8 @@ class ModelBase:
+     supports_mtp_export: bool = False
+     mtp_only: bool = False
+     no_mtp: bool = False
++    # with mtp_only, leave the shared embeddings and lm head to the target model
++    mtp_shared_embd: bool = False
+ 
+     def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, *, is_big_endian: bool = False,
+                  use_temp_file: bool = False, eager: bool = False,
+@@ -1032,6 +1034,10 @@ class ModelBase:
+ 
+     def prepare_metadata(self, vocab_only: bool):
+ 
++        # tells the loader the shared embeddings and lm head are missing on purpose
++        if self.mtp_only and self.mtp_shared_embd:
++            self.gguf_writer.add_nextn_shared_target_tensors(True)
++
+         total_params, shared_params, expert_params, expert_count = self.gguf_writer.get_total_parameter_count()
+ 
+         self.metadata = gguf.Metadata.load(self.metadata_override, self.dir_model_card, self.model_name, total_params)
+diff --git a/conversion/command_r.py b/conversion/command_r.py
+index 971f93ebd..2b513509d 100644
+--- a/conversion/command_r.py
++++ b/conversion/command_r.py
+@@ -131,9 +131,9 @@ class Cohere2MoeModel(TextModel):
+             is_mtp = (m := re.match(r"model\.layers\.(\d+)\.", name)) is not None and int(m.group(1)) >= cls._n_main_layers
+             if is_mtp and cls.no_mtp:
+                 return None
+-            if cls.mtp_only and not is_mtp and name not in (
++            if cls.mtp_only and not is_mtp and (cls.mtp_shared_embd or name not in (
+                 "model.embed_tokens.weight", "model.norm.weight", "lm_head.weight",
+-            ):
++            )):
+                 return None
+ 
+         return name, gen
+diff --git a/conversion/dots3.py b/conversion/dots3.py
+index c7ac2319e..e8d3f350c 100644
+--- a/conversion/dots3.py
++++ b/conversion/dots3.py
+@@ -99,9 +99,9 @@ class Dots3NoteModel(DeepseekV2Model):
+         # --no-mtp: drop the NextN/MTP block; --mtp: keep only that block plus the shared embeddings/norm/lm_head
+         if is_mtp and cls.no_mtp:
+             return None
+-        if cls.mtp_only and not is_mtp and name not in (
++        if cls.mtp_only and not is_mtp and (cls.mtp_shared_embd or name not in (
+             "model.embed_tokens.weight", "model.norm.weight", "lm_head.weight",
+-        ):
++        )):
+             return None
+ 
+         return name, gen
+diff --git a/conversion/glm.py b/conversion/glm.py
+index 7544f850c..245f01f84 100644
+--- a/conversion/glm.py
++++ b/conversion/glm.py
+@@ -138,9 +138,9 @@ class Glm4MoeModel(TextModel):
+ 
+         if is_mtp and cls.no_mtp:
+             return None
+-        if cls.mtp_only and not is_mtp and name not in (
++        if cls.mtp_only and not is_mtp and (cls.mtp_shared_embd or name not in (
+             "model.embed_tokens.weight", "model.norm.weight", "lm_head.weight",
+-        ):
++        )):
+             return None
+ 
+         return name, gen
+@@ -292,9 +292,9 @@ class Glm4MoeLiteModel(DeepseekV2Model):
+             is_mtp = match is not None and int(match.group(1)) >= cls._n_main_layers
+             if is_mtp and cls.no_mtp:
+                 return None
+-            if cls.mtp_only and not is_mtp and name not in (
++            if cls.mtp_only and not is_mtp and (cls.mtp_shared_embd or name not in (
+                 "model.embed_tokens.weight", "model.norm.weight", "lm_head.weight",
+-            ):
++            )):
+                 return None
+ 
+         return name, gen
+@@ -352,9 +352,9 @@ class GlmMoeDsaModel(DeepseekV2Model):
+             return None
+         # --mtp: keep ONLY NextN-block tensors plus the shared embeddings/
+         # norm/lm_head (so the resulting GGUF carries just the draft head).
+-        if cls.mtp_only and not is_mtp and name not in (
++        if cls.mtp_only and not is_mtp and (cls.mtp_shared_embd or name not in (
+             "model.embed_tokens.weight", "model.norm.weight", "lm_head.weight",
+-        ):
++        )):
+             return None
+ 
+         return name, gen
+diff --git a/conversion/qwen.py b/conversion/qwen.py
+index 419611896..ca89d27ba 100644
+--- a/conversion/qwen.py
++++ b/conversion/qwen.py
+@@ -338,7 +338,7 @@ class _QwenMtpMixin:
+             elif len(parts) == 3 and parts[1] in remapper:
+                 name = f"model.layers.{cls._original_block_count}.{remapper[parts[1]]}.{parts[2]}"
+         elif cls.mtp_only:
+-            keep = name in (
++            keep = not cls.mtp_shared_embd and name in (
+                 "model.embed_tokens.weight", "model.norm.weight", "lm_head.weight",
+                 "embed_tokens.weight", "norm.weight",
+             )
+diff --git a/convert_hf_to_gguf.py b/convert_hf_to_gguf.py
+index 78ad26c65..6e7dddfa6 100755
+--- a/convert_hf_to_gguf.py
++++ b/convert_hf_to_gguf.py
+@@ -125,6 +125,10 @@ def parse_args() -> argparse.Namespace:
+         "--no-nextn", "--no-mtp", dest="no_mtp", action="store_true",
+         help="Exclude NextN speculative draft tensors from the converted GGUF. Pair with --mtp or --dspark on a second run to publish target and draft as two files.",
+     )
++    parser.add_argument(
++        "--mtp-shared-embd", action="store_true",
++        help="With --mtp, leave the token embeddings, output norm and LM head out of the draft and take them from the target model at load time. Much smaller draft, but it needs a llama.cpp new enough to read it.",
++    )
+     parser.add_argument(
+         "--dspark", action="store_true",
+         help="Export only the DeepSeek-V4 DSpark draft tensors as a separate GGUF.",
+@@ -278,6 +282,12 @@ def main() -> None:
+             if args.mtp:
+                 model_class.mtp_only = True
+ 
++        if args.mtp_shared_embd:
++            if not args.mtp:
++                logger.error("--mtp-shared-embd only applies together with --mtp")
++                sys.exit(1)
++            model_class.mtp_shared_embd = True
++
+         model_instance = model_class(dir_model, output_type, fname_out,
+                                      is_big_endian=args.bigendian, use_temp_file=args.use_temp_file,
+                                      eager=args.no_lazy,
+diff --git a/gguf-py/gguf/constants.py b/gguf-py/gguf/constants.py
+index f9b84213e..1ca16a09f 100644
+--- a/gguf-py/gguf/constants.py
++++ b/gguf-py/gguf/constants.py
+@@ -129,6 +129,7 @@ class Keys:
+         MOE_EVERY_N_LAYERS                = "{arch}.moe_every_n_layers"
+         MOE_LATENT_SIZE                   = "{arch}.moe_latent_size"
+         NEXTN_PREDICT_LAYERS              = "{arch}.nextn_predict_layers"
++        NEXTN_SHARED_TARGET_TENSORS       = "{arch}.nextn_shared_target_tensors"
+         NUM_DEEPSTACK_LAYERS              = "{arch}.n_deepstack_layers"
+         DEEPSTACK_MAPPING                 = "{arch}.deepstack_mapping"
+         POOLING_TYPE                      = "{arch}.pooling_type"
+diff --git a/gguf-py/gguf/gguf_writer.py b/gguf-py/gguf/gguf_writer.py
+index d95fe9b1a..87f32c329 100644
+--- a/gguf-py/gguf/gguf_writer.py
++++ b/gguf-py/gguf/gguf_writer.py
+@@ -905,6 +905,9 @@ class GGUFWriter:
+     def add_nextn_predict_layers(self, count: int) -> None:
+         self.add_uint32(Keys.LLM.NEXTN_PREDICT_LAYERS.format(arch=self.arch), count)
+ 
++    def add_nextn_shared_target_tensors(self, value: bool) -> None:
++        self.add_bool(Keys.LLM.NEXTN_SHARED_TARGET_TENSORS.format(arch=self.arch), value)
++
+     def add_swin_norm(self, value: bool) -> None:
+         self.add_bool(Keys.LLM.SWIN_NORM.format(arch=self.arch), value)
+ 
+diff --git a/include/llama.h b/include/llama.h
+index ef7a012c4..6e25109db 100644
+--- a/include/llama.h
++++ b/include/llama.h
+@@ -340,6 +340,10 @@ extern "C" {
+         // override key-value pairs of the model meta data
+         const struct llama_model_kv_override * kv_overrides;
+ 
++        // already loaded model to take the shared embeddings and lm head from, for a draft
++        // head that declares nextn_shared_target_tensors. must outlive the model being loaded
++        const struct llama_model * model_shared;
++
+         // Keep the booleans together to avoid misalignment during copy-by-value.
+         bool vocab_only;      // only load the vocabulary, no weights
+         bool check_tensors;   // validate model tensor data
+diff --git a/src/llama-arch.cpp b/src/llama-arch.cpp
+index b28644fe2..4f5ca11a0 100644
+--- a/src/llama-arch.cpp
++++ b/src/llama-arch.cpp
+@@ -217,6 +217,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
+     { LLM_KV_MOE_EVERY_N_LAYERS,                "%s.moe_every_n_layers"                },
+     { LLM_KV_MOE_LATENT_SIZE,                   "%s.moe_latent_size"                   },
+     { LLM_KV_NEXTN_PREDICT_LAYERS,              "%s.nextn_predict_layers"              },
++    { LLM_KV_NEXTN_SHARED_TARGET_TENSORS,       "%s.nextn_shared_target_tensors"       },
+     { LLM_KV_NUM_DEEPSTACK_LAYERS,              "%s.n_deepstack_layers"                },
+     { LLM_KV_DEEPSTACK_MAPPING,                 "%s.deepstack_mapping"                 },
+     { LLM_KV_HIDDEN_ACT,                        "%s.hidden_activation"                 },
+diff --git a/src/llama-arch.h b/src/llama-arch.h
+index f01313766..1097c4bfc 100644
+--- a/src/llama-arch.h
++++ b/src/llama-arch.h
+@@ -222,6 +222,7 @@ enum llm_kv {
+     LLM_KV_MOE_EVERY_N_LAYERS,
+     LLM_KV_MOE_LATENT_SIZE,
+     LLM_KV_NEXTN_PREDICT_LAYERS,
++    LLM_KV_NEXTN_SHARED_TARGET_TENSORS,
+     LLM_KV_NUM_DEEPSTACK_LAYERS,
+     LLM_KV_DEEPSTACK_MAPPING,
+     LLM_KV_HIDDEN_ACT,
+diff --git a/src/llama-model-loader.cpp b/src/llama-model-loader.cpp
+index 7663797ba..ee26457b1 100644
+--- a/src/llama-model-loader.cpp
++++ b/src/llama-model-loader.cpp
+@@ -1106,6 +1106,71 @@ bool llama_model_loader::lazy_read::add(const std::string & name, const ggml_ten
+     return true;
+ }
+ 
++// declared in llama-model.h, which this file does not include
++const std::vector<std::pair<std::string, ggml_tensor *>> & llama_internal_get_tensor_map(const llama_model * model);
++
++struct ggml_tensor * llama_model_loader::borrow_shared_tensor(const LLM_TN_IMPL & tn, const std::initializer_list<int64_t> & ne) {
++    // only the tensors a draft head is allowed to leave out, checked first so no other
++    // tensor in any model costs a metadata lookup
++    if (tn.tensor != LLM_TENSOR_TOKEN_EMBD && tn.tensor != LLM_TENSOR_OUTPUT && tn.tensor != LLM_TENSOR_OUTPUT_NORM) {
++        return nullptr;
++    }
++
++    if (shared_target_tensors < 0) {
++        bool shared = false;
++        get_key(LLM_KV_NEXTN_SHARED_TARGET_TENSORS, shared, false);
++        shared_target_tensors = shared ? 1 : 0;
++    }
++    if (shared_target_tensors == 0) {
++        return nullptr;
++    }
++
++    // a file that declares the flag and still ships the tensor keeps its own copy
++    const std::string name = tn.str();
++    if (get_weight(name.c_str()) != nullptr) {
++        return nullptr;
++    }
++
++    if (model_shared == nullptr) {
++        throw std::runtime_error(format("%s: this model is a draft head without its own '%s'; "
++                    "load it as a draft of its target model, not on its own", __func__, name.c_str()));
++    }
++
++    ggml_tensor * src = nullptr;
++    for (const auto & [n, t] : llama_internal_get_tensor_map(model_shared)) {
++        if (n == name) {
++            src = t;
++            break;
++        }
++    }
++    if (src == nullptr) {
++        throw std::runtime_error(format("%s: draft needs tensor '%s' from the target, which does not have it",
++                    __func__, name.c_str()));
++    }
++
++    // the draft uses the tensor directly, so the shapes must agree exactly
++    size_t dim = 0;
++    for (const int64_t n : ne) {
++        if (dim >= GGML_MAX_DIMS || src->ne[dim] != n) {
++            throw std::runtime_error(format("%s: draft and target disagree on '%s': target has %s, draft wants %s",
++                        __func__, name.c_str(), llama_format_tensor_shape(src).c_str(), llama_format_tensor_shape(ne).c_str()));
++        }
++        dim++;
++    }
++    for (; dim < GGML_MAX_DIMS; dim++) {
++        if (src->ne[dim] != 1) {
++            throw std::runtime_error(format("%s: draft and target disagree on '%s': target has %s, draft wants %s",
++                        __func__, name.c_str(), llama_format_tensor_shape(src).c_str(), llama_format_tensor_shape(ne).c_str()));
++        }
++    }
++
++    LLAMA_LOG_INFO("%s: tensor %s taken from the target model\n", __func__, name.c_str());
++
++    // not counted in n_created or size_data: the tensor is not in this file and is neither
++    // allocated nor freed here
++    return src;
++}
++
+ struct ggml_tensor * llama_model_loader::create_tensor(
+         const llama_hparams & hparams, const buft_list_t * buft_list_cpu, const buft_list_t * buft_list_input, const buft_list_t * buft_list_output,
+         const buft_list_t * buft_list_layer, const LLM_TN_IMPL & tn, const std::initializer_list<int64_t> & ne, int flags) {
+@@ -1326,6 +1391,12 @@ struct ggml_tensor * llama_model_loader::create_tensor(
+         return ret;
+     }
+ 
++    // must run before check_tensor_dims: the tensor is absent from this file by design, and for
++    // the lm head it must also win over the arch fallback that ties the head to token_embd
++    if (ggml_tensor * shared = borrow_shared_tensor(tn, ne)) {
++        return shared;
++    }
++
+     LLAMA_LOG_DEBUG("%s: loading tensor %s\n", __func__, tn.str().c_str());
+     const struct ggml_tensor * cur = check_tensor_dims(tn.str(), ne, !(flags & TENSOR_NOT_REQUIRED), flags & TENSOR_ALLOW_RESHAPE);
+     if (cur == NULL) {
+diff --git a/src/llama-model-loader.h b/src/llama-model-loader.h
+index 9e51d0ce7..d9e6cda98 100644
+--- a/src/llama-model-loader.h
++++ b/src/llama-model-loader.h
+@@ -117,6 +117,12 @@ struct llama_model_loader {
+         std::set<std::string>                  tensors;
+     } lazy;
+ 
++    // target model a draft head borrows the shared tensors from, see borrow_shared_tensor()
++    const struct llama_model * model_shared = nullptr;
++
++    // cached nextn_shared_target_tensors, -1 until first read
++    int shared_target_tensors = -1;
++
+     llama_files files;
+     llama_ftype ftype;
+     llama_fver  fver;
+@@ -238,6 +244,11 @@ struct llama_model_loader {
+         const llama_hparams & hparams, const buft_list_t * buft_list_cpu, const buft_list_t * buft_list_input, const buft_list_t * buft_list_output,
+         const buft_list_t * buft_list_layer, const LLM_TN_IMPL & tn, const std::initializer_list<int64_t> & ne, int flags);
+ 
++    // a draft head that sets nextn_shared_target_tensors does not carry its own token_embd,
++    // output or output_norm; take them from the target model instead. returns null unless the
++    // file declares the flag, so a draft that ships its own tensors is never affected
++    struct ggml_tensor * borrow_shared_tensor(const LLM_TN_IMPL & tn, const std::initializer_list<int64_t> & ne);
++
+     void done_getting_tensors(bool partial = false) const;
+ 
+     void init_mappings(bool prefetch = true, llama_mlocks * mlock_mmaps = nullptr);
+diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+index 36bccec2a..a819580fe 100644
+--- a/src/llama-model.cpp
++++ b/src/llama-model.cpp
+@@ -2694,6 +2694,7 @@ llama_model_params llama_model_default_params() {
+         /*.progress_callback           =*/ nullptr,
+         /*.progress_callback_user_data =*/ nullptr,
+         /*.kv_overrides                =*/ nullptr,
++        /*.model_shared                =*/ nullptr,
+         /*.vocab_only                  =*/ false,
+         /*.check_tensors               =*/ false,
+         /*.use_extra_bufts             =*/ true,
+diff --git a/src/llama.cpp b/src/llama.cpp
+index 633db658c..7c49b3a24 100644
+--- a/src/llama.cpp
++++ b/src/llama.cpp
+@@ -318,7 +318,8 @@ static std::pair<int, llama_model *> llama_model_load(struct gguf_context * meta
+         llama_model_loader ml(metadata, set_tensor_data, set_tensor_data_ud, fname, splits, file, params.load_mode,
+             params.check_tensors, params.no_alloc, params.load_mtp, params.kv_overrides, params.tensor_buft_overrides);
+ 
+-        ml.lazy.mode = params.lazy_mode;
++        ml.lazy.mode    = params.lazy_mode;
++        ml.model_shared = params.model_shared;
+ 
+         ml.print_info();
+         std::unique_ptr<llama_model> model_ptr(llama_model_create(ml, params));

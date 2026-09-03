@@ -1,0 +1,12 @@
+0001-metal-optimize-qwen4-exp-inference.patch
+0002-gguf-py-register-qwen4exp-nextn-tensors.patch
+0003-model-add-qwen4exp-nextn-mtp-draft-head.patch
+0004-convert-export-qwen4exp-nextn-mtp-draft-head.patch
+0005-ggml-cuda-key-cuda-graph-cache-by-shape.patch
+0006-llama-let-mtp-draft-borrow-target-embeddings-lm-head.patch
+0007-qwen4exp-allow-loading-draft-only-mtp-export.patch
+0008-qwen4exp-mtp-trim-comments.patch
+0009-convert-declare-mtp-shared-embd-on-qwen-mtp-mixin.patch
+0010-ggml-cuda-guard-graph-key-against-empty-graph.patch
+0011-qwen4exp-reject-draft-only-export-without-target.patch
+0012-qwen4exp-expose-optimized-graph-helpers-to-mtp.patch

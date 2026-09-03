@@ -1,0 +1,32 @@
+From 811160ef1a6ca6362c78e74797a946b05590f1b6 Mon Sep 17 00:00:00 2001
+From: danielhanchen <danielhanchen@gmail.com>
+Date: Wed, 2 Sep 2026 12:36:18 +0000
+Subject: [PATCH 09/12] convert : declare mtp_shared_embd on the Qwen MTP mixin
+
+_QwenMtpMixin is not a ModelBase subclass, so it re-declares the
+attributes it reads off cls for the type checker. filter_tensors reads
+cls.mtp_shared_embd without a matching declaration, which ty reports as
+unresolved-attribute.
+
+The declaration is a bare annotation, matching no_mtp and mtp_only
+above it. That creates no class attribute, so it cannot shadow
+ModelBase.mtp_shared_embd even though the mixin precedes the model
+class in the MRO; a default value here would have.
+
+Assisted-by: Claude
+---
+ conversion/qwen.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/conversion/qwen.py b/conversion/qwen.py
+index ca89d27ba..27f4d7fe8 100644
+--- a/conversion/qwen.py
++++ b/conversion/qwen.py
+@@ -290,6 +290,7 @@ class _QwenMtpMixin:
+     tensor_map: gguf.TensorNameMap
+     no_mtp: bool
+     mtp_only: bool
++    mtp_shared_embd: bool
+     _original_block_count: int | None = None
+     opt_num_mtp_layers: int = 0
+ 
