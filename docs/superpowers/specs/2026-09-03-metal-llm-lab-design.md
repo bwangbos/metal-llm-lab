@@ -2,7 +2,7 @@
 
 **Date:** September 3, 2026
 
-**Status:** Approved in chat; awaiting written-spec review
+**Status:** Approved for implementation
 
 **Repository:** `bwangbos/metal-llm-lab`
 
