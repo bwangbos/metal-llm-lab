@@ -372,7 +372,7 @@ for boundary in 32767 32768 32769; do
     array_count=$(( boundary - completion_offset ))
     (( array_count > 0 )) || fail 'calibrated boundary array length is invalid'
     stream=false
-    [[ "$boundary" == 32768 ]] && stream=true
+    [[ "$boundary" == 32768 || "$boundary" == 32769 ]] && stream=true
     route=on
     (( boundary > threshold )) && route=off
     payload=$(completion_payload "$array_count" "$stream" 0)

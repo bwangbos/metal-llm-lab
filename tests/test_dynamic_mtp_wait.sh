@@ -92,5 +92,7 @@ grep -Fq 'metal_llm_wait_for_process_diagnostic "$second_pid" "$second_started"'
 if grep -Fq 'for attempt in {1..30}' "$harness"; then
     fail 'integration harness still treats 30 seconds of artifact verification as lease failure'
 fi
+grep -Fq '[[ "$boundary" == 32768 || "$boundary" == 32769 ]] && stream=true' "$harness" || \
+    fail 'integration harness lacks streamed boundary coverage on both dynamic routes'
 
 print -- 'dynamic-MTP diagnostic wait checks: PASS'
