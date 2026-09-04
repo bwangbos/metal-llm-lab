@@ -94,5 +94,9 @@ if grep -Fq 'for attempt in {1..30}' "$harness"; then
 fi
 grep -Fq '[[ "$boundary" == 32768 || "$boundary" == 32769 ]] && stream=true' "$harness" || \
     fail 'integration harness lacks streamed boundary coverage on both dynamic routes'
+grep -Fxq 'METAL_LLM_ROOT=$root' "$harness" || \
+    fail 'integration harness does not initialize the repository root for sourced helpers'
+grep -Fxq 'export METAL_LLM_ROOT' "$harness" || \
+    fail 'integration harness does not export the repository root for sourced helpers'
 
 print -- 'dynamic-MTP diagnostic wait checks: PASS'

@@ -4,6 +4,8 @@ setopt extended_glob
 unsetopt bg_nice
 
 root=${0:A:h:h:h}
+METAL_LLM_ROOT=$root
+export METAL_LLM_ROOT
 
 if [[ "${METAL_LLM_INTEGRATION:-0}" != 1 ]]; then
     print -- 'SKIP: dynamic-MTP integration requires METAL_LLM_INTEGRATION=1'
