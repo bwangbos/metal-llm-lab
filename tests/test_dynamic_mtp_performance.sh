@@ -16,7 +16,7 @@ skip_output=$(zsh "$collector")
     fail 'performance collector does not skip explicitly by default'
 
 self_test_output=$(METAL_LLM_PERFORMANCE=1 zsh "$collector" --self-test)
-[[ "$self_test_output" == 'dynamic-MTP performance self-test: PASS' ]] || \
+[[ "$self_test_output" == $'dynamic-MTP performance self-test: PASS\nperformance checkpoint integration self-test: PASS' ]] || \
     fail 'performance collector self-test failed'
 
 for required_text in \
@@ -28,10 +28,11 @@ for required_text in \
   'throughput_tolerance_percent=5' \
   'generated_tokens=128' \
   'source "$root/lib/setup.zsh"' \
+  'source "$root/lib/performance-checkpoint.zsh"' \
   'cache_prompt: false' \
   'temperature: 0' \
   'seed: 1234' \
-  'response_path="$responses_dir/$case_id.response"' \
+  'response_path="$responses_dir/$server_session_id-$case_id.response"' \
   'metal_llm_managed_identity_is_live "$identity_record"' \
   'metal_llm_release_managed_lease "$server_owner_token"' \
   'metal_llm_validate_result "$result_part"' \

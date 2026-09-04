@@ -19,11 +19,25 @@ source "$root/lib/runtime-state.zsh"
 source "$root/lib/managed-process.zsh"
 source "$root/lib/bench.zsh"
 source "$root/lib/report.zsh"
+source "$root/lib/performance-checkpoint.zsh"
 source "$root/tests/integration/dynamic_mtp_helpers.zsh"
 
 fail() {
     print -u2 -- "dynamic-MTP performance: $1"
     return 1
+}
+
+retire_published_checkpoint() {
+    local checkpoint_path=$1
+    local expected="$root/.lab/task6-evidence/dynamic-mtp-performance-checkpoint"
+    local retired="$root/.lab/task6-evidence/.dynamic-mtp-performance-completed-$$"
+    [[ "$checkpoint_path" == "$expected" && -d "$checkpoint_path" && ! -L "$checkpoint_path" && \
+       ! -e "$retired" && ! -L "$retired" ]] || \
+        fail 'refusing to remove an unexpected checkpoint path'
+    mv -- "$checkpoint_path" "$retired" || fail 'could not retire the published checkpoint atomically'
+    command sync
+    rm -rf -- "$retired"
+    command sync
 }
 
 policies=(on off dynamic)
@@ -83,6 +97,9 @@ metal_llm_performance_self_test() {
         return 1
     [[ "$selected" == false ]] || return 1
     print -- 'dynamic-MTP performance self-test: PASS'
+    whence -w metal_llm_performance_checkpoint_open >/dev/null || return 1
+    whence -w metal_llm_performance_checkpoint_publish_run >/dev/null || return 1
+    print -- 'performance checkpoint integration self-test: PASS'
 }
 
 if (( $# == 1 )) && [[ "$1" == --self-test ]]; then
@@ -93,7 +110,7 @@ elif (( $# != 0 )); then
     exit 2
 fi
 
-for required_command in git jq curl shasum system_profiler uname ps awk; do
+for required_command in git jq curl shasum system_profiler uname ps awk sync; do
     command -v "$required_command" >/dev/null 2>&1 || fail "missing required command: $required_command"
 done
 metal_llm_require_supported_host || exit 1
@@ -120,9 +137,12 @@ metal_llm_detect_hardware_manifest || exit 1
 
 model_manifest="$root/manifests/models/$model_id.json"
 runtime_manifest="$root/manifests/runtimes/$runtime_id.json"
+hardware_manifest="$root/manifests/hardware/$hardware_id.json"
 collector_path="$root/tests/integration/test_dynamic_mtp_performance.sh"
+checkpoint_library_path="$root/lib/performance-checkpoint.zsh"
 integration_evidence="$root/.lab/task6-evidence/integration-acceptance.json"
-[[ -f "$model_manifest" && -f "$runtime_manifest" ]] || fail 'required manifests are missing'
+[[ -f "$model_manifest" && -f "$runtime_manifest" && -f "$hardware_manifest" ]] || \
+    fail 'required manifests are missing'
 [[ -f "$integration_evidence" && ! -L "$integration_evidence" ]] || \
     fail 'validated correctness evidence is required before performance collection'
 metal_llm_validate_model_manifest "$model_manifest" "$model_id" || fail 'model manifest is invalid'
@@ -139,15 +159,123 @@ jq -e '
 ' "$integration_evidence" >/dev/null || fail 'staged correctness evidence is incomplete'
 
 collector_sha=$(metal_llm_sha256 "$collector_path")
+checkpoint_library_sha=$(metal_llm_sha256 "$checkpoint_library_path")
 integration_evidence_sha=$(metal_llm_sha256 "$integration_evidence")
 model_manifest_sha=$(metal_llm_sha256 "$model_manifest")
+runtime_manifest_sha=$(metal_llm_sha256 "$runtime_manifest")
+hardware_manifest_sha=$(metal_llm_sha256 "$hardware_manifest")
 system_provenance=$(metal_llm_benchmark_system_provenance)
-collection_started=$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)
-metal_llm_validate_benchmark_timestamp "$collection_started" || exit 1
+
+metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-server || \
+    fail 'verified tuned build and receipt are required'
+[[ "$METAL_LLM_VERIFIED_RUNTIME_MANIFEST_SHA256" == "$runtime_manifest_sha" ]] || \
+    fail 'verified runtime manifest identity changed'
+metal_llm_resolve_profile "$model_manifest" auto on '' '' '' || \
+    fail 'auto profile could not be resolved for artifact verification'
+artifact_dir="$root/.lab/artifacts/$model_id"
+metal_llm_profile_artifact_identities "$model_manifest" "$artifact_dir" "$METAL_LLM_EFFECTIVE_PROFILE" || \
+    fail 'all acceptance artifacts must already exist and match their manifest checksums'
+verified_artifacts=$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES
 
 result_dir="$root/results/raw"
 result_path="$result_dir/2026-09-03-qwen38-dynamic-mtp.json"
-[[ ! -e "$result_path" && ! -L "$result_path" ]] || fail 'named performance result already exists'
+checkpoint="$root/.lab/task6-evidence/dynamic-mtp-performance-checkpoint"
+result_already_published=false
+if [[ -e "$result_path" || -L "$result_path" ]]; then
+    [[ -f "$result_path" && ! -L "$result_path" && -d "$checkpoint" && ! -L "$checkpoint" ]] || \
+        fail 'named performance result already exists without a recoverable checkpoint'
+    result_already_published=true
+fi
+if [[ -e "$checkpoint" ]]; then
+    [[ -d "$checkpoint" && ! -L "$checkpoint" && -f "$checkpoint/identity.json" && \
+       ! -L "$checkpoint/identity.json" ]] || fail 'existing performance checkpoint is unsafe'
+    collection_started=$(jq -er '.collection_started | select(type == "string")' \
+      "$checkpoint/identity.json") || fail 'existing performance checkpoint has no valid start timestamp'
+else
+    collection_started=$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)
+fi
+metal_llm_validate_benchmark_timestamp "$collection_started" || exit 1
+
+checkpoint_identity=$(jq -cn \
+  --arg collection_started "$collection_started" \
+  --arg repository_revision "$repository_revision" --arg repository_tree "$repository_tree" \
+  --arg collector_sha "$collector_sha" --arg checkpoint_library_sha "$checkpoint_library_sha" \
+  --arg hardware_manifest_sha "$hardware_manifest_sha" --arg model_manifest_sha "$model_manifest_sha" \
+  --arg runtime_manifest_sha "$runtime_manifest_sha" --arg correctness_sha "$integration_evidence_sha" \
+  --arg hardware "$hardware_id" --arg chip "$METAL_LLM_DETECTED_CHIP" \
+  --argjson memory "$METAL_LLM_DETECTED_MEMORY_BYTES" --argjson system "$system_provenance" \
+  --arg runtime "$runtime_id" --arg runtime_revision "$METAL_LLM_VERIFIED_RUNTIME_REVISION" \
+  --arg runtime_tree "$METAL_LLM_VERIFIED_RUNTIME_TREE" \
+  --arg receipt_sha "$METAL_LLM_VERIFIED_BUILD_RECEIPT_SHA256" \
+  --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
+  --argjson artifacts "$verified_artifacts" '
+  {
+    schema_version: 1, collection_started: $collection_started,
+    repository: {revision: $repository_revision, tree_sha: $repository_tree},
+    collector: {
+      path: "tests/integration/test_dynamic_mtp_performance.sh", sha256: $collector_sha,
+      checkpoint_library_path: "lib/performance-checkpoint.zsh",
+      checkpoint_library_sha256: $checkpoint_library_sha
+    },
+    manifests: {
+      hardware_sha256: $hardware_manifest_sha, model_sha256: $model_manifest_sha,
+      runtime_sha256: $runtime_manifest_sha
+    },
+    correctness_evidence_sha256: $correctness_sha,
+    hardware: {id: $hardware, chip: $chip, unified_memory_bytes: $memory},
+    system: $system,
+    runtime: {
+      id: $runtime, tested_revision: $runtime_revision, tested_tree_sha: $runtime_tree,
+      manifest_sha256: $runtime_manifest_sha, build_receipt_sha256: $receipt_sha,
+      executable: {name: "llama-server", sha256: $executable_sha}
+    },
+    model_manifest_sha256: $model_manifest_sha, artifacts: $artifacts,
+    matrix: {
+      policies: ["on", "off", "dynamic"],
+      effective_prompt_lengths: [29000, 30000, 32767, 32768, 32769, 33868, 98304],
+      warmups_per_cell: 1, samples_per_cell: 5
+    },
+    generation: {
+      context: 262144, vision: true, generated_tokens: 128, temperature: 0, seed: 1234,
+      reasoning: false, ignore_eos: true, cache_prompt: false, parallel: 1, draft_n_max: 2
+    },
+    comparison: {
+      metric: "generation_tokens_per_second", tolerance_percent: 5, dynamic_threshold: 32768
+    }
+  }
+') || fail 'could not construct immutable performance checkpoint identity'
+metal_llm_performance_checkpoint_open "$checkpoint" "$checkpoint_identity" || \
+    fail 'performance checkpoint is not safely resumable'
+if [[ "$result_already_published" == true ]]; then
+    metal_llm_validate_result "$result_path" 'published dynamic-MTP performance result' || \
+        fail 'published result is invalid; preserving its checkpoint'
+    checkpoint_identity_sha=$(metal_llm_sha256 "$checkpoint/identity.json")
+    jq -e --arg sha "$checkpoint_identity_sha" --arg revision "$repository_revision" \
+      --arg tree "$repository_tree" --arg collector "$collector_sha" '
+      .configuration.checkpoint_identity_sha256 == $sha and
+      .provenance.repository.revision == $revision and .provenance.repository.tree_sha == $tree and
+      .provenance.suite.sha256 == $collector and (.runs | length) == 105 and
+      (.interpretation.performance_gate_passed | type == "boolean")
+    ' "$result_path" >/dev/null || fail 'published result does not match its recoverable checkpoint'
+    [[ "$METAL_LLM_PERFORMANCE_CHECKPOINT_RUN_COUNT" == 105 ]] || \
+        fail 'published result checkpoint does not retain all 105 samples'
+    published_performance_passed=$(jq -r '.interpretation.performance_gate_passed' "$result_path")
+    retire_published_checkpoint "$checkpoint" || exit 1
+    print -- "dynamic-MTP performance: recovered already-published evidence: ${result_path#$root/}"
+    [[ "$published_performance_passed" == true ]] || \
+        fail 'dynamic route exceeded the predeclared 5% generation-throughput tolerance'
+    print -- 'dynamic-MTP performance: PASS'
+    exit 0
+fi
+mkdir -p -- "$checkpoint/logs" "$checkpoint/responses"
+assembly=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-dynamic-mtp-assembly.XXXXXX")
+run_buffer="$assembly/runs.jsonl"
+log_buffer="$assembly/logs.jsonl"
+metal_llm_performance_checkpoint_runs "$checkpoint" > "$run_buffer" || \
+    fail 'could not rehydrate retained performance samples'
+: > "$log_buffer"
+print -- "dynamic-MTP performance: checkpoint resumed=$METAL_LLM_PERFORMANCE_CHECKPOINT_RESUMED retained=$METAL_LLM_PERFORMANCE_CHECKPOINT_RUN_COUNT/105"
+
 lease_dir=$(metal_llm_managed_lease_dir)
 [[ ! -e "$lease_dir" && ! -L "$lease_dir" ]] || \
     fail 'managed full-model lease must be absent before performance collection'
@@ -155,13 +283,8 @@ if curl -fsS --connect-timeout 1 --max-time 1 "http://$host:$port/health" >/dev/
     fail 'configured endpoint is already responding'
 fi
 
-scratch=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-dynamic-mtp-performance.XXXXXX")
-run_buffer="$scratch/runs.jsonl"
-log_buffer="$scratch/logs.jsonl"
-responses_dir="$scratch/responses"
-mkdir -- "$responses_dir"
-: > "$run_buffer"
-: > "$log_buffer"
+scratch=$assembly
+responses_dir="$checkpoint/responses"
 
 server_pid=''
 server_started=''
@@ -213,7 +336,7 @@ stop_server_exact() {
 
 cleanup() {
     local exit_status=$?
-    local identity_record="$lease_dir/identity.json" expected_scratch_root scratch_parent
+    local identity_record="$lease_dir/identity.json" expected_assembly_root assembly_parent
     trap - EXIT HUP INT TERM
     if [[ -n "$server_pid" && -n "$server_started" && -n "$server_owner_token" && \
           -f "$identity_record" && ! -L "$identity_record" ]] &&
@@ -228,17 +351,18 @@ cleanup() {
         stop_if_same_process "$launcher_pid" "$launcher_started"
         wait "$launcher_pid" 2>/dev/null || true
     fi
-    expected_scratch_root=${TMPDIR:-/tmp}
-    expected_scratch_root=${expected_scratch_root:A}
-    scratch_parent=${scratch:h:A}
-    if (( exit_status != 0 )); then
-        print -u2 -- "dynamic-MTP performance: preserving failure diagnostics: ${scratch:t}"
-    elif [[ -d "$scratch" && "$scratch_parent" == "$expected_scratch_root" && \
-            "${scratch:t}" == metal-llm-dynamic-mtp-performance.* ]]; then
-        rm -rf -- "$scratch"
+    expected_assembly_root=${TMPDIR:-/tmp}
+    expected_assembly_root=${expected_assembly_root:A}
+    assembly_parent=${assembly:h:A}
+    if [[ -d "$assembly" && "$assembly_parent" == "$expected_assembly_root" && \
+          "${assembly:t}" == metal-llm-dynamic-mtp-assembly.* ]]; then
+        rm -rf -- "$assembly"
     else
-        print -u2 -- 'dynamic-MTP performance: refusing to remove an unexpected scratch path'
+        print -u2 -- 'dynamic-MTP performance: refusing to remove an unexpected assembly path'
         exit_status=1
+    fi
+    if (( exit_status != 0 )); then
+        print -u2 -- "dynamic-MTP performance: preserving durable checkpoint diagnostics: ${checkpoint#$root/}"
     fi
     return "$exit_status"
 }
@@ -253,18 +377,27 @@ post_arguments=(-fsS --connect-timeout 5 --max-time 900 -H 'Content-Type: applic
     post_arguments+=(-H "Authorization: Bearer $METAL_LLM_API_KEY")
 }
 
-common_runtime_revision=''
-common_runtime_tree=''
-common_runtime_manifest_sha=''
-common_receipt_sha=''
-common_executable_sha=''
-common_artifacts=''
+common_runtime_revision=$METAL_LLM_VERIFIED_RUNTIME_REVISION
+common_runtime_tree=$METAL_LLM_VERIFIED_RUNTIME_TREE
+common_runtime_manifest_sha=$METAL_LLM_VERIFIED_RUNTIME_MANIFEST_SHA256
+common_receipt_sha=$METAL_LLM_VERIFIED_BUILD_RECEIPT_SHA256
+common_executable_sha=$METAL_LLM_VERIFIED_EXECUTABLE_SHA256
+common_artifacts=$verified_artifacts
+server_session_id=''
 
 start_policy_server() {
-    local policy=$1 identity_record candidate_pid candidate_started candidate_owner_token
+    local policy=$1 identity_record candidate_pid candidate_started candidate_owner_token session_number
     local mtp_threshold_json=null
     [[ "$policy" == dynamic ]] && mtp_threshold_json=$threshold
-    server_log="$scratch/server-$policy.log"
+    session_number=1
+    while [[ -e "$checkpoint/logs/$policy-session-$session_number.log" || \
+            -L "$checkpoint/logs/$policy-session-$session_number.log" ]]; do
+        (( session_number += 1 ))
+    done
+    server_session_id="$policy-session-$session_number"
+    server_log="$checkpoint/logs/$server_session_id.log"
+    : > "$server_log" || fail "could not create durable $policy server log"
+    command sync
     "$root/bin/metal-llm" serve "$model_id" --profile custom --runtime tuned \
       --mtp "$policy" --context "$context" --vision on > "$server_log" 2>&1 &
     launcher_pid=$!
@@ -318,22 +451,15 @@ start_policy_server() {
     curl "${health_arguments[@]}" "http://$host:$port/health" >/dev/null 2>&1 || \
         fail "timed out waiting for $policy server health"
 
-    if [[ -z "$common_runtime_revision" ]]; then
-        common_runtime_revision=$(jq -er '.runtime_revision' "$identity_record")
-        common_runtime_tree=$(jq -er '.runtime_tree_sha' "$identity_record")
-        common_runtime_manifest_sha=$(jq -er '.runtime_manifest_sha256' "$identity_record")
-        common_receipt_sha=$(jq -er '.build_receipt_sha256' "$identity_record")
-        common_executable_sha=$(jq -er '.executable_sha256' "$identity_record")
-        common_artifacts=$(jq -c '.artifacts' "$identity_record")
-    else
-        jq -e --arg revision "$common_runtime_revision" --arg tree "$common_runtime_tree" \
-          --arg manifest "$common_runtime_manifest_sha" --arg receipt "$common_receipt_sha" \
-          --arg executable "$common_executable_sha" '
-          .runtime_revision == $revision and .runtime_tree_sha == $tree and
-          .runtime_manifest_sha256 == $manifest and .build_receipt_sha256 == $receipt and
-          .executable_sha256 == $executable
-        ' "$identity_record" >/dev/null || fail "$policy server changed immutable runtime provenance"
-    fi
+    jq -e --arg revision "$common_runtime_revision" --arg tree "$common_runtime_tree" \
+      --arg manifest "$common_runtime_manifest_sha" --arg receipt "$common_receipt_sha" \
+      --arg executable "$common_executable_sha" --arg model_manifest "$model_manifest_sha" \
+      --argjson artifacts "$common_artifacts" '
+      .runtime_revision == $revision and .runtime_tree_sha == $tree and
+      .runtime_manifest_sha256 == $manifest and .build_receipt_sha256 == $receipt and
+      .executable_sha256 == $executable and .model_manifest_sha256 == $model_manifest and
+      .artifacts == $artifacts
+    ' "$identity_record" >/dev/null || fail "$policy server changed immutable runtime or artifact provenance"
     current_policy=$policy
     print -- "dynamic-MTP performance: server healthy policy=$policy pid=$server_pid"
 }
@@ -349,9 +475,9 @@ completion_payload() {
 
 record_request() {
     local policy=$1 effective_target=$2 filler_token=$3 completion_offset=$4 sample=$5 kind=$6
-    local array_count payload payload_sha case_id response response_path response_sha timing
+    local array_count payload payload_sha case_id response response_path response_part response_sha timing
     local selected expected_selected effective generated prompt_speed generation_speed draft accepted output_sha
-    local threshold_json=null timestamp notes
+    local threshold_json=null timestamp notes run_json envelope
     array_count=$(( effective_target - completion_offset ))
     (( array_count > 0 )) || fail 'calibrated prompt array length is invalid'
     payload=$(completion_payload "$filler_token" "$array_count") || return 1
@@ -363,8 +489,15 @@ record_request() {
     fi
     response=$(curl "${post_arguments[@]}" -d "$payload" "http://$host:$port/completion") || \
         fail "$case_id request failed"
-    response_path="$responses_dir/$case_id.response"
-    print -rn -- "$response" > "$response_path" || fail "$case_id response could not be preserved"
+    response_path="$responses_dir/$server_session_id-$case_id.response"
+    [[ ! -e "$response_path" && ! -L "$response_path" ]] || \
+        fail "$case_id durable response path already exists"
+    response_part=$(mktemp "$responses_dir/.part.XXXXXX") || \
+        fail "$case_id durable response part could not be created"
+    print -rn -- "$response" > "$response_part" || fail "$case_id response could not be preserved"
+    command sync
+    mv -- "$response_part" "$response_path" || fail "$case_id response could not be published"
+    command sync
     response_sha=$(metal_llm_sha256 "$response_path") || fail "$case_id response could not be hashed"
     timing=$(jq -ce '.timings | select(type == "object")' "$response_path") || \
         fail "$case_id response has no timing object; response-sha256=$response_sha"
@@ -415,7 +548,7 @@ record_request() {
     fi
     timestamp=$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)
     notes="Measured sample $sample of $samples_per_cell after $warmups_per_cell warm-up; response SHA-256 $response_sha."
-    jq -cn \
+    run_json=$(jq -cn \
       --arg id "$case_id" --arg timestamp "$timestamp" --arg repository "$repository_revision" \
       --arg hardware "$hardware_id" --arg runtime "$runtime_id" \
       --arg runtime_revision "$common_runtime_revision" --arg policy "$policy" \
@@ -442,11 +575,28 @@ record_request() {
         },
         notes: $notes
       }
-    ' >> "$run_buffer" || fail "$case_id sample could not be recorded"
+    ') || fail "$case_id sample could not be assembled"
+    envelope=$(jq -cn --arg session "$server_session_id" --argjson run "$run_json" \
+      '{schema_version: 1, server_session_id: $session, run: $run}') || \
+        fail "$case_id checkpoint envelope could not be assembled"
+    metal_llm_performance_checkpoint_publish_run "$checkpoint" "$envelope" || \
+        fail "$case_id sample could not be atomically retained"
+    print -r -- "$run_json" >> "$run_buffer" || fail "$case_id assembly buffer could not be updated"
     print -- "dynamic-MTP performance: sample policy=$policy effective=$effective sample=$sample/$samples_per_cell route=$selected generation=$generation_speed"
 }
 
 for policy in "${policies[@]}"; do
+    policy_missing=0
+    for effective_target in "${effective_lengths[@]}"; do
+        for sample in {1..5}; do
+            [[ -e "$checkpoint/runs/$policy-$effective_target-s$sample.json" ]] || \
+                (( policy_missing += 1 ))
+        done
+    done
+    if (( policy_missing == 0 )); then
+        print -- "dynamic-MTP performance: policy=$policy already complete; no server launch"
+        continue
+    fi
     start_policy_server "$policy" || exit 1
     tokenize_payload=$(jq -cn '{content: " x", add_special: false}')
     tokenize_response=$(curl "${post_arguments[@]}" -d "$tokenize_payload" "http://$host:$port/tokenize") || \
@@ -457,8 +607,11 @@ for policy in "${policies[@]}"; do
     calibration_payload=$(completion_payload "$filler_token" 32)
     calibration_response=$(curl "${post_arguments[@]}" -d "$calibration_payload" \
       "http://$host:$port/completion") || fail "$policy offset calibration failed"
-    calibration_path="$responses_dir/calibration-$policy.response"
+    calibration_path="$responses_dir/$server_session_id-calibration-$policy.response"
+    [[ ! -e "$calibration_path" && ! -L "$calibration_path" ]] || \
+        fail "$policy durable calibration response already exists"
     print -rn -- "$calibration_response" > "$calibration_path"
+    command sync
     calibration_timing=$(jq -ce '.timings | select(type == "object")' "$calibration_path") || \
         fail "$policy offset calibration has no timing object"
     metal_llm_validate_endpoint_timing "$calibration_timing" "$policy" \
@@ -470,19 +623,43 @@ for policy in "${policies[@]}"; do
         fail "$policy completion offset is outside the safe range"
 
     for effective_target in "${effective_lengths[@]}"; do
-        record_request "$policy" "$effective_target" "$filler_token" "$completion_offset" 0 warmup || exit 1
+        retained_in_cell=0
         for sample in {1..5}; do
+            [[ ! -e "$checkpoint/runs/$policy-$effective_target-s$sample.json" ]] || \
+                (( retained_in_cell += 1 ))
+        done
+        if (( retained_in_cell == samples_per_cell )); then
+            print -- "dynamic-MTP performance: cell policy=$policy effective=$effective_target already complete"
+            continue
+        fi
+        if (( retained_in_cell == 0 )); then
+            record_request "$policy" "$effective_target" "$filler_token" "$completion_offset" 0 warmup || exit 1
+        else
+            print -- "dynamic-MTP performance: resuming cell policy=$policy effective=$effective_target retained=$retained_in_cell/5 without repeating its completed warm-up"
+        fi
+        for sample in {1..5}; do
+            if [[ -e "$checkpoint/runs/$policy-$effective_target-s$sample.json" ]]; then
+                print -- "dynamic-MTP performance: retaining existing sample policy=$policy effective=$effective_target sample=$sample/5"
+                continue
+            fi
             record_request "$policy" "$effective_target" "$filler_token" "$completion_offset" "$sample" sample || exit 1
         done
     done
     stop_server_exact || exit 1
     server_log_sha=$(metal_llm_sha256 "$server_log")
-    jq -cn --arg policy "$policy" --arg sha "$server_log_sha" \
-      '{policy: $policy, sha256: $sha}' >> "$log_buffer"
-    print -- "dynamic-MTP performance: server stopped policy=$policy"
+    command sync
+    print -- "dynamic-MTP performance: server stopped policy=$policy session=$server_session_id log-sha256=$server_log_sha"
 done
 
 expected_run_count=$(( ${#policies[@]} * ${#effective_lengths[@]} * samples_per_cell ))
+metal_llm_performance_checkpoint_open "$checkpoint" "$checkpoint_identity" || \
+    fail 'completed checkpoint failed final strict validation'
+[[ "$METAL_LLM_PERFORMANCE_CHECKPOINT_RUN_COUNT" == "$expected_run_count" ]] || \
+    fail "checkpoint retains $METAL_LLM_PERFORMANCE_CHECKPOINT_RUN_COUNT samples, expected $expected_run_count"
+run_buffer_part=$(mktemp "$assembly/runs.jsonl.part.XXXXXX")
+metal_llm_performance_checkpoint_runs "$checkpoint" > "$run_buffer_part" || \
+    fail 'could not rehydrate the final retained sample set'
+mv -- "$run_buffer_part" "$run_buffer"
 actual_run_count=$(wc -l < "$run_buffer" | tr -d ' ')
 [[ "$actual_run_count" == "$expected_run_count" ]] || \
     fail "recorded $actual_run_count samples, expected $expected_run_count"
@@ -543,7 +720,19 @@ comparisons=$(jq -cn --argjson statistics "$statistics" --argjson threshold "$th
 performance_passed=$(jq -r 'all(.[]; .passed)' <<< "$comparisons")
 
 collection_completed=$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)
-server_logs=$(jq -s 'sort_by(.policy)' "$log_buffer")
+for server_log in "$checkpoint/logs"/*.log(N); do
+    server_log_name=${server_log:t:r}
+    server_log_policy=${server_log_name%%-session-*}
+    server_log_sha=$(metal_llm_sha256 "$server_log") || fail 'durable server log could not be hashed'
+    jq -cn --arg policy "$server_log_policy" --arg session "$server_log_name" \
+      --arg sha "$server_log_sha" \
+      '{policy: $policy, session_id: $session, sha256: $sha}' >> "$log_buffer" || \
+        fail 'server log identity could not be recorded'
+done
+server_logs=$(jq -s 'sort_by(.policy, .session_id)' "$log_buffer")
+[[ "$(jq -r 'length' <<< "$server_logs")" -ge 3 ]] || \
+    fail 'fewer than three durable server logs were retained'
+checkpoint_identity_sha=$(metal_llm_sha256 "$checkpoint/identity.json")
 result_part=$(mktemp "$result_path.part.XXXXXX")
 jq -s \
   --arg experiment "${collection_started//[-:]/}-dynamic-mtp-performance" \
@@ -556,6 +745,7 @@ jq -s \
   --arg receipt_sha "$common_receipt_sha" --arg executable_sha "$common_executable_sha" \
   --arg model_manifest_sha "$model_manifest_sha" --argjson artifacts "$common_artifacts" \
   --arg collector_sha "$collector_sha" --arg integration_sha "$integration_evidence_sha" \
+  --arg checkpoint_identity_sha "$checkpoint_identity_sha" \
   --arg collection_started "$collection_started" --arg collection_completed "$collection_completed" \
   --argjson lengths "$(printf '%s\n' "${effective_lengths[@]}" | jq -s 'map(tonumber)')" \
   --argjson statistics "$statistics" --argjson comparisons "$comparisons" \
@@ -603,6 +793,7 @@ jq -s \
       },
       collection_started: $collection_started,
       collection_completed: $collection_completed,
+      checkpoint_identity_sha256: $checkpoint_identity_sha,
       correctness_evidence_sha256: $integration_sha,
       server_log_sha256: $server_logs,
       statistics: $statistics,
@@ -630,6 +821,7 @@ metal_llm_validate_result "$result_part" 'pending dynamic-MTP performance result
     fail 'combined performance evidence failed schema/privacy/route validation'
 }
 metal_llm_publish_benchmark_result "$result_part" "$result_path" || exit 1
+retire_published_checkpoint "$checkpoint" || exit 1
 print -- "dynamic-MTP performance: wrote validated evidence: ${result_path#$root/}"
 if [[ "$performance_passed" != true ]]; then
     fail 'dynamic route exceeded the predeclared 5% generation-throughput tolerance'
