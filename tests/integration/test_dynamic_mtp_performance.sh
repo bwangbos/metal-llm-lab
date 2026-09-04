@@ -674,6 +674,7 @@ record_request() {
       --arg notes "$notes" '
       {
         id: $id, experiment: "dynamic-mtp-performance", measurement_kind: "single_run",
+        request_kind: "text",
         timestamp: $timestamp, repository_revision: $repository,
         hardware_id: $hardware, runtime_id: $runtime, runtime_revision: $runtime_revision,
         profile: null, profile_id: "custom", runtime_alias: "tuned", context: 262144,

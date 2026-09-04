@@ -221,6 +221,7 @@ metal_llm_validate_result() {
     local result_file=$1
     local result_label=${2:-${result_file#$METAL_LLM_ROOT/}}
     local schema_file="$METAL_LLM_ROOT/schemas/result.schema.json"
+    local result_sha
 
     [[ -f "$schema_file" ]] || {
         metal_llm_die 'result schema is missing: schemas/result.schema.json'
@@ -281,7 +282,8 @@ metal_llm_validate_result() {
         return 1
     }
 
-    jq -e '
+    result_sha=$(metal_llm_sha256 "$result_file") || return 1
+    jq -e --arg result_sha "$result_sha" '
       . as $root |
       def historical_route_unknown:
         .profile_id == null and .runtime_alias == null and .context == null and
@@ -306,9 +308,13 @@ metal_llm_validate_result() {
             .prompt_tokens == .effective_prompt_tokens
           else .request_kind == "text" end
         else
-          ($root.suite_id == "dynamic-mtp-performance" and
+          ($result_sha == "7bfe8fbaf71299d250c86a7f96b20985e5df3ac70f4628ae9f9e184450fa9363" and
+            $root.suite_id == "dynamic-mtp-performance" and
+            $root.configuration.acceptance_variant == "multi-policy-endpoint" and
             .experiment == "dynamic-mtp-performance") or
-          ($root.suite_id == "dynamic-mtp-acceptance" and
+          ($result_sha == "9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16" and
+            $root.suite_id == "dynamic-mtp-acceptance" and
+            ($root.runs | length) == 19 and
             .experiment == "dynamic-mtp-acceptance" and .prompt_tokens == null)
         end) and
         (.mtp_selected | type == "boolean") and

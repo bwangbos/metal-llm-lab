@@ -66,6 +66,7 @@ identity=$(jq -cn '
 run=$(jq -cn --arg response_sha "$fixture_response_sha" '
   {
     id: "on-29000-s1", experiment: "dynamic-mtp-performance", measurement_kind: "single_run",
+    request_kind: "text",
     timestamp: "2026-09-04T12:01:00Z", repository_revision: ("1" * 40),
     hardware_id: "apple-m5-max-128gb", runtime_id: "llama-cpp-qwen38-hybrid",
     runtime_revision: ("8" * 40), profile: null, profile_id: "custom", runtime_alias: "tuned",
@@ -151,6 +152,17 @@ jq '.run.effective_prompt_tokens = 30000' "$malformed/runs/on-29000-s1.json" > \
 mv -- "$malformed/runs/on-29000-s1.json.part" "$malformed/runs/on-29000-s1.json"
 if metal_llm_performance_checkpoint_open "$malformed" "$identity" "$repository_root" 2>/dev/null; then
     fail 'checkpoint accepted a retained row whose ID disagrees with its matrix cell'
+fi
+
+missing_request_kind="$repository_root/missing-request-kind"
+cp -R "$checkpoint" "$missing_request_kind"
+jq 'del(.run.request_kind)' "$missing_request_kind/runs/on-29000-s1.json" > \
+  "$missing_request_kind/runs/on-29000-s1.json.part"
+mv -- "$missing_request_kind/runs/on-29000-s1.json.part" \
+  "$missing_request_kind/runs/on-29000-s1.json"
+if metal_llm_performance_checkpoint_open \
+  "$missing_request_kind" "$identity" "$repository_root" 2>/dev/null; then
+    fail 'checkpoint accepted a future performance row without typed request kind'
 fi
 
 unsafe="$repository_root/unsafe"

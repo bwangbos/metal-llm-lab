@@ -113,6 +113,7 @@ metal_llm_performance_checkpoint_validate_envelope() {
       ($e.server_session_id | type == "string" and test("^(on|off|dynamic)-session-[0-9]+$")) and
       ($r | type == "object" and exact_keys([
         "id", "experiment", "measurement_kind", "timestamp", "repository_revision",
+        "request_kind",
         "hardware_id", "runtime_id", "runtime_revision", "profile", "profile_id",
         "runtime_alias", "context", "vision", "mtp_policy", "mtp_selected", "mtp_threshold",
         "prompt_tokens", "effective_prompt_tokens", "generated_tokens",
@@ -130,6 +131,7 @@ metal_llm_performance_checkpoint_validate_envelope() {
         ($id.sample | tonumber) <= $i.matrix.samples_per_cell and
         ($r.notes | test("^Measured sample " + $id.sample + " of 5 after 1 warm-up; response SHA-256 [0-9a-f]{64}\\.$"))) and
       $r.experiment == "dynamic-mtp-performance" and $r.measurement_kind == "single_run" and
+      $r.request_kind == "text" and
       ($r.timestamp | timestamp) and $r.repository_revision == $i.repository.revision and
       $r.hardware_id == $i.hardware.id and $r.runtime_id == $i.runtime.id and
       $r.runtime_revision == $i.runtime.tested_revision and

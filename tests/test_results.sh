@@ -284,6 +284,24 @@ assert_route_invalid '.provenance.suite.id = "other-suite"' \
   'top-level suite differs from provenance'
 assert_route_invalid 'del(.suite_id)' 'new endpoint harness without top-level suite identity'
 assert_route_invalid 'del(.runs[0].request_kind)' 'new endpoint row without typed request kind'
+assert_route_invalid '
+  .suite_id = "dynamic-mtp-performance" |
+  .provenance.suite.id = "dynamic-mtp-performance" |
+  .runs[0].experiment = "dynamic-mtp-performance" |
+  del(.runs[0].request_kind) |
+  .runs[0].prompt_tokens = 32769 |
+  .runs[0].effective_prompt_tokens = 32768 |
+  .runs[0].mtp_selected = true
+' 'untyped substituted route relabeled as legacy performance evidence'
+assert_route_invalid '
+  .suite_id = "dynamic-mtp-acceptance" |
+  .provenance.suite.id = "dynamic-mtp-acceptance" |
+  .runs[0].experiment = "dynamic-mtp-acceptance" |
+  del(.runs[0].request_kind) |
+  .runs[0].prompt_tokens = null |
+  .runs[0].effective_prompt_tokens = 32768 |
+  .runs[0].mtp_selected = true
+' 'untyped substituted route relabeled as legacy correctness evidence'
 assert_route_invalid '.runs[0].mtp_selected = false' 'dynamic route disabled at threshold'
 assert_route_invalid '.runs[0].effective_prompt_tokens = 32769' 'dynamic route enabled above threshold'
 assert_route_invalid '.runs[0].request_kind = "vision" | .runs[0].prompt_tokens = 32769 |
@@ -365,7 +383,7 @@ restore_correctness_fixture
 jq '.runs[0].notes += " changed"' "$correctness_raw_result" > "$fixture_correctness.part"
 mv "$fixture_correctness.part" "$fixture_correctness"
 assert_correctness_rejected 'changed tracked correctness evidence' \
-  'invalid dynamic-MTP correctness evidence'
+  'invalid benchmark route provenance'
 
 restore_correctness_fixture
 print -r -- '{malformed' > "$fixture_correctness"
@@ -381,7 +399,7 @@ wrong_case_sha=$(shasum -a 256 "$fixture_correctness" | awk '{print $1}')
 jq --arg sha "$wrong_case_sha" '.configuration.correctness_evidence.sha256 = $sha' \
   "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
 assert_correctness_rejected 'tracked correctness evidence with the wrong case set' \
-  'invalid dynamic-MTP correctness evidence'
+  'invalid benchmark route provenance'
 
 restore_correctness_fixture
 jq '.provenance.suite.sha256 = ("f" * 64)' \
@@ -391,13 +409,13 @@ wrong_harness_sha=$(shasum -a 256 "$fixture_correctness" | awk '{print $1}')
 jq --arg sha "$wrong_harness_sha" '.configuration.correctness_evidence.sha256 = $sha' \
   "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
 assert_correctness_rejected 'tracked correctness evidence with the wrong harness identity' \
-  'invalid dynamic-MTP correctness evidence'
+  'invalid benchmark route provenance'
 
 restore_correctness_fixture
 jq '.configuration.correctness_evidence.sha256 = ("f" * 64)' \
   "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
 assert_correctness_rejected 'tracked correctness evidence with the wrong bound hash' \
-  'invalid dynamic-MTP correctness evidence'
+  'invalid benchmark route provenance'
 
 restore_correctness_fixture
 jq '.provenance.repository.revision = ("f" * 40) |
@@ -408,31 +426,33 @@ wrong_provenance_sha=$(shasum -a 256 "$fixture_correctness" | awk '{print $1}')
 jq --arg sha "$wrong_provenance_sha" '.configuration.correctness_evidence.sha256 = $sha' \
   "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
 assert_correctness_rejected 'tracked correctness evidence with changed immutable provenance' \
-  'invalid dynamic-MTP correctness evidence'
+  'invalid benchmark route provenance'
 
 restore_correctness_fixture
-jq '.runs[0].generation_tokens_per_second += 1' \
+jq '(.runs[].request_kind = "text") | .runs[0].generation_tokens_per_second += 1' \
     "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
 if dynamic_drift_output=$($fixture_cli report --check 2>&1); then
     fail 'report --check accepted a changed retained throughput sample with stale aggregates'
 fi
 assert_contains "$dynamic_drift_output" 'invalid dynamic-MTP derived data'
 
-jq '.runs[0].output_sha256 = ("f" * 64)' \
+jq '(.runs[].request_kind = "text") | .runs[0].output_sha256 = ("f" * 64)' \
     "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
 if dynamic_output_drift=$($fixture_cli report --check 2>&1); then
     fail 'report --check accepted a changed retained output hash with stale aggregates'
 fi
 assert_contains "$dynamic_output_drift" 'invalid dynamic-MTP derived data'
 
-jq '.configuration.accepted_allocation_observation.observation.process.rss_bytes = 0' \
+jq '(.runs[].request_kind = "text") |
+    .configuration.accepted_allocation_observation.observation.process.rss_bytes = 0' \
     "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
 if invalid_allocation_output=$($fixture_cli report --check 2>&1); then
     fail 'report --check accepted a zero-RSS allocation observation'
 fi
 assert_contains "$invalid_allocation_output" 'invalid dynamic-MTP derived data'
 
-jq '.configuration.accepted_allocation_observation.evidence_sha256 = ("f" * 64)' \
+jq '(.runs[].request_kind = "text") |
+    .configuration.accepted_allocation_observation.evidence_sha256 = ("f" * 64)' \
     "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
 if invalid_allocation_hash_output=$($fixture_cli report --check 2>&1); then
     fail 'report --check accepted an allocation observation with a mismatched evidence hash'
