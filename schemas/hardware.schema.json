@@ -11,17 +11,15 @@
     "architecture",
     "gpu_cores",
     "unified_memory_bytes",
-    "recommended_profile",
     "tested"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "id": { "$ref": "#/$defs/id" },
     "chip": { "type": "string", "minLength": 1 },
     "architecture": { "const": "arm64" },
     "gpu_cores": { "type": "integer", "minimum": 1 },
     "unified_memory_bytes": { "type": "integer", "minimum": 1 },
-    "recommended_profile": { "$ref": "#/$defs/id" },
     "tested": {
       "type": "object",
       "additionalProperties": false,

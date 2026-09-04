@@ -1,8 +1,11 @@
 metal_llm_validate_model_manifest() {
     local manifest=$1
     local expected_id=$2
+    local schema_version
 
-    jq -er --arg expected_id "$expected_id" '
+    schema_version=$(jq -er '.schema_version' "$manifest" 2>/dev/null) || return 1
+    if [[ "$schema_version" == 1 ]]; then
+        jq -er --arg expected_id "$expected_id" '
         (.schema_version == 1) and
         (.id == $expected_id) and
         (.name | type == "string" and length > 0) and
@@ -32,7 +35,95 @@ metal_llm_validate_model_manifest() {
         ([.artifacts[].id] | length == (unique | length)) and
         ([.text_model.artifact_ids[] as $id | any(.artifacts[]; .id == $id)] | all) and
         ([.profiles[].model_artifact_id as $id | any(.artifacts[]; .id == $id)] | all)
-    ' "$manifest" >/dev/null
+        ' "$manifest" >/dev/null
+        return $?
+    fi
+    [[ "$schema_version" == 2 ]] || return 1
+
+    jq -er --arg expected_id "$expected_id" '
+      def valid_id: type == "string" and test("^[a-z0-9]+([.-][a-z0-9]+)*$");
+      def exact_keys($keys): (keys | sort) == ($keys | sort);
+      . as $manifest |
+      [.artifacts[].id] as $artifact_ids |
+      ([.text_model.artifact_ids[], .capabilities.vision.projector_artifact_id,
+        .capabilities.mtp.artifact_id] | unique) as $reachable_artifacts |
+      (.schema_version == 2) and
+      (. | exact_keys([
+        "schema_version", "id", "name", "artifacts", "default_profile", "max_context",
+        "runtime_aliases", "text_model", "capabilities", "metal", "profiles"
+      ])) and
+      (.id == $expected_id and (.id | valid_id)) and
+      (.name | type == "string" and length > 0) and
+      (.default_profile | valid_id) and
+      (.max_context | type == "number" and floor == . and . > 0) and
+      (.runtime_aliases | type == "object" and exact_keys(["tuned", "upstream"]) and
+        all(.[]; valid_id)) and
+      (.artifacts | type == "array" and length > 0 and all(.[ ];
+        exact_keys(["id", "kind", "filename", "url", "bytes", "sha256", "license_url"]) and
+        (.id | valid_id) and
+        (.kind == "model" or .kind == "projector" or .kind == "mtp") and
+        (.filename | type == "string" and length > 0 and . != "." and . != ".." and
+          (contains("/") | not) and (contains("\t") | not) and (contains("\n") | not)) and
+        (.url | type == "string" and length > 0 and
+          (contains("\t") | not) and (contains("\n") | not)) and
+        (.bytes | type == "number" and . > 0 and floor == .) and
+        (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+        (.license_url | type == "string" and length > 0 and
+          (contains("\t") | not) and (contains("\n") | not))
+      )) and
+      ($artifact_ids | length == (unique | length)) and
+      ($artifact_ids | sort) == ($reachable_artifacts | sort) and
+      (.text_model | type == "object" and
+        exact_keys(["entry_artifact_id", "artifact_ids", "total_bytes"]) and
+        (.entry_artifact_id | valid_id) and
+        (.artifact_ids | type == "array" and length > 0 and
+          length == (unique | length) and all(.[]; valid_id)) and
+        (.total_bytes | type == "number" and . > 0 and floor == .)) and
+      ($manifest.text_model.artifact_ids | index($manifest.text_model.entry_artifact_id)) != null and
+      (all(.text_model.artifact_ids[]; . as $id |
+        any($manifest.artifacts[]; .id == $id and .kind == "model"))) and
+      ([$manifest.artifacts[] as $artifact |
+        select($manifest.text_model.artifact_ids | index($artifact.id)) | $artifact.bytes] | add) ==
+        $manifest.text_model.total_bytes and
+      (.capabilities | type == "object" and exact_keys(["vision", "mtp"])) and
+      (.capabilities.vision | type == "object" and
+        exact_keys(["default_enabled", "projector_artifact_id", "image_min_tokens"]) and
+        (.default_enabled | type == "boolean") and
+        (.projector_artifact_id | valid_id) and
+        (.image_min_tokens | type == "number" and floor == . and . > 0)) and
+      ($manifest.capabilities.vision.projector_artifact_id as $id |
+        any($manifest.artifacts[]; .id == $id and .kind == "projector")) and
+      (.capabilities.mtp | type == "object" and
+        exact_keys(["artifact_id", "spec_type", "draft_n_max", "gpu_layers", "dynamic_threshold"]) and
+        (.artifact_id | valid_id) and
+        .spec_type == "draft-mtp" and
+        (.draft_n_max | type == "number" and floor == . and . > 0) and
+        .gpu_layers == "all" and
+        (.dynamic_threshold | type == "number" and floor == . and . > 0)) and
+      ($manifest.capabilities.mtp.artifact_id as $id |
+        any($manifest.artifacts[]; .id == $id and .kind == "mtp")) and
+      (.metal == {
+        gpu_layers: "all", fit: false, flash_attention: true,
+        load_mode: "mmap", lazy_mmap: true
+      }) and
+      (.profiles | type == "array" and length > 0 and all(.[ ];
+        exact_keys(["id", "runtime", "context", "mtp_policy", "status"]) and
+        (.id | valid_id) and
+        (.runtime | type == "string" and $manifest.runtime_aliases[.] != null) and
+        (.context | type == "number" and floor == . and . > 0 and . <= $manifest.max_context) and
+        (.mtp_policy == "on" or .mtp_policy == "off" or .mtp_policy == "dynamic") and
+        (.status == "supported" or .status == "pending-acceptance" or .status == "reference") and
+        (if .runtime == "upstream" then .mtp_policy == "off" else true end) and
+        (if .mtp_policy == "on" or .mtp_policy == "dynamic" then .runtime == "tuned" else true end)
+      )) and
+      ([.profiles[].id] | length == (unique | length)) and
+      ([.profiles[] | select(.id == $manifest.default_profile)] | length == 1)
+    ' "$manifest" >/dev/null || return 1
+
+    local runtime_id
+    for runtime_id in "${(@f)$(jq -er '.runtime_aliases[]' "$manifest")}"; do
+        [[ -f "$METAL_LLM_ROOT/manifests/runtimes/$runtime_id.json" ]] || return 1
+    done
 }
 
 metal_llm_validate_runtime_manifest() {
@@ -249,11 +340,23 @@ metal_llm_setup() {
         return 1
     }
 
-    local runtime_id runtime_manifest
+    local model_schema_version runtime_id runtime_manifest
     typeset -a runtime_ids
-    runtime_ids=("${(@f)$(jq -er '
-        reduce .profiles[].runtime_id as $id ([]; if index($id) then . else . + [$id] end)[]
-    ' "$model_manifest")}")
+    model_schema_version=$(jq -er '.schema_version' "$model_manifest") || return 1
+    if [[ "$model_schema_version" == 2 ]]; then
+        local default_profile
+        default_profile=$(jq -er '.default_profile' "$model_manifest") || return 1
+        print -- "default profile: $default_profile"
+        runtime_ids=("${(@f)$(jq -er '
+          reduce .runtime_aliases[] as $id
+            ([]; if index($id) then . else . + [$id] end)[]
+        ' "$model_manifest")}")
+    else
+        runtime_ids=("${(@f)$(jq -er '
+          reduce .profiles[].runtime_id as $id
+            ([]; if index($id) then . else . + [$id] end)[]
+        ' "$model_manifest")}")
+    fi
     for runtime_id in "${runtime_ids[@]}"; do
         runtime_manifest="$METAL_LLM_ROOT/manifests/runtimes/$runtime_id.json"
         [[ -f "$runtime_manifest" ]] || { metal_llm_die "runtime manifest not found: $runtime_id"; return 1; }

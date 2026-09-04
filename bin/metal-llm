@@ -7,6 +7,7 @@ export METAL_LLM_ROOT
 
 source "$METAL_LLM_ROOT/lib/common.zsh"
 source "$METAL_LLM_ROOT/lib/doctor.zsh"
+source "$METAL_LLM_ROOT/lib/profile.zsh"
 source "$METAL_LLM_ROOT/lib/setup.zsh"
 source "$METAL_LLM_ROOT/lib/runtime-state.zsh"
 source "$METAL_LLM_ROOT/lib/managed-process.zsh"

@@ -4,21 +4,37 @@
   "title": "Metal LLM Lab model manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "id", "name", "artifacts", "text_model", "profiles"],
+  "required": [
+    "schema_version", "id", "name", "artifacts", "default_profile", "max_context",
+    "runtime_aliases", "text_model", "capabilities", "metal", "profiles"
+  ],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "id": { "$ref": "#/$defs/id" },
     "name": { "type": "string", "minLength": 1 },
     "artifacts": {
       "type": "array",
       "minItems": 1,
+      "uniqueItems": true,
       "items": { "$ref": "#/$defs/artifact" }
+    },
+    "default_profile": { "$ref": "#/$defs/id" },
+    "max_context": { "type": "integer", "minimum": 1 },
+    "runtime_aliases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tuned", "upstream"],
+      "properties": {
+        "tuned": { "$ref": "#/$defs/id" },
+        "upstream": { "$ref": "#/$defs/id" }
+      }
     },
     "text_model": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["artifact_ids", "total_bytes"],
+      "required": ["entry_artifact_id", "artifact_ids", "total_bytes"],
       "properties": {
+        "entry_artifact_id": { "$ref": "#/$defs/id" },
         "artifact_ids": {
           "type": "array",
           "minItems": 1,
@@ -28,9 +44,20 @@
         "total_bytes": { "type": "integer", "minimum": 1 }
       }
     },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vision", "mtp"],
+      "properties": {
+        "vision": { "$ref": "#/$defs/vision_capability" },
+        "mtp": { "$ref": "#/$defs/mtp_capability" }
+      }
+    },
+    "metal": { "$ref": "#/$defs/metal" },
     "profiles": {
       "type": "array",
       "minItems": 1,
+      "uniqueItems": true,
       "items": { "$ref": "#/$defs/profile" }
     }
   },
@@ -53,6 +80,28 @@
         "license_url": { "type": "string", "format": "uri", "minLength": 1 }
       }
     },
+    "vision_capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default_enabled", "projector_artifact_id", "image_min_tokens"],
+      "properties": {
+        "default_enabled": { "type": "boolean" },
+        "projector_artifact_id": { "$ref": "#/$defs/id" },
+        "image_min_tokens": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "mtp_capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "spec_type", "draft_n_max", "gpu_layers", "dynamic_threshold"],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/id" },
+        "spec_type": { "const": "draft-mtp" },
+        "draft_n_max": { "type": "integer", "minimum": 1 },
+        "gpu_layers": { "const": "all" },
+        "dynamic_threshold": { "type": "integer", "minimum": 1 }
+      }
+    },
     "metal": {
       "type": "object",
       "additionalProperties": false,
@@ -65,79 +114,27 @@
         "lazy_mmap": { "const": true }
       }
     },
-    "vision": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["enabled", "projector_artifact_id", "image_min_tokens"],
-      "properties": {
-        "enabled": { "type": "boolean" },
-        "projector_artifact_id": { "type": ["string", "null"] },
-        "image_min_tokens": { "type": ["integer", "null"], "minimum": 1 }
-      },
-      "allOf": [
-        {
-          "if": { "properties": { "enabled": { "const": true } } },
-          "then": {
-            "properties": {
-              "projector_artifact_id": { "$ref": "#/$defs/id" },
-              "image_min_tokens": { "type": "integer", "minimum": 1 }
-            }
-          },
-          "else": {
-            "properties": {
-              "projector_artifact_id": { "type": "null" },
-              "image_min_tokens": { "type": "null" }
-            }
-          }
-        }
-      ]
-    },
-    "mtp": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["enabled", "artifact_id", "spec_type", "draft_n_max", "gpu_layers"],
-      "properties": {
-        "enabled": { "type": "boolean" },
-        "artifact_id": { "type": ["string", "null"] },
-        "spec_type": { "type": ["string", "null"] },
-        "draft_n_max": { "type": ["integer", "null"], "minimum": 1 },
-        "gpu_layers": { "type": ["string", "null"] }
-      },
-      "allOf": [
-        {
-          "if": { "properties": { "enabled": { "const": true } } },
-          "then": {
-            "properties": {
-              "artifact_id": { "$ref": "#/$defs/id" },
-              "spec_type": { "type": "string", "minLength": 1 },
-              "draft_n_max": { "type": "integer", "minimum": 1 },
-              "gpu_layers": { "const": "all" }
-            }
-          },
-          "else": {
-            "properties": {
-              "artifact_id": { "type": "null" },
-              "spec_type": { "type": "null" },
-              "draft_n_max": { "type": "null" },
-              "gpu_layers": { "type": "null" }
-            }
-          }
-        }
-      ]
-    },
     "profile": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "runtime_id", "model_artifact_id", "context", "vision", "mtp", "metal"],
+      "required": ["id", "runtime", "context", "mtp_policy", "status"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "runtime_id": { "$ref": "#/$defs/id" },
-        "model_artifact_id": { "$ref": "#/$defs/id" },
+        "runtime": { "enum": ["tuned", "upstream"] },
         "context": { "type": "integer", "minimum": 1 },
-        "vision": { "$ref": "#/$defs/vision" },
-        "mtp": { "$ref": "#/$defs/mtp" },
-        "metal": { "$ref": "#/$defs/metal" }
-      }
+        "mtp_policy": { "enum": ["on", "off", "dynamic"] },
+        "status": { "enum": ["supported", "pending-acceptance", "reference"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "runtime": { "const": "upstream" } } },
+          "then": { "properties": { "mtp_policy": { "const": "off" } } }
+        },
+        {
+          "if": { "properties": { "mtp_policy": { "enum": ["on", "dynamic"] } } },
+          "then": { "properties": { "runtime": { "const": "tuned" } } }
+        }
+      ]
     }
   }
 }

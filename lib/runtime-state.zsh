@@ -83,20 +83,33 @@ metal_llm_detect_hardware_manifest() {
 metal_llm_profile_artifact_identities() {
     local manifest=$1
     local artifact_dir=$2
-    local profile_id=$3
+    local normalized_configuration=$3
     local artifact_id identities
     typeset -a artifact_ids
 
-    artifact_ids=("${(@f)$(jq -er --arg profile "$profile_id" '
-      first(.profiles[] | select(.id == $profile)) as $profile |
-      reduce (
-        .text_model.artifact_ids[] ,
-        (if $profile.vision.enabled then $profile.vision.projector_artifact_id else empty end),
-        (if $profile.mtp.enabled then $profile.mtp.artifact_id else empty end)
-      ) as $id ([]; if index($id) then . else . + [$id] end)[]
-    ' "$manifest")}") || return 1
+    if jq -e 'type == "object"' <<< "$normalized_configuration" >/dev/null 2>&1; then
+        artifact_ids=("${(@f)$(jq -er --argjson configuration "$normalized_configuration" '
+          reduce (
+            .text_model.artifact_ids[] ,
+            (if $configuration.vision.enabled then
+              $configuration.vision.projector_artifact_id else empty end),
+            (if $configuration.mtp.policy != "off" then
+              $configuration.mtp.artifact_id else empty end)
+          ) as $id ([]; if index($id) then . else . + [$id] end)[]
+        ' "$manifest")}") || return 1
+    else
+        # Transitional compatibility for serve/bench until their v2 consumers land.
+        artifact_ids=("${(@f)$(jq -er --arg profile "$normalized_configuration" '
+          first(.profiles[] | select(.id == $profile)) as $profile |
+          reduce (
+            .text_model.artifact_ids[] ,
+            (if $profile.vision.enabled then $profile.vision.projector_artifact_id else empty end),
+            (if $profile.mtp.enabled then $profile.mtp.artifact_id else empty end)
+          ) as $id ([]; if index($id) then . else . + [$id] end)[]
+        ' "$manifest")}") || return 1
+    fi
     (( ${#artifact_ids} > 0 )) || {
-        metal_llm_die "profile has no model artifacts: $profile_id"
+        metal_llm_die 'effective configuration has no model artifacts'
         return 1
     }
     for artifact_id in "${artifact_ids[@]}"; do
