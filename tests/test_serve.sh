@@ -35,6 +35,19 @@ assert_contains() {
     [[ "$haystack" == *"$needle"* ]] || fail "missing expected output: $needle"
 }
 
+assert_serve_usage_rejected() {
+    local description=$1
+    shift
+    local usage_output
+    if usage_output=$(PATH="$test_path" "$cli" serve fixture-model "$@" --dry-run 2>&1); then
+        fail "serve accepted invalid parser input: $description"
+    else
+        local usage_status=$?
+    fi
+    (( usage_status == 2 )) || fail "serve parser rejection exited $usage_status, expected 2: $description"
+    assert_contains "$usage_output" 'usage: metal-llm serve MODEL'
+}
+
 temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-serve.XXXXXX")
 trap 'rm -rf -- "$temporary_root"' EXIT
 fixture_root="$temporary_root/repository"
@@ -226,6 +239,19 @@ if obsolete_context_output=$(METAL_LLM_CONTEXT=4096 PATH="$test_path" "$cli" ser
     fail 'serve accepted removed METAL_LLM_CONTEXT'
 fi
 assert_contains "$obsolete_context_output" 'METAL_LLM_CONTEXT was removed; use --profile custom --runtime RUNTIME --mtp POLICY --context TOKENS'
+
+assert_serve_usage_rejected 'explicit empty profile' --profile ''
+assert_serve_usage_rejected 'explicit empty vision' --vision ''
+assert_serve_usage_rejected 'explicit empty runtime' --profile custom --runtime '' --mtp off --context 65536
+assert_serve_usage_rejected 'explicit empty named-profile runtime override' --profile fast --runtime ''
+assert_serve_usage_rejected 'explicit empty MTP policy' --profile custom --runtime tuned --mtp '' --context 65536
+assert_serve_usage_rejected 'explicit empty context' --profile custom --runtime tuned --mtp off --context ''
+
+assert_serve_usage_rejected 'empty-first duplicate profile' --profile '' --profile fast
+assert_serve_usage_rejected 'empty-first duplicate vision' --vision '' --vision off
+assert_serve_usage_rejected 'empty-first duplicate runtime' --profile custom --runtime '' --runtime tuned --mtp off --context 65536
+assert_serve_usage_rejected 'empty-first duplicate MTP policy' --profile custom --runtime tuned --mtp '' --mtp off --context 65536
+assert_serve_usage_rejected 'empty-first duplicate context' --profile custom --runtime tuned --mtp off --context '' --context 65536
 
 for invalid_named_arguments in \
     '--profile fast --runtime tuned' \

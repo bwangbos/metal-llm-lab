@@ -62,6 +62,7 @@ metal_llm_validate_serve_extra_arguments() {
 metal_llm_serve() {
     local model_id='' requested_profile='' requested_vision='' requested_runtime=''
     local requested_mtp='' requested_context='' dry_run=0 passthrough=0 argument
+    local profile_seen=0 vision_seen=0 runtime_seen=0 mtp_seen=0 context_seen=0
     typeset -a extra_arguments
     extra_arguments=()
 
@@ -82,31 +83,41 @@ metal_llm_serve() {
                 ;;
             --profile)
                 (( $# > 0 )) || { metal_llm_serve_usage; return $?; }
-                [[ -z "$requested_profile" ]] || { metal_llm_serve_usage; return $?; }
+                (( profile_seen == 0 )) || { metal_llm_serve_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_serve_usage; return $?; }
+                profile_seen=1
                 requested_profile=$1
                 shift
                 ;;
             --vision)
                 (( $# > 0 )) || { metal_llm_serve_usage; return $?; }
-                [[ -z "$requested_vision" ]] || { metal_llm_serve_usage; return $?; }
+                (( vision_seen == 0 )) || { metal_llm_serve_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_serve_usage; return $?; }
+                vision_seen=1
                 requested_vision=$1
                 shift
                 ;;
             --runtime)
                 (( $# > 0 )) || { metal_llm_serve_usage; return $?; }
-                [[ -z "$requested_runtime" ]] || { metal_llm_serve_usage; return $?; }
+                (( runtime_seen == 0 )) || { metal_llm_serve_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_serve_usage; return $?; }
+                runtime_seen=1
                 requested_runtime=$1
                 shift
                 ;;
             --mtp)
                 (( $# > 0 )) || { metal_llm_serve_usage; return $?; }
-                [[ -z "$requested_mtp" ]] || { metal_llm_serve_usage; return $?; }
+                (( mtp_seen == 0 )) || { metal_llm_serve_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_serve_usage; return $?; }
+                mtp_seen=1
                 requested_mtp=$1
                 shift
                 ;;
             --context)
                 (( $# > 0 )) || { metal_llm_serve_usage; return $?; }
-                [[ -z "$requested_context" ]] || { metal_llm_serve_usage; return $?; }
+                (( context_seen == 0 )) || { metal_llm_serve_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_serve_usage; return $?; }
+                context_seen=1
                 requested_context=$1
                 shift
                 ;;
