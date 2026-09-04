@@ -89,7 +89,6 @@ fixture_root="$temporary_root/repository"
 artifact_dir="$fixture_root/artifacts"
 fixture_manifest="$fixture_root/manifests/models/fixture-model.json"
 missing_runtime_manifest="$fixture_root/manifests/models/missing-runtime-model.json"
-legacy_manifest="$fixture_root/manifests/models/legacy-model.json"
 mkdir -p "$artifact_dir" "$fixture_root/manifests/models" "$fixture_root/manifests/runtimes"
 for artifact_file in model.gguf projector.gguf mtp.gguf; do
     print -n -- "$artifact_file fixture" > "$artifact_dir/$artifact_file"
@@ -149,27 +148,6 @@ if metal_llm_resolve_profile "$missing_runtime_manifest" \
 fi
 [[ -z "${METAL_LLM_EFFECTIVE_PROFILE:-}" ]] ||
   fail 'failed runtime-reference resolution published normalized JSON'
-
-jq '{
-  schema_version: 1,
-  id: "legacy-model",
-  name: "Legacy Model",
-  artifacts: .artifacts,
-  text_model: {artifact_ids: .text_model.artifact_ids, total_bytes: .text_model.total_bytes},
-  profiles: [{
-    id: "legacy",
-    runtime_id: "fixture-runtime",
-    model_artifact_id: "model",
-    context: 128,
-    vision: {enabled: true, projector_artifact_id: "projector", image_min_tokens: 16},
-    mtp: {enabled: true, artifact_id: "mtp", spec_type: "draft-mtp",
-      draft_n_max: 2, gpu_layers: "all"},
-    metal: .metal
-  }]
-}' "$fixture_manifest" > "$legacy_manifest"
-metal_llm_profile_artifact_identities "$legacy_manifest" "$artifact_dir" legacy
-jq -e 'map(.id) == ["model", "projector", "mtp"]' \
-  <<< "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" >/dev/null
 
 if raw_v2_output=$(metal_llm_profile_artifact_identities \
     "$fixture_manifest" "$artifact_dir" auto 2>&1); then

@@ -67,6 +67,76 @@ metal_llm_validate_result() {
         return 1
     }
 
+    jq -e '
+      . as $root |
+      def historical_route_unknown:
+        .profile_id == null and .runtime_alias == null and .context == null and
+        .mtp_policy == null and .mtp_selected == null and .mtp_threshold == null and
+        .prompt_tokens == null;
+      def local_runtime_only:
+        .profile == null and .profile_id == null and
+        (.runtime_alias == "tuned" or .runtime_alias == "upstream") and
+        .context == null and .vision == null and .mtp_policy == null and
+        .mtp_selected == null and .effective_prompt_tokens == null and .mtp_threshold == null;
+      def endpoint_route:
+        .profile == null and
+        (.profile_id | type == "string" and length > 0) and
+        (.runtime_alias == "tuned" or .runtime_alias == "upstream") and
+        (.context | type == "number" and floor == . and . > 0) and
+        (.vision | type == "boolean") and
+        (.effective_prompt_tokens | type == "number" and floor == . and . >= 0) and
+        (.mtp_selected | type == "boolean") and
+        (if .mtp_policy == "dynamic" then
+          (.mtp_threshold | type == "number" and floor == . and . > 0) and
+          .mtp_selected == (.effective_prompt_tokens <= .mtp_threshold)
+        elif .mtp_policy == "on" then
+          .mtp_selected == true and .mtp_threshold == null
+        elif .mtp_policy == "off" then
+          .mtp_selected == false and .mtp_threshold == null
+        else false end) and
+        (if .runtime_alias == "upstream" then .mtp_policy == "off" else true end);
+      def matches_provenance($provenance):
+        .profile_id == $provenance.profile_id and
+        .runtime_alias == $provenance.runtime_alias and
+        .context == $provenance.context and .vision == $provenance.vision and
+        .mtp_policy == $provenance.mtp_policy and .mtp_threshold == $provenance.mtp_threshold and
+        .runtime_id == $provenance.runtime.id and
+        .runtime_revision == $provenance.runtime.tested_revision;
+      (if .benchmark_mode == "local" then
+         .provenance != null and .provenance.profile_id == null and
+         (.provenance.runtime_alias == "tuned" or .provenance.runtime_alias == "upstream") and
+         .provenance.context == null and .provenance.vision == null and
+         .provenance.mtp_policy == null and .provenance.mtp_threshold == null and
+         .provenance.runtime.executable.name == "llama-bench"
+       elif .benchmark_mode == "endpoint" then
+         .provenance != null and
+         (.provenance.profile_id | type == "string" and length > 0) and
+         (.provenance.runtime_alias == "tuned" or .provenance.runtime_alias == "upstream") and
+         (.provenance.context | type == "number" and floor == . and . > 0) and
+         (.provenance.vision | type == "boolean") and
+         (.provenance.mtp_policy == "on" or .provenance.mtp_policy == "off" or
+           .provenance.mtp_policy == "dynamic") and
+         (if .provenance.mtp_policy == "dynamic" then
+            (.provenance.mtp_threshold | type == "number" and floor == . and . > 0)
+          else .provenance.mtp_threshold == null end) and
+         (if .provenance.runtime_alias == "upstream" then .provenance.mtp_policy == "off" else true end) and
+         .provenance.runtime.executable.name == "llama-server"
+       else true end) and
+      all(.runs[];
+        if $root.benchmark_mode == "local" then
+          local_runtime_only and
+          (if $root.provenance == null then true else matches_provenance($root.provenance) end)
+        elif $root.benchmark_mode == "endpoint" then
+          endpoint_route and
+          (if $root.provenance == null then true else matches_provenance($root.provenance) end)
+        else
+          historical_route_unknown or endpoint_route
+        end)
+    ' "$result_file" >/dev/null 2>&1 || {
+        metal_llm_die "invalid benchmark route provenance: $result_label"
+        return 1
+    }
+
     local unsafe_path secret_key
     unsafe_path=$(jq -r '[.. | strings | select(test("/" + "Users" + "/[^/[:space:]]+/"))][0] // empty' \
       "$result_file") || return 1
@@ -222,7 +292,21 @@ metal_llm_generate_summary() {
         .interpretation.output_behavior,
         "",
         .interpretation.limitation
-      ] | table(.)
+      ] +
+      (if any(.runs[]; .mtp_policy != null) then
+        [
+          "",
+          "## MTP route provenance",
+          "",
+          "| Run | Configured policy | Selected route | Effective prompt tokens | Threshold |",
+          "| --- | --- | --- | ---: | ---: |"
+        ] +
+        [.runs[] | select(.mtp_policy != null) |
+          "| " + .id + " | " + .mtp_policy + " | " +
+          (if .mtp_selected then "on" else "off" end) + " | " +
+          (.effective_prompt_tokens | comma) + " | " +
+          (if .mtp_threshold == null then "n/a" else (.mtp_threshold | comma) end) + " |"]
+       else [] end) | table(.)
     ' "$result_file"
 }
 
@@ -242,11 +326,14 @@ metal_llm_generate_generic_summary() {
       [
         "# Benchmark result: " + .experiment_id,
         "",
-        "| Run | Experiment | Prompt tokens | Generated tokens | Prompt tok/s | Generation tok/s |",
-        "| --- | --- | ---: | ---: | ---: | ---: |"
+        "| Run | Experiment | Prompt tokens | Effective prompt tokens | MTP policy | Selected route | Generated tokens | Prompt tok/s | Generation tok/s |",
+        "| --- | --- | ---: | ---: | --- | --- | ---: | ---: | ---: |"
       ] +
       [.runs[] |
-        "| " + .id + " | " + .experiment + " | " + (if .effective_prompt_tokens == null then "n/a" else (.effective_prompt_tokens | comma) end) +
+        "| " + .id + " | " + .experiment + " | " + (if .prompt_tokens == null then "n/a" else (.prompt_tokens | comma) end) +
+        " | " + (if .effective_prompt_tokens == null then "n/a" else (.effective_prompt_tokens | comma) end) +
+        " | " + (.mtp_policy // "n/a") +
+        " | " + (if .mtp_selected == null then "n/a" elif .mtp_selected then "on" else "off" end) +
         " | " + (if .generated_tokens == null then "n/a" else (.generated_tokens | comma) end) + " | " +
         shown("prompt_tokens_per_second"; "prompt_tokens_per_second_display") + " | " +
         shown("generation_tokens_per_second"; "generation_tokens_per_second_display") + " |"

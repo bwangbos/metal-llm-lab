@@ -167,7 +167,15 @@
       "prompt_tokens_per_second_display": "513.38",
       "generation_tokens_per_second_display": "37.03",
       "cache_depth": 0,
-      "notes": "Upstream `de8656bd9`"
+      "notes": "Upstream `de8656bd9`",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "qwen-metal-0",
@@ -194,7 +202,15 @@
       "prompt_tokens_per_second_display": "755.41",
       "generation_tokens_per_second_display": "43.50",
       "cache_depth": 0,
-      "notes": "Qwen Metal `67d777b61`"
+      "notes": "Qwen Metal `67d777b61`",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "hybrid-0",
@@ -221,7 +237,15 @@
       "prompt_tokens_per_second_display": "1,375.06",
       "generation_tokens_per_second_display": "51.21",
       "cache_depth": 0,
-      "notes": "Local hybrid `831e5d6f6`"
+      "notes": "Local hybrid `831e5d6f6`",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "upstream-32768",
@@ -248,7 +272,15 @@
       "prompt_tokens_per_second_display": "330.94",
       "generation_tokens_per_second_display": "26.87",
       "cache_depth": 32768,
-      "notes": "Upstream `de8656bd9`"
+      "notes": "Upstream `de8656bd9`",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "qwen-metal-32768",
@@ -275,7 +307,15 @@
       "prompt_tokens_per_second_display": "689.18",
       "generation_tokens_per_second_display": "35.30",
       "cache_depth": 32768,
-      "notes": "Qwen Metal `67d777b61`"
+      "notes": "Qwen Metal `67d777b61`",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "hybrid-32768",
@@ -302,7 +342,15 @@
       "prompt_tokens_per_second_display": "918.50",
       "generation_tokens_per_second_display": "43.60",
       "cache_depth": 32768,
-      "notes": "Local hybrid `831e5d6f6`"
+      "notes": "Local hybrid `831e5d6f6`",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "upstream-131072",
@@ -329,7 +377,15 @@
       "prompt_tokens_per_second_display": "196.30",
       "generation_tokens_per_second_display": "16.25",
       "cache_depth": 131072,
-      "notes": "Upstream `de8656bd9`"
+      "notes": "Upstream `de8656bd9`",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "qwen-metal-131072",
@@ -356,7 +412,15 @@
       "prompt_tokens_per_second_display": "675.92",
       "generation_tokens_per_second_display": "32.03",
       "cache_depth": 131072,
-      "notes": "Qwen Metal `67d777b61`"
+      "notes": "Qwen Metal `67d777b61`",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "upstream-250000",
@@ -383,7 +447,15 @@
       "prompt_tokens_per_second_display": "179.09",
       "generation_tokens_per_second_display": "10.82",
       "cache_depth": 250000,
-      "notes": "Upstream `de8656bd9`"
+      "notes": "Upstream `de8656bd9`",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "qwen-metal-250000",
@@ -410,7 +482,15 @@
       "prompt_tokens_per_second_display": "555.90",
       "generation_tokens_per_second_display": "30.50",
       "cache_depth": 250000,
-      "notes": "Qwen Metal `67d777b61`"
+      "notes": "Qwen Metal `67d777b61`",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "matched-no-mtp",
@@ -436,7 +516,15 @@
       "generation_tokens_per_second_display": "51.09",
       "mtp": false,
       "output_equivalence": "byte_identical",
-      "notes": "Reference arm without MTP"
+      "notes": "Reference arm without MTP",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "matched-mtp",
@@ -463,7 +551,15 @@
       "mtp": true,
       "draft_acceptance": "166/177",
       "output_equivalence": "byte_identical",
-      "notes": "MTP enabled with at most two draft tokens"
+      "notes": "MTP enabled with at most two draft tokens",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "retrieval-28k",
@@ -488,7 +584,15 @@
       "generation_tokens_per_second": null,
       "prompt_tokens_per_second_display": "926.51",
       "mtp": false,
-      "notes": "Exact ORCHID-729184 retrieval; generated-token count and generation throughput were not retained"
+      "notes": "Exact ORCHID-729184 retrieval; generated-token count and generation throughput were not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "retrieval-96k-mtp",
@@ -515,7 +619,15 @@
       "generation_tokens_per_second_display": "23.80",
       "mtp": true,
       "draft_acceptance": "60/70",
-      "notes": "Exact VIOLET-483027 retrieval on cached retry; MTP was enabled; first 96-token output budget clipped visible content"
+      "notes": "Exact VIOLET-483027 retrieval on cached retry; MTP was enabled; first 96-token output budget clipped visible content",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "vision": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-1097-no-mtp",
@@ -542,7 +654,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-1097-mtp",
@@ -570,7 +689,14 @@
       "mtp": true,
       "draft_acceptance": "160/189",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-5196-no-mtp",
@@ -597,7 +723,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-5196-mtp",
@@ -625,7 +758,14 @@
       "mtp": true,
       "draft_acceptance": "162/186",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-9292-no-mtp",
@@ -652,7 +792,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-9292-mtp",
@@ -680,7 +827,14 @@
       "mtp": true,
       "draft_acceptance": "159/190",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-17484-no-mtp",
@@ -707,7 +861,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-17484-mtp",
@@ -735,7 +896,14 @@
       "mtp": true,
       "draft_acceptance": "161/188",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-25676-no-mtp",
@@ -762,7 +930,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-25676-mtp",
@@ -790,7 +965,14 @@
       "mtp": true,
       "draft_acceptance": "163/184",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-29772-no-mtp",
@@ -817,7 +999,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-29772-mtp",
@@ -845,7 +1034,14 @@
       "mtp": true,
       "draft_acceptance": "162/184",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-30796-no-mtp",
@@ -872,7 +1068,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-30796-mtp",
@@ -900,7 +1103,14 @@
       "mtp": true,
       "draft_acceptance": "162/186",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-31820-no-mtp",
@@ -927,7 +1137,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-31820-mtp",
@@ -955,7 +1172,14 @@
       "mtp": true,
       "draft_acceptance": "159/190",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-32844-no-mtp",
@@ -982,7 +1206,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-32844-mtp",
@@ -1010,7 +1241,14 @@
       "mtp": true,
       "draft_acceptance": "161/188",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-33868-no-mtp",
@@ -1037,7 +1275,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-33868-mtp",
@@ -1065,7 +1310,14 @@
       "mtp": true,
       "draft_acceptance": "162/186",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-50253-no-mtp",
@@ -1092,7 +1344,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-50253-mtp",
@@ -1120,7 +1379,14 @@
       "mtp": true,
       "draft_acceptance": "162/185",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-66637-no-mtp",
@@ -1147,7 +1413,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-66637-mtp",
@@ -1175,7 +1448,14 @@
       "mtp": true,
       "draft_acceptance": "158/194",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-99405-no-mtp",
@@ -1202,7 +1482,14 @@
       "vision": true,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP disabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "image-99405-mtp",
@@ -1230,7 +1517,14 @@
       "mtp": true,
       "draft_acceptance": "160/188",
       "output_equivalence": "not_compared",
-      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained"
+      "notes": "Same attached-image workload; MTP enabled; prompt-processing throughput not retained; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-mean-28705-no-mtp",
@@ -1258,7 +1552,14 @@
       "generation_tokens_per_second_sd": 0.567,
       "vision": false,
       "mtp": false,
-      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-mean-28705-mtp",
@@ -1287,7 +1588,14 @@
       "change_display": "+1.29%",
       "vision": false,
       "mtp": true,
-      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-mean-29217-no-mtp",
@@ -1315,7 +1623,14 @@
       "generation_tokens_per_second_sd": 0.411,
       "vision": false,
       "mtp": false,
-      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-mean-29217-mtp",
@@ -1344,7 +1659,14 @@
       "change_display": "-8.25%",
       "vision": false,
       "mtp": true,
-      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-mean-29729-no-mtp",
@@ -1372,7 +1694,14 @@
       "generation_tokens_per_second_sd": 0.842,
       "vision": false,
       "mtp": false,
-      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-mean-29729-mtp",
@@ -1401,7 +1730,14 @@
       "change_display": "-0.41%",
       "vision": false,
       "mtp": true,
-      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-mean-30241-no-mtp",
@@ -1429,7 +1765,14 @@
       "generation_tokens_per_second_sd": 0.253,
       "vision": false,
       "mtp": false,
-      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-mean-30241-mtp",
@@ -1459,7 +1802,14 @@
       "change_display": "-2.82%",
       "vision": false,
       "mtp": true,
-      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-mean-30753-no-mtp",
@@ -1487,7 +1837,14 @@
       "generation_tokens_per_second_sd": 0.034,
       "vision": false,
       "mtp": false,
-      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-mean-30753-mtp",
@@ -1516,7 +1873,14 @@
       "change_display": "-3.57%",
       "vision": false,
       "mtp": true,
-      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-30-no-mtp",
@@ -1543,7 +1907,14 @@
       "vision": false,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-30-mtp",
@@ -1570,7 +1941,14 @@
       "vision": false,
       "mtp": true,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-16417-no-mtp",
@@ -1597,7 +1975,14 @@
       "vision": false,
       "mtp": false,
       "output_equivalence": "byte_identical",
-      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-16417-mtp",
@@ -1624,7 +2009,14 @@
       "vision": false,
       "mtp": true,
       "output_equivalence": "byte_identical",
-      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-24609-no-mtp",
@@ -1651,7 +2043,14 @@
       "vision": false,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-24609-mtp",
@@ -1678,7 +2077,14 @@
       "vision": false,
       "mtp": true,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-32801-no-mtp",
@@ -1705,7 +2111,14 @@
       "vision": false,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-32801-mtp",
@@ -1732,7 +2145,14 @@
       "vision": false,
       "mtp": true,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-49186-no-mtp",
@@ -1759,7 +2179,14 @@
       "vision": false,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-49186-mtp",
@@ -1786,7 +2213,14 @@
       "vision": false,
       "mtp": true,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-98338-no-mtp",
@@ -1813,7 +2247,14 @@
       "vision": false,
       "mtp": false,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP disabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     },
     {
       "id": "text-single-98338-mtp",
@@ -1840,7 +2281,14 @@
       "vision": false,
       "mtp": true,
       "output_equivalence": "not_compared",
-      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained"
+      "notes": "F16 projector resident; text-only request; MTP enabled; actual generated-token count not retained",
+      "profile_id": null,
+      "runtime_alias": null,
+      "context": null,
+      "mtp_policy": null,
+      "mtp_selected": null,
+      "mtp_threshold": null,
+      "prompt_tokens": null
     }
   ]
 }

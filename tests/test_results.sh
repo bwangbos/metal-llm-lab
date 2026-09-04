@@ -28,13 +28,14 @@ done
 jq -e '
     .["$defs"].run.required as $required |
     (.required | index("provenance") != null) and
-    all([
+    ([
       "timestamp", "repository_revision", "hardware_id", "runtime_id",
-      "runtime_revision", "profile", "effective_prompt_tokens",
+      "runtime_revision", "profile", "profile_id", "runtime_alias", "context", "vision",
+      "mtp_policy", "mtp_selected", "mtp_threshold", "prompt_tokens", "effective_prompt_tokens",
       "generated_tokens", "prompt_tokens_per_second",
       "generation_tokens_per_second", "generation_settings", "command", "notes"
-    ][]; $required | index(.) != null)
-' "$schema" >/dev/null
+    ] - $required | length == 0)
+' "$schema" >/dev/null || fail 'result schema does not require route-aware benchmark provenance'
 
 jq -e '
     .schema_version == 1 and
@@ -46,6 +47,10 @@ jq -e '
       ([.hardware_id, .runtime_id, .runtime_revision, .notes] |
         all(type == "string" and length > 0)) and
       (.profile == null) and
+      (.profile_id == null) and (.runtime_alias == null) and (.context == null) and
+      (.mtp_policy == null) and (.mtp_selected == null) and (.mtp_threshold == null) and
+      (.prompt_tokens == null) and
+      (has("vision")) and ((.vision == null) or (.vision | type == "boolean")) and
       (.runtime_revision | test("^[0-9a-f]{40}$")) and
       (.effective_prompt_tokens | type == "number" and . >= 0 and floor == .) and
       ((.generated_tokens == null) or (.generated_tokens | type == "number" and . >= 0 and floor == .)) and
@@ -55,7 +60,15 @@ jq -e '
       ((has("output_sha256") | not) or
         (.output_sha256 | type == "string" and test("^[0-9a-f]{64}$")))
     )
-' "$raw_result" >/dev/null
+' "$raw_result" >/dev/null || fail 'historical result lacks explicit null compatibility provenance'
+jq -e '
+  ([.runs[] | select(.vision == true)] | length) == 26 and
+  ([.runs[] | select(.vision == false)] | length) == 22 and
+  ([.runs[] | select(.vision == null)] | length) == 14 and
+  ([.runs[] | select(.mtp? == true)] | length) == 26 and
+  ([.runs[] | select(.mtp? == false)] | length) == 26 and
+  ([.runs[] | select(has("mtp") | not)] | length) == 10
+' "$raw_result" >/dev/null || fail 'historical boolean/null provenance was rewritten'
 jq -e '
   all(.runs[] | select(.experiment == "matched-mtp-ab" or
     .experiment == "attached-image-crossover" or
@@ -117,6 +130,10 @@ assert_schema_invalid '.runs[0].generation_settings.unexpected = true' 'unknown 
 assert_schema_invalid '.runs[0].generation_settings.temperature = "zero"' 'wrong nested type'
 assert_schema_invalid '.runs[0].measurement_kind = "median"' 'invalid enum'
 assert_schema_invalid '.runs[0].effective_prompt_tokens = -1' 'value below minimum'
+assert_schema_invalid 'del(.runs[0].mtp_selected)' 'missing selected-route field'
+assert_schema_invalid '.runs[0].runtime_alias = "other"' 'invalid runtime alias'
+assert_schema_invalid '.runs[0].mtp_policy = "sometimes"' 'invalid MTP policy'
+assert_schema_invalid '.runs[0].mtp_selected = "yes"' 'wrong selected-route type'
 assert_schema_invalid '.runs[0].id = "INVALID ID"' 'pattern mismatch'
 assert_schema_invalid '.runs[0].output_sha256 = "bad"' 'checksum pattern mismatch'
 assert_schema_invalid '.date = "not-a-date"' 'date format mismatch'
@@ -124,6 +141,71 @@ assert_schema_invalid '.date = "2026-02-30"' 'invalid calendar date'
 assert_schema_invalid '.runs[0].timestamp = "2026-02-30T00:00:00Z"' 'invalid calendar timestamp'
 assert_schema_invalid '.runs = []' 'array below minimum size'
 assert_schema_invalid 'del(.runs[0].notes)' 'missing required field'
+
+route_result="$temporary_root/route-result.json"
+jq '
+  del(.summary) |
+  .benchmark_mode = "endpoint" | .suite_id = "qwen3.8-smoke" |
+  .runs = [(.runs[0] |
+    .id = "dynamic-short" | .profile_id = "auto" | .runtime_alias = "tuned" |
+    .context = 262144 | .vision = true | .mtp_policy = "dynamic" |
+    .mtp_selected = true | .mtp_threshold = 32768 | .prompt_tokens = 3 |
+    .effective_prompt_tokens = 32768)] |
+  .provenance = {
+    repository: {
+      revision: .runs[0].repository_revision,
+      tree_sha: .runs[0].repository_revision,
+      clean: true
+    },
+    hardware: {id: .runs[0].hardware_id, chip: "Fixture Chip", unified_memory_bytes: 1},
+    system: {
+      operating_system: "macOS", operating_system_version: null, compiler: null,
+      sdk: null, power_source: null, low_power_mode: null
+    },
+    profile_id: "auto", runtime_alias: "tuned", context: 262144, vision: true,
+    mtp_policy: "dynamic", mtp_threshold: 32768,
+    runtime: {
+      id: .runs[0].runtime_id, tested_revision: .runs[0].runtime_revision,
+      tested_tree_sha: .runs[0].runtime_revision,
+      manifest_sha256: ("0" * 64), build_receipt_sha256: ("0" * 64),
+      executable: {name: "llama-server", sha256: ("0" * 64)}
+    },
+    model_manifest_sha256: ("0" * 64),
+    artifacts: [{id: "model", bytes: 1, sha256: ("0" * 64)}],
+    suite: {id: "qwen3.8-smoke", sha256: ("0" * 64), fixtures: []}
+  }
+' "$raw_result" > "$route_result"
+cp "$route_result" "$fixture_root/results/raw/result.json"
+route_output=$($fixture_cli report)
+assert_contains "$route_output" '| Run | Experiment | Prompt tokens | Effective prompt tokens | MTP policy | Selected route | Generated tokens | Prompt tok/s | Generation tok/s |'
+assert_contains "$route_output" '| dynamic-short | runtime-comparison | 3 | 32,768 | dynamic | on | 128 | 513.38 | 37.03 |'
+
+assert_route_invalid() {
+    local filter=$1
+    local description=$2
+    jq "$filter" "$route_result" > "$fixture_root/results/raw/result.json"
+    if route_validation_output=$($fixture_cli report 2>&1); then
+        fail "report accepted invalid benchmark route provenance: $description"
+    fi
+    assert_contains "$route_validation_output" 'invalid benchmark route provenance'
+}
+
+assert_route_invalid '.runs[0].mtp_threshold = null' 'dynamic route without threshold'
+assert_route_invalid '.provenance = null' 'new endpoint harness without provenance'
+assert_route_invalid '.runs[0].mtp_selected = false' 'dynamic route disabled at threshold'
+assert_route_invalid '.runs[0].effective_prompt_tokens = 32769' 'dynamic route enabled above threshold'
+assert_route_invalid '.runs[0].prompt_tokens = 3 | .runs[0].effective_prompt_tokens = 3 | .runs[0].mtp_selected = false' \
+  'text-only count substituted for expanded effective count'
+assert_route_invalid '.runs[0].mtp_policy = "on" | .runs[0].mtp_selected = false | .runs[0].mtp_threshold = null' \
+  'fixed-on route disabled'
+assert_route_invalid '.runs[0].mtp_policy = "off" | .runs[0].mtp_selected = true | .runs[0].mtp_threshold = null' \
+  'fixed-off route enabled'
+assert_route_invalid '.runs[0].mtp_policy = "on" | .runs[0].mtp_threshold = 32768' \
+  'fixed policy retained a threshold'
+assert_route_invalid '.benchmark_mode = "local" | .runs[0].profile_id = null | .runs[0].context = null | .runs[0].vision = null' \
+  'standalone llama-bench labeled as dynamic MTP'
+assert_route_invalid '.runs[0].profile_id = null | .runs[0].runtime_alias = "tuned" | .runs[0].context = null | .runs[0].vision = null | .runs[0].mtp_policy = null | .runs[0].mtp_selected = null | .runs[0].effective_prompt_tokens = null | .runs[0].mtp_threshold = null' \
+  'partially invented historical runtime alias'
 
 jq '.runs[0].hardware_id = "unknown-hardware"' "$raw_result" > "$fixture_root/results/raw/result.json"
 if invalid_output=$($fixture_cli report --check 2>&1); then
@@ -167,8 +249,24 @@ assert_contains "$drift_output" 'summary differs from generated output'
 
 jq 'del(.summary)' "$raw_result" > "$fixture_root/results/raw/result.json"
 generic_output=$($fixture_cli report)
-assert_contains "$generic_output" '| Run | Experiment | Prompt tokens | Generated tokens | Prompt tok/s | Generation tok/s |'
-assert_contains "$generic_output" '| image-99405-no-mtp | attached-image-crossover | 99,405 | n/a | n/a | 34.4737 |'
+assert_contains "$generic_output" '| Run | Experiment | Prompt tokens | Effective prompt tokens | MTP policy | Selected route | Generated tokens | Prompt tok/s | Generation tok/s |'
+assert_contains "$generic_output" '| image-99405-no-mtp | attached-image-crossover | n/a | 99,405 | n/a | n/a | n/a | n/a | 34.4737 |'
+
+cp "$summary" "$fixture_root/results/summaries/qwen3.8-flash-next-m5-max.md"
+jq '
+  (.runs[] | select(.id == "matched-mtp")) |= (
+    .profile_id = "auto" | .runtime_alias = "tuned" | .context = 262144 |
+    .vision = true | .mtp_policy = "dynamic" | .mtp_selected = true |
+    .mtp_threshold = 32768 | .prompt_tokens = 24)
+' "$raw_result" > "$fixture_root/results/raw/result.json"
+route_summary_output=$($fixture_cli report)
+assert_contains "$route_summary_output" '## MTP route provenance'
+assert_contains "$route_summary_output" '| matched-mtp | dynamic | on | 24 | 32,768 |'
+cp "$summary" "$fixture_root/results/summaries/qwen3.8-flash-next-m5-max.md"
+if route_drift_output=$($fixture_cli report --check 2>&1); then
+    fail 'report --check accepted generated MTP route statement drift'
+fi
+assert_contains "$route_drift_output" 'summary differs from generated output'
 
 jq '.summary.output = "../../escaped.md"' "$raw_result" > "$fixture_root/results/raw/result.json"
 if traversal_output=$($fixture_cli report 2>&1); then

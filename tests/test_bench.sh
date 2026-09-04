@@ -22,12 +22,14 @@ assert_contains() {
 [[ -f "$suite" ]] || fail 'missing benchmarks/suites/qwen3.8-smoke.json'
 jq -e '
     .schema_version == 1 and .id == "qwen3.8-smoke" and .default_mode == "local" and
+    (has("default_profile") | not) and
     all(.cases[] | select(.mode == "local"); .kind == "llama-bench") and
     any(.cases[]; .mode == "local" and .kind == "llama-bench" and .prompt_tokens == 512) and
     any(.cases[]; .mode == "local" and .kind == "llama-bench" and .generated_tokens == 128) and
     all(.cases[] | select(.mode == "endpoint"); .kind == "api" or .kind == "vision") and
     any(.cases[]; .mode == "endpoint" and .kind == "api" and .temperature == 0 and .seed == 1234) and
-    any(.cases[]; .mode == "endpoint" and .kind == "vision" and .optional == true and (.fixture | endswith(".png")))
+    any(.cases[]; .mode == "endpoint" and .kind == "vision" and .optional == true and
+      .stream == true and (.fixture | endswith(".png")))
 ' "$suite" >/dev/null
 vision_fixture=$(jq -r 'first(.cases[] | select(.kind == "vision") | .fixture)' "$suite")
 [[ -f "$source_root/$vision_fixture" ]] || fail "missing optional vision fixture: $vision_fixture"
@@ -54,30 +56,40 @@ cp "$source_root/$vision_fixture" "$fixture_root/$vision_fixture"
 
 print -n -- 'fixture-model' > "$fixture_root/.lab/artifacts/fixture-model/model.gguf"
 print -n -- 'fixture-projector' > "$fixture_root/.lab/artifacts/fixture-model/projector.gguf"
+print -n -- 'fixture-mtp' > "$fixture_root/.lab/artifacts/fixture-model/mtp.gguf"
 model_bytes=$(wc -c < "$fixture_root/.lab/artifacts/fixture-model/model.gguf" | tr -d ' ')
 model_sha=$($real_shasum -a 256 "$fixture_root/.lab/artifacts/fixture-model/model.gguf" | awk '{print $1}')
 projector_bytes=$(wc -c < "$fixture_root/.lab/artifacts/fixture-model/projector.gguf" | tr -d ' ')
 projector_sha=$($real_shasum -a 256 "$fixture_root/.lab/artifacts/fixture-model/projector.gguf" | awk '{print $1}')
+mtp_bytes=$(wc -c < "$fixture_root/.lab/artifacts/fixture-model/mtp.gguf" | tr -d ' ')
+mtp_sha=$($real_shasum -a 256 "$fixture_root/.lab/artifacts/fixture-model/mtp.gguf" | awk '{print $1}')
 
 $real_jq -n --arg sha "$model_sha" --argjson bytes "$model_bytes" \
-  --arg projector_sha "$projector_sha" --argjson projector_bytes "$projector_bytes" '{
-  schema_version: 1,
+  --arg projector_sha "$projector_sha" --argjson projector_bytes "$projector_bytes" \
+  --arg mtp_sha "$mtp_sha" --argjson mtp_bytes "$mtp_bytes" '{
+  schema_version: 2,
   id: "fixture-model",
   name: "Fixture Model",
+  default_profile: "auto",
+  max_context: 262144,
+  runtime_aliases: {tuned: "fixture-runtime", upstream: "fixture-runtime"},
   artifacts: [
     {id: "model", kind: "model", filename: "model.gguf", url: "https://example.invalid/model", bytes: $bytes, sha256: $sha, license_url: "https://example.invalid/license"},
-    {id: "projector", kind: "projector", filename: "projector.gguf", url: "https://example.invalid/projector", bytes: $projector_bytes, sha256: $projector_sha, license_url: "https://example.invalid/license"}
+    {id: "projector", kind: "projector", filename: "projector.gguf", url: "https://example.invalid/projector", bytes: $projector_bytes, sha256: $projector_sha, license_url: "https://example.invalid/license"},
+    {id: "mtp", kind: "mtp", filename: "mtp.gguf", url: "https://example.invalid/mtp", bytes: $mtp_bytes, sha256: $mtp_sha, license_url: "https://example.invalid/license"}
   ],
-  text_model: {artifact_ids: ["model"], total_bytes: $bytes},
+  text_model: {entry_artifact_id: "model", artifact_ids: ["model"], total_bytes: $bytes},
+  capabilities: {
+    vision: {default_enabled: true, projector_artifact_id: "projector", image_min_tokens: 1024},
+    mtp: {artifact_id: "mtp", spec_type: "draft-mtp", draft_n_max: 2,
+      gpu_layers: "all", dynamic_threshold: 32768}
+  },
+  metal: {gpu_layers: "all", fit: false, flash_attention: true, load_mode: "mmap", lazy_mmap: true},
   profiles: [
-    {id: "fast", runtime_id: "fixture-runtime", model_artifact_id: "model", context: 32768,
-     vision: {enabled: false, projector_artifact_id: null, image_min_tokens: null},
-     mtp: {enabled: false, artifact_id: null, spec_type: null, draft_n_max: null, gpu_layers: null},
-     metal: {gpu_layers: "all", fit: false, flash_attention: true, load_mode: "mmap", lazy_mmap: true}},
-    {id: "vision", runtime_id: "fixture-runtime", model_artifact_id: "model", context: 32768,
-     vision: {enabled: true, projector_artifact_id: "projector", image_min_tokens: 1024},
-     mtp: {enabled: false, artifact_id: null, spec_type: null, draft_n_max: null, gpu_layers: null},
-     metal: {gpu_layers: "all", fit: false, flash_attention: true, load_mode: "mmap", lazy_mmap: true}}
+    {id: "fast", runtime: "tuned", context: 32768, mtp_policy: "on", status: "supported"},
+    {id: "long", runtime: "tuned", context: 262144, mtp_policy: "off", status: "supported"},
+    {id: "auto", runtime: "tuned", context: 262144, mtp_policy: "dynamic", status: "pending-acceptance"},
+    {id: "stable", runtime: "upstream", context: 32768, mtp_policy: "off", status: "reference"}
   ]
 }' > "$fixture_root/manifests/models/fixture-model.json"
 
@@ -151,12 +163,35 @@ if [[ "${shown[*]}" == *"/health"* ]]; then
   [[ "${FAKE_SERVER_ACTIVE:-0}" == 1 ]] && { print '{"status":"ok"}'; exit 0; }
   exit 22
 fi
-if [[ "${FAKE_OMIT_USAGE:-0}" == 1 ]]; then
-  print '{"choices":[{"message":{"content":"fixture response"}}]}'
-elif [[ "${FAKE_NEGATIVE_USAGE:-0}" == 1 ]]; then
-  print '{"choices":[{"message":{"content":"fixture response"}}],"usage":{"prompt_tokens":-1,"completion_tokens":2}}'
+request="${shown[*]}"
+effective_prompt_tokens=32768
+speculative=true
+if [[ "$request" == *'"image_url"'* ]]; then
+  effective_prompt_tokens=32769
+  speculative=false
+fi
+[[ "${FAKE_BAD_SHORT_ROUTE:-0}" == 0 || "$request" == *'"image_url"'* ]] || speculative=false
+[[ "${FAKE_BAD_LONG_ROUTE:-0}" == 0 || "$request" != *'"image_url"'* ]] || speculative=true
+[[ "${FAKE_TEXT_ONLY_TIMING:-0}" == 0 || "$request" != *'"image_url"'* ]] || effective_prompt_tokens=3
+timings=',"timings":{"speculative":'$speculative',"speculative_policy":"dynamic","effective_prompt_tokens":'$effective_prompt_tokens',"speculative_threshold":32768}'
+[[ "${FAKE_OMIT_TIMINGS:-0}" == 0 ]] || timings=''
+usage=',"usage":{"prompt_tokens":3,"completion_tokens":2}'
+[[ "${FAKE_OMIT_USAGE:-0}" == 0 ]] || usage=''
+if [[ "${FAKE_NEGATIVE_USAGE:-0}" == 1 ]]; then
+  usage=',"usage":{"prompt_tokens":-1,"completion_tokens":2}'
+fi
+if [[ "$request" == *'"stream":true'* ]]; then
+  first_speculative=$speculative
+  [[ "${FAKE_STREAM_ROUTE_CHANGE:-0}" == 0 ]] || {
+    [[ "$speculative" == true ]] && first_speculative=false || first_speculative=true
+  }
+  first_timings=',"timings":{"speculative":'$first_speculative',"speculative_policy":"dynamic","effective_prompt_tokens":'$effective_prompt_tokens',"speculative_threshold":32768}'
+  [[ "${FAKE_OMIT_TIMINGS:-0}" == 0 ]] || first_timings=''
+  print -r -- 'data: {"choices":[{"delta":{"content":"fixture "}}]'$first_timings'}'
+  print -r -- 'data: {"choices":[{"delta":{"content":"response"},"finish_reason":"stop"}]'$usage$timings'}'
+  print -r -- 'data: [DONE]'
 else
-  print '{"choices":[{"message":{"content":"fixture response"}}],"usage":{"prompt_tokens":3,"completion_tokens":2}}'
+  print -r -- '{"choices":[{"message":{"content":"fixture response"}}]'$usage$timings'}'
 fi
 EOF
 chmod +x "$fake_bin/curl"
@@ -246,26 +281,64 @@ write_live_server_identity() {
     local pid=$1
     local profile=$2
     local vision=$3
+    local runtime_alias context mtp_policy mtp_threshold
+    case "$profile" in
+        auto)
+            runtime_alias=tuned
+            context=262144
+            mtp_policy=dynamic
+            mtp_threshold=32768
+            ;;
+        fast)
+            runtime_alias=tuned
+            context=32768
+            mtp_policy=on
+            mtp_threshold=null
+            ;;
+        long)
+            runtime_alias=tuned
+            context=262144
+            mtp_policy=off
+            mtp_threshold=null
+            ;;
+        stable)
+            runtime_alias=upstream
+            context=32768
+            mtp_policy=off
+            mtp_threshold=null
+            ;;
+        custom)
+            runtime_alias=${4:-tuned}
+            context=${5:-65536}
+            mtp_policy=${6:-dynamic}
+            [[ "$mtp_policy" == dynamic ]] && mtp_threshold=32768 || mtp_threshold=null
+            ;;
+        *) fail "unknown managed identity test profile: $profile" ;;
+    esac
     local current_receipt_sha model_manifest_sha artifacts
     current_receipt_sha=$($real_shasum -a 256 "$receipt_path" | awk '{print $1}')
     model_manifest_sha=$($real_shasum -a 256 "$fixture_root/manifests/models/fixture-model.json" | awk '{print $1}')
-    if [[ "$profile" == vision ]]; then
-        artifacts=$($real_jq -c '[.artifacts[] | {id, bytes, sha256}]' \
-          "$fixture_root/manifests/models/fixture-model.json")
-    else
-        artifacts=$($real_jq -c '[.artifacts[] | select(.id == "model") | {id, bytes, sha256}]' \
-          "$fixture_root/manifests/models/fixture-model.json")
-    fi
+    artifacts=$($real_jq -c --argjson vision "$vision" --arg policy "$mtp_policy" '
+      [.artifacts[] |
+        select(.kind == "model" or ($vision and .kind == "projector") or
+          ($policy != "off" and .kind == "mtp")) |
+        {id, bytes, sha256}]
+    ' "$fixture_root/manifests/models/fixture-model.json")
     mkdir -p "$lease_dir"
     $real_jq -n --argjson pid "$pid" --arg started "fixture-start-$pid" \
-      --arg profile "$profile" --argjson vision "$vision" --arg tree "$runtime_tree" \
+      --arg profile "$profile" --arg runtime_alias "$runtime_alias" \
+      --argjson context "$context" --argjson vision "$vision" \
+      --arg mtp_policy "$mtp_policy" --argjson mtp_threshold "$mtp_threshold" \
+      --arg tree "$runtime_tree" \
       --arg runtime_manifest_sha "$runtime_manifest_sha" --arg receipt_sha "$current_receipt_sha" \
       --arg server_sha "$server_sha" --arg model_manifest_sha "$model_manifest_sha" \
       --argjson artifacts "$artifacts" '{
-        schema_version: 1, owner_kind: "serve",
+        schema_version: 2, owner_kind: "serve",
         owner_token: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         pid: $pid, process_started_at: $started,
         model_id: "fixture-model", profile_id: $profile, vision: $vision,
+        runtime_alias: $runtime_alias, context: $context,
+        mtp_policy: $mtp_policy, mtp_threshold: $mtp_threshold,
         runtime_id: "fixture-runtime", runtime_revision: "2222222222222222222222222222222222222222",
         runtime_tree_sha: $tree, runtime_manifest_sha256: $runtime_manifest_sha,
         build_receipt_sha256: $receipt_sha, executable_name: "llama-server",
@@ -278,9 +351,27 @@ dry_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model -
 assert_contains "$dry_output" 'llama-bench'
 assert_contains "$dry_output" '-p 512 -n 0'
 assert_contains "$dry_output" '-p 0 -n 128'
+[[ "$dry_output" != *'mtp.gguf'* && "$dry_output" != *'-md'* && "$dry_output" != *'--spec-'* ]] || \
+  fail 'standalone llama-bench dry-run enabled server speculative decoding'
 [[ "$dry_output" != *'HTTP POST'* ]] || fail 'local mode included endpoint cases'
 dry_result_files=("$results_dir"/*(N))
 (( ${#dry_result_files} == 0 )) || fail 'bench --dry-run wrote a result file'
+
+upstream_dry=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --runtime upstream --dry-run)
+assert_contains "$upstream_dry" 'llama-bench'
+for local_option in '--profile auto' '--vision on' '--mtp off' '--context 32768'; do
+    if local_option_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+        --suite qwen3.8-smoke ${(z)local_option} --dry-run 2>&1); then
+        fail "local benchmark accepted endpoint configuration: $local_option"
+    fi
+    assert_contains "$local_option_output" 'local benchmark accepts only --runtime tuned|upstream'
+done
+if invalid_runtime_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+    --suite qwen3.8-smoke --runtime other --dry-run 2>&1); then
+    fail 'local benchmark accepted an unknown runtime alias'
+fi
+assert_contains "$invalid_runtime_output" 'runtime must be tuned or upstream'
 
 run_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model --suite qwen3.8-smoke)
 assert_contains "$run_output" 'wrote benchmark result:'
@@ -298,7 +389,13 @@ jq -e '
   .model_id == "fixture-model" and .suite_id == "qwen3.8-smoke" and .benchmark_mode == "local" and
   (.runs | length == 2) and
   (.runs[0].prompt_tokens_per_second == 987.25) and
-  (.runs[1].generation_tokens_per_second == 44.5)
+  (.runs[1].generation_tokens_per_second == 44.5) and
+  (.runs[0].prompt_tokens == 512) and (.runs[1].prompt_tokens == 0) and
+  all(.runs[];
+    .profile == null and .profile_id == null and .runtime_alias == "tuned" and
+    .context == null and .vision == null and .mtp_policy == null and
+    .mtp_selected == null and .effective_prompt_tokens == null and .mtp_threshold == null and
+    (has("mtp") | not))
 ' "$result_file" >/dev/null
 jq -e --arg revision "$fixture_revision" --arg tree "$fixture_tree" \
   --arg runtime_tree "$runtime_tree" --arg runtime_manifest_sha "$runtime_manifest_sha" \
@@ -311,6 +408,9 @@ jq -e --arg revision "$fixture_revision" --arg tree "$fixture_tree" \
     compiler: "Apple clang version 18.0.0 (clang-1800.0.1)", sdk: "26.0",
     power_source: "AC Power", low_power_mode: false
   } and
+  .provenance.profile_id == null and .provenance.runtime_alias == "tuned" and
+  .provenance.context == null and .provenance.vision == null and
+  .provenance.mtp_policy == null and .provenance.mtp_threshold == null and
   .provenance.runtime.id == "fixture-runtime" and
   .provenance.runtime.tested_revision == "2222222222222222222222222222222222222222" and
   .provenance.runtime.tested_tree_sha == $runtime_tree and
@@ -464,7 +564,7 @@ mv "$fake_server.saved" "$fake_server"
 
 sleep 60 &!
 managed_identity_pid=$!
-write_live_server_identity "$managed_identity_pid" vision true
+write_live_server_identity "$managed_identity_pid" auto true
 live_results="$temporary_root/live-conflict-results"
 mkdir -p "$live_results"
 if lease_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$live_results" \
@@ -517,7 +617,7 @@ assert_contains "$identity_output" 'no managed full-model identity is available'
 
 sleep 60 &!
 managed_identity_pid=$!
-write_live_server_identity "$managed_identity_pid" vision true
+write_live_server_identity "$managed_identity_pid" auto true
 if inactive_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$endpoint_results" \
     "$fixture_cli" bench fixture-model --suite qwen3.8-smoke --mode endpoint 2>&1); then
     kill "$managed_identity_pid" 2>/dev/null || true
@@ -526,14 +626,72 @@ if inactive_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$endp
 fi
 assert_contains "$inactive_output" 'endpoint mode requires a running endpoint'
 
-if mismatch_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_PROFILE=fast \
+if mismatch_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 \
     METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
-    --suite qwen3.8-smoke --mode endpoint 2>&1); then
+    --suite qwen3.8-smoke --mode endpoint --profile fast 2>&1); then
     kill "$managed_identity_pid" 2>/dev/null || true
     wait "$managed_identity_pid" 2>/dev/null || true
     fail 'endpoint mode accepted a requested profile that did not match the managed server'
 fi
-assert_contains "$mismatch_output" 'managed endpoint profile mismatch: requested fast, active vision'
+assert_contains "$mismatch_output" 'managed endpoint identity does not match resolved configuration'
+if vision_mismatch_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 \
+    METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
+    --suite qwen3.8-smoke --mode endpoint --vision off 2>&1); then
+    kill "$managed_identity_pid" 2>/dev/null || true
+    wait "$managed_identity_pid" 2>/dev/null || true
+    fail 'endpoint mode accepted requested vision state that did not match the managed server'
+fi
+assert_contains "$vision_mismatch_output" 'managed endpoint identity does not match resolved configuration'
+
+identity_base="$temporary_root/managed-auto-identity.json"
+cp "$lease_record" "$identity_base"
+identity_mismatch_results="$temporary_root/identity-mismatch-results"
+mkdir -p "$identity_mismatch_results"
+typeset -a identity_mutations
+identity_mutations=(
+  '.runtime_alias = "upstream" | .mtp_policy = "off" | .mtp_threshold = null | .artifacts |= map(select(.id != "mtp"))'
+  '.context = 131072'
+  '.mtp_policy = "on" | .mtp_threshold = null'
+  '.mtp_threshold = 32767'
+  '.artifacts |= map(select(.id != "projector"))'
+)
+for identity_mutation in "${identity_mutations[@]}"; do
+    $real_jq "$identity_mutation" "$identity_base" > "$lease_record.part"
+    mv "$lease_record.part" "$lease_record"
+    if identity_mismatch_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 \
+        METAL_LLM_RESULTS_DIR="$identity_mismatch_results" "$fixture_cli" bench fixture-model \
+        --suite qwen3.8-smoke --mode endpoint 2>&1); then
+        kill "$managed_identity_pid" 2>/dev/null || true
+        wait "$managed_identity_pid" 2>/dev/null || true
+        fail "endpoint mode accepted mismatched managed identity: $identity_mutation"
+    fi
+    assert_contains "$identity_mismatch_output" 'managed endpoint identity does not match resolved configuration'
+done
+cp "$identity_base" "$lease_record"
+identity_mismatch_files=("$identity_mismatch_results"/*(N))
+(( ${#identity_mismatch_files} == 0 )) || fail 'identity mismatch leaked benchmark result data'
+
+assert_endpoint_route_failure() {
+    local fake_setting=$1
+    local expected_error=$2
+    local label=${fake_setting%%=*}
+    local failure_results="$temporary_root/${(L)label}-results"
+    mkdir -p "$failure_results"
+    if route_failure_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 \
+        METAL_LLM_INCLUDE_OPTIONAL=1 "$fake_setting" METAL_LLM_RESULTS_DIR="$failure_results" \
+        "$fixture_cli" bench fixture-model --suite qwen3.8-smoke --mode endpoint 2>&1); then
+        fail "endpoint benchmark accepted invalid route evidence: $label"
+    fi
+    assert_contains "$route_failure_output" "$expected_error"
+    route_failure_files=("$failure_results"/*(N))
+    (( ${#route_failure_files} == 0 )) || fail "invalid route evidence leaked output: $label"
+}
+
+assert_endpoint_route_failure FAKE_OMIT_TIMINGS=1 'missing final endpoint timing metadata'
+assert_endpoint_route_failure FAKE_BAD_SHORT_ROUTE=1 'endpoint timing metadata does not match managed MTP policy'
+assert_endpoint_route_failure FAKE_BAD_LONG_ROUTE=1 'endpoint timing metadata does not match managed MTP policy'
+assert_endpoint_route_failure FAKE_TEXT_ONLY_TIMING=1 'endpoint timing metadata does not match managed MTP policy'
+assert_endpoint_route_failure FAKE_STREAM_ROUTE_CHANGE=1 'endpoint stream changed MTP route metadata'
 
 endpoint_secret='endpoint-secret-must-not-leak'
 endpoint_output=$(env "${common_environment[@]}" METAL_LLM_API_KEY="$endpoint_secret" \
@@ -546,10 +704,19 @@ endpoint_files=("$endpoint_results"/*.json(N))
 (( ${#endpoint_files} == 1 )) || fail "expected one endpoint result, found ${#endpoint_files}"
 jq -e '
   .benchmark_mode == "endpoint" and (.runs | length == 2) and
+  .provenance.profile_id == "auto" and .provenance.runtime_alias == "tuned" and
+  .provenance.context == 262144 and .provenance.vision == true and
+  .provenance.mtp_policy == "dynamic" and .provenance.mtp_threshold == 32768 and
   all(.runs[];
-    .profile == "vision" and .runtime_id == "fixture-runtime" and
-    .effective_prompt_tokens == null and .generated_tokens == null and
-    .prompt_tokens_per_second == null and .generation_tokens_per_second == null)
+    .profile == null and .profile_id == "auto" and .runtime_alias == "tuned" and
+    .runtime_id == "fixture-runtime" and .context == 262144 and .vision == true and
+    .mtp_policy == "dynamic" and .mtp_threshold == 32768 and
+    .prompt_tokens == null and .generated_tokens == null and
+    .prompt_tokens_per_second == null and .generation_tokens_per_second == null) and
+  (.runs | map({id, effective_prompt_tokens, mtp_selected})) == [
+    {id: "deterministic-api-smoke", effective_prompt_tokens: 32768, mtp_selected: true},
+    {id: "vision-spatial-smoke", effective_prompt_tokens: 32769, mtp_selected: false}
+  ]
 ' "$endpoint_files[1]" >/dev/null
 curl_log_contents=$(command cat -- "$temporary_root/curl.log")
 auth_capture_contents=$(command cat -- "$temporary_root/auth.capture")
@@ -571,6 +738,24 @@ fi
 assert_contains "$negative_usage_output" 'invalid result document: pending benchmark result'
 negative_usage_files=("$negative_usage_results"/*(N))
 (( ${#negative_usage_files} == 0 )) || fail 'invalid API usage leaked a result or temporary file'
+
+custom_results="$temporary_root/custom-endpoint-results"
+mkdir -p "$custom_results"
+write_live_server_identity "$managed_identity_pid" custom false tuned 65536 dynamic
+custom_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 \
+  METAL_LLM_RESULTS_DIR="$custom_results" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --mode endpoint --profile custom --runtime tuned \
+  --mtp dynamic --context 65536 --vision off)
+assert_contains "$custom_output" 'wrote benchmark result:'
+custom_files=("$custom_results"/*.json(N))
+(( ${#custom_files} == 1 )) || fail 'custom endpoint benchmark did not publish exactly one result'
+jq -e '
+  .provenance.profile_id == "custom" and .provenance.runtime_alias == "tuned" and
+  .provenance.context == 65536 and .provenance.vision == false and
+  .provenance.mtp_policy == "dynamic" and .provenance.mtp_threshold == 32768 and
+  (.runs | length == 1) and .runs[0].profile_id == "custom" and
+  .runs[0].effective_prompt_tokens == 32768 and .runs[0].mtp_selected == true
+' "$custom_files[1]" >/dev/null || fail 'custom endpoint configuration was not recorded exactly'
 
 kill "$managed_identity_pid" 2>/dev/null || true
 wait "$managed_identity_pid" 2>/dev/null || true
@@ -600,13 +785,13 @@ cp "$fixture_root/$vision_fixture" "$fixture_root/benchmarks/fixtures/uppercase.
 printf '\377\330\377\340\000\020JFIF\000\001\001\000\000\001\000\001\000\000\377\331' > \
   "$fixture_root/benchmarks/fixtures/jpeg-content.png"
 $real_jq -n '{
-  schema_version: 1, id: "traversal-fixture", default_mode: "endpoint", default_profile: "vision",
+  schema_version: 1, id: "traversal-fixture", default_mode: "endpoint",
   cases: [{id: "traversal", mode: "endpoint", kind: "vision", prompt: "Describe it.",
     fixture: "benchmarks/fixtures/../outside.png", max_tokens: 8, temperature: 0, seed: 1,
     notes: "Traversal fixture must be rejected"}]
 }' > "$fixture_root/benchmarks/suites/traversal-fixture.json"
 $real_jq -n '{
-  schema_version: 1, id: "symlink-fixture", default_mode: "endpoint", default_profile: "vision",
+  schema_version: 1, id: "symlink-fixture", default_mode: "endpoint",
   cases: [{id: "symlink", mode: "endpoint", kind: "vision", prompt: "Describe it.",
     fixture: "benchmarks/fixtures/escape.png", max_tokens: 8, temperature: 0, seed: 1,
     notes: "Symlink fixture must be rejected"}]
@@ -620,7 +805,7 @@ for fixture_suite in png-as-jpg jpeg-as-png uppercase-png; do
         mislabeled_fixture=benchmarks/fixtures/uppercase.PNG
     fi
     "$real_jq" -n --arg id "$fixture_suite" --arg fixture "$mislabeled_fixture" '{
-      schema_version: 1, id: $id, default_mode: "endpoint", default_profile: "vision",
+      schema_version: 1, id: $id, default_mode: "endpoint",
       cases: [{id: "mislabeled", mode: "endpoint", kind: "vision", prompt: "Describe it.",
         fixture: $fixture, max_tokens: 8, temperature: 0, seed: 1,
         notes: "Fixture extension and MIME must agree"}]
@@ -635,7 +820,7 @@ $real_git -C "$fixture_root" -c user.name='Bench Test' -c user.email='bench-test
 
 sleep 60 &!
 managed_identity_pid=$!
-write_live_server_identity "$managed_identity_pid" vision true
+write_live_server_identity "$managed_identity_pid" auto true
 for fixture_suite in traversal-fixture symlink-fixture png-as-jpg jpeg-as-png uppercase-png; do
     fixture_escape_results="$temporary_root/$fixture_suite-results"
     mkdir -p "$fixture_escape_results"
@@ -656,8 +841,9 @@ clear_managed_lease
 
 cp "$endpoint_files[1]" "$fixture_root/results/raw/endpoint.json"
 endpoint_report=$(env "${common_environment[@]}" "$fixture_cli" report)
-assert_contains "$endpoint_report" '| deterministic-api-smoke | suite-run | n/a | n/a | n/a | n/a |'
-assert_contains "$endpoint_report" '| vision-spatial-smoke | suite-run | n/a | n/a | n/a | n/a |'
+assert_contains "$endpoint_report" '| Run | Experiment | Prompt tokens | Effective prompt tokens | MTP policy | Selected route | Generated tokens | Prompt tok/s | Generation tok/s |'
+assert_contains "$endpoint_report" '| deterministic-api-smoke | suite-run | n/a | 32,768 | dynamic | on | n/a | n/a | n/a |'
+assert_contains "$endpoint_report" '| vision-spatial-smoke | suite-run | n/a | 32,769 | dynamic | off | n/a | n/a | n/a |'
 
 if mode_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
     --suite qwen3.8-smoke --mode mixed 2>&1); then
