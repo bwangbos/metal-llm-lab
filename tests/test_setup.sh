@@ -26,6 +26,36 @@ assert_count() {
     (( actual == expected )) || fail "expected $expected occurrences of '$needle', got $actual"
 }
 
+assert_setup_usage_rejected() {
+    local description=$1
+    shift
+    local output exit_status
+    if output=$(PATH="$test_path" "$fixture_root/bin/metal-llm" setup "$@" 2>&1); then
+        fail "setup accepted $description"
+    else
+        exit_status=$?
+    fi
+    (( exit_status == 2 )) || fail "setup rejected $description with status $exit_status, expected 2"
+    assert_contains "$output" 'usage: metal-llm setup MODEL [--artifact-check cached|full] [--dry-run] [--yes]'
+}
+
+inventory_lab() {
+    local item relative metadata digest
+    while IFS= read -r item; do
+        relative=${item#"$fixture_root/.lab/"}
+        if [[ -f "$item" && ! -L "$item" ]]; then
+            metadata=$(/usr/bin/stat -f '%u:%Lp:%z' "$item") || return 1
+            digest=$($real_shasum -a 256 "$item" | awk '{print $1}') || return 1
+            print -r -- "file:$relative:$metadata:$digest"
+        elif [[ -d "$item" && ! -L "$item" ]]; then
+            metadata=$(/usr/bin/stat -f '%u:%Lp' "$item") || return 1
+            print -r -- "directory:$relative:$metadata"
+        elif [[ -L "$item" ]]; then
+            print -r -- "symlink:$relative:$(/bin/readlink "$item")"
+        fi
+    done < <(/usr/bin/find "$fixture_root/.lab" -print | /usr/bin/sort)
+}
+
 temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-setup.XXXXXX")
 trap 'rm -rf -- "$temporary_root"' EXIT
 fixture_root="$temporary_root/repository"
@@ -130,7 +160,17 @@ chmod +x "$fixture_root/scripts/runtime-sync.zsh"
 
 ln -s "$real_curl" "$fake_bin/curl"
 ln -s "$real_jq" "$fake_bin/jq"
-ln -s "$real_shasum" "$fake_bin/shasum"
+
+cat > "$fake_bin/shasum" <<EOF
+#!/bin/zsh
+set -eu
+for argument in "\$@"; do
+    case "\$argument" in
+        *.gguf|*.gguf.part) print -r -- "\$argument" >> "\${SETUP_TEST_ARTIFACT_HASH_LOG:?}" ;;
+    esac
+done
+exec "$real_shasum" "\$@"
+EOF
 
 cat > "$fake_bin/git" <<'EOF'
 #!/bin/zsh
@@ -184,10 +224,12 @@ cat > "$fake_bin/df" <<'EOF'
 print -- 'Filesystem 1024-blocks Used Available Capacity Mounted on'
 print -- "/dev/test 20000000 1 ${SETUP_TEST_BLOCKS:-10000000} 1% /"
 EOF
-chmod +x "$fake_bin/cmake" "$fake_bin/smoke-executable" "$fake_bin/uname" "$fake_bin/df" "$fake_bin/git"
+chmod +x "$fake_bin/cmake" "$fake_bin/smoke-executable" "$fake_bin/uname" "$fake_bin/df" "$fake_bin/git" "$fake_bin/shasum"
 
 test_path="$fake_bin:/bin:/usr/bin"
 export SETUP_TEST_SMOKE_LOG="$temporary_root/smoke.log"
+export SETUP_TEST_ARTIFACT_HASH_LOG="$temporary_root/artifact-hashes.log"
+: > "$SETUP_TEST_ARTIFACT_HASH_LOG"
 write_model_manifest "$artifact_bytes" "$artifact_sha"
 dry_manifest="$fixture_root/manifests/models/dry-model.json"
 "$real_jq" '
@@ -196,6 +238,11 @@ dry_manifest="$fixture_root/manifests/models/dry-model.json"
         .id = "fixture-artifact-two" |
         .filename = "fixture-two.gguf")]
 ' "$fixture_root/manifests/models/fixture-model.json" > "$dry_manifest"
+
+assert_setup_usage_rejected 'missing value' fixture-model --artifact-check
+assert_setup_usage_rejected 'disabled verification' fixture-model --artifact-check off
+assert_setup_usage_rejected 'equals form' fixture-model --artifact-check=full
+assert_setup_usage_rejected 'duplicate' fixture-model --artifact-check cached --artifact-check full
 
 if unsupported_output=$(SETUP_TEST_ARCH=x86_64 PATH="$test_path" "$fixture_root/bin/metal-llm" setup fixture-model --yes 2>&1); then
     fail 'setup accepted an unsupported architecture'
@@ -242,8 +289,31 @@ assert_contains "$dry_output" 'verify bytes:'
 assert_contains "$dry_output" 'verify sha256:'
 assert_contains "$dry_output" 'publish artifact atomically:'
 assert_contains "$dry_output" 'write build receipt atomically:'
+assert_contains "$dry_output" 'artifact verification: requested=cached effective=not-run cache_hits=0 cache_misses=0 full_hashes=0'
 [[ "$dry_output" != *'secret-token-must-not-leak'* ]] || fail 'dry-run exposed HF_TOKEN'
 [[ ! -e "$fixture_root/.lab" ]] || fail 'dry-run created .lab state'
+
+dry_artifact_dir="$fixture_root/.lab/artifacts/fixture-model"
+dry_final_artifact="$dry_artifact_dir/fixture.gguf"
+dry_receipt_dir="$fixture_root/.lab/verification/artifacts/fixture-model"
+mkdir -p "$dry_artifact_dir" "$dry_receipt_dir"
+cp "$source_artifact" "$dry_final_artifact"
+chmod 700 "$fixture_root/.lab/verification/artifacts" "$dry_receipt_dir"
+print -r -- '{"stale":true}' > "$dry_receipt_dir/fixture-artifact.json"
+chmod 600 "$dry_receipt_dir/fixture-artifact.json"
+dry_inventory_before="$temporary_root/dry-inventory-before"
+dry_inventory_after="$temporary_root/dry-inventory-after"
+inventory_lab > "$dry_inventory_before"
+: > "$SETUP_TEST_ARTIFACT_HASH_LOG"
+dry_existing_output=$(PATH="$test_path" "$fixture_root/bin/metal-llm" setup fixture-model --dry-run)
+assert_contains "$dry_existing_output" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=1 full_hashes=1'
+dry_hash_count=$(wc -l < "$SETUP_TEST_ARTIFACT_HASH_LOG" | tr -d ' ')
+(( dry_hash_count == 1 )) || fail 'dry-run did not read exactly one GGUF body'
+[[ "$(/usr/bin/tail -n 1 "$SETUP_TEST_ARTIFACT_HASH_LOG")" == "${dry_final_artifact:A}" ]] ||
+    fail 'dry-run did not read the existing final GGUF body'
+inventory_lab > "$dry_inventory_after"
+cmp -s "$dry_inventory_before" "$dry_inventory_after" || fail 'dry-run changed existing .lab state'
+rm -rf "$fixture_root/.lab"
 
 cp "$source_root/manifests/models/qwen3.8-flash-next.json" "$fixture_root/manifests/models/"
 cp "$source_root/manifests/runtimes/llama-cpp-qwen38-hybrid.json" "$fixture_root/manifests/runtimes/"
@@ -258,6 +328,7 @@ assert_count "$real_dry_output" 'download artifact:' 35
 assert_count "$real_dry_output" 'verify bytes:' 35
 assert_count "$real_dry_output" 'verify sha256:' 35
 assert_count "$real_dry_output" 'publish artifact atomically:' 35
+assert_contains "$real_dry_output" 'artifact verification: requested=cached effective=not-run cache_hits=0 cache_misses=0 full_hashes=0'
 [[ "$real_dry_output" != *'recommended_profile'* ]] ||
   fail 'v2 dry-run mentioned removed hardware profile selection'
 [[ ! -e "$fixture_root/.lab" ]] || fail 'v2 dry-run created .lab state'
@@ -286,11 +357,16 @@ assert_contains "$success_output" "total required disk bytes: $(( remaining_afte
 assert_contains "$success_output" $'artifact: fixture-artifact\nsource: file://'
 assert_contains "$success_output" $'license: https://example.invalid/license\nexpected bytes:'
 assert_contains "$success_output" 'resuming artifact: fixture-artifact'
+assert_contains "$success_output" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=0 full_hashes=1'
 assert_contains "$success_output" './bin/metal-llm serve fixture-model --profile auto'
 [[ -f "$final_artifact" ]] || fail 'verified artifact was not published'
 [[ ! -e "$part_artifact" ]] || fail 'successful setup left a partial artifact'
 [[ $(wc -c < "$final_artifact" | tr -d ' ') == "$artifact_bytes" ]] || fail 'published artifact has wrong byte count'
 [[ $($real_shasum -a 256 "$final_artifact" | awk '{print $1}') == "$artifact_sha" ]] || fail 'published artifact has wrong checksum'
+artifact_receipt="$fixture_root/.lab/verification/artifacts/fixture-model/fixture-artifact.json"
+"$real_jq" -e --arg final_path "${final_artifact:A}" '
+    .canonical_path == $final_path and .artifact_id == "fixture-artifact"
+' "$artifact_receipt" >/dev/null || fail 'artifact receipt does not name the final artifact'
 assert_contains "$(<"$temporary_root/cmake.log")" '-G Ninja'
 assert_contains "$(<"$temporary_root/cmake.log")" '-DGGML_METAL=ON'
 assert_contains "$(<"$temporary_root/cmake.log")" '--target llama-server llama-bench'
@@ -313,6 +389,7 @@ for runtime_id in fixture-runtime fixture-stable; do
 done
 
 rm "$source_artifact"
+: > "$SETUP_TEST_ARTIFACT_HASH_LOG"
 reuse_output=$(METAL_LLM_BUILD_RESERVE_BYTES=1024 SETUP_TEST_BLOCKS=1 \
     PATH="$test_path" "$fixture_root/bin/metal-llm" setup fixture-model --yes)
 assert_contains "$reuse_output" 'remaining artifact bytes: 0'
@@ -320,6 +397,17 @@ assert_contains "$reuse_output" 'total required disk bytes: 1024'
 assert_contains "$reuse_output" $'artifact: fixture-artifact\nsource: file://'
 assert_contains "$reuse_output" $'license: https://example.invalid/license\nexpected bytes:'
 assert_contains "$reuse_output" 'using verified artifact: fixture-artifact'
+assert_contains "$reuse_output" 'artifact verification: requested=cached effective=cached cache_hits=1 cache_misses=0 full_hashes=0'
+[[ ! -s "$SETUP_TEST_ARTIFACT_HASH_LOG" ]] || fail 'warm cached setup hashed a GGUF body'
+
+: > "$SETUP_TEST_ARTIFACT_HASH_LOG"
+full_output=$(METAL_LLM_BUILD_RESERVE_BYTES=1024 SETUP_TEST_BLOCKS=1 \
+    PATH="$test_path" "$fixture_root/bin/metal-llm" setup fixture-model --yes --artifact-check full)
+assert_contains "$full_output" 'artifact verification: requested=full effective=full cache_hits=0 cache_misses=0 full_hashes=1'
+full_hash_count=$(wc -l < "$SETUP_TEST_ARTIFACT_HASH_LOG" | tr -d ' ')
+(( full_hash_count == 1 )) || fail 'full setup did not read exactly one GGUF body'
+[[ "$(/usr/bin/tail -n 1 "$SETUP_TEST_ARTIFACT_HASH_LOG")" == "${final_artifact:A}" ]] ||
+    fail 'full setup did not read the final GGUF body'
 
 rm -rf "$fixture_root/.lab"
 print -n -- 'tiny model artifact for setup tests' > "$source_artifact"

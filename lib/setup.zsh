@@ -151,32 +151,25 @@ metal_llm_validate_runtime_manifest() {
 }
 
 metal_llm_setup_usage() {
-    metal_llm_error 'usage: metal-llm setup MODEL [--dry-run] [--yes]'
+    metal_llm_error 'usage: metal-llm setup MODEL [--artifact-check cached|full] [--dry-run] [--yes]'
     return 2
 }
 
 metal_llm_remaining_artifact_bytes() {
     local model_manifest=$1
-    local artifact_dir=$2
-    local remaining_bytes=0
+    local model_id=$2
+    local artifact_dir=$3
     local artifact_id artifact_filename artifact_bytes artifact_sha
-    local final_path part_path present_bytes present_sha
+    local final_path part_path present_bytes
+
+    typeset -gi METAL_LLM_REMAINING_ARTIFACT_BYTES=0
 
     while IFS=$'\t' read -r artifact_id artifact_filename artifact_bytes artifact_sha; do
         final_path="$artifact_dir/$artifact_filename"
         part_path="$final_path.part"
 
         if [[ -e "$final_path" ]]; then
-            [[ -f "$final_path" ]] || {
-                metal_llm_die "artifact path is not a regular file: $final_path"
-                return 1
-            }
-            present_bytes=$(metal_llm_file_size "$final_path") || return 1
-            present_sha=$(metal_llm_sha256 "$final_path") || return 1
-            if [[ "$present_bytes" != "$artifact_bytes" || "$present_sha" != "$artifact_sha" ]]; then
-                metal_llm_die "refusing to overwrite unverified artifact: $final_path"
-                return 1
-            fi
+            metal_llm_verify_model_artifact "$model_manifest" "$model_id" "$artifact_dir" "$artifact_id" || return 1
             continue
         fi
 
@@ -190,13 +183,11 @@ metal_llm_remaining_artifact_bytes() {
                 metal_llm_die "byte count mismatch for $artifact_id: expected $artifact_bytes, got $present_bytes"
                 return 1
             fi
-            remaining_bytes=$(( remaining_bytes + artifact_bytes - present_bytes ))
+            METAL_LLM_REMAINING_ARTIFACT_BYTES=$(( METAL_LLM_REMAINING_ARTIFACT_BYTES + artifact_bytes - present_bytes ))
         else
-            remaining_bytes=$(( remaining_bytes + artifact_bytes ))
+            METAL_LLM_REMAINING_ARTIFACT_BYTES=$(( METAL_LLM_REMAINING_ARTIFACT_BYTES + artifact_bytes ))
         fi
     done < <(jq -er '.artifacts[] | [.id, .filename, (.bytes | tostring), .sha256] | @tsv' "$model_manifest")
-
-    print -- "$remaining_bytes"
 }
 
 metal_llm_setup_runtime() {
@@ -309,9 +300,12 @@ metal_llm_setup() {
     local model_id=''
     local dry_run=0
     local assume_yes=0
+    local artifact_check=cached
+    local artifact_check_set=0
     local argument
 
-    for argument in "$@"; do
+    while (( $# > 0 )); do
+        argument=$1
         case "$argument" in
             --dry-run)
                 (( dry_run == 0 )) || { metal_llm_setup_usage; return $?; }
@@ -321,12 +315,23 @@ metal_llm_setup() {
                 (( assume_yes == 0 )) || { metal_llm_setup_usage; return $?; }
                 assume_yes=1
                 ;;
+            --artifact-check)
+                (( artifact_check_set == 0 && $# >= 2 )) || { metal_llm_setup_usage; return $?; }
+                shift
+                case "$1" in
+                    cached|full) artifact_check=$1 ;;
+                    *) metal_llm_setup_usage; return $? ;;
+                esac
+                artifact_check_set=1
+                ;;
+            --artifact-check=*) metal_llm_setup_usage; return $? ;;
             -*) metal_llm_setup_usage; return $? ;;
             *)
                 [[ -z "$model_id" ]] || { metal_llm_setup_usage; return $?; }
                 model_id=$argument
                 ;;
         esac
+        shift
     done
 
     [[ -n "$model_id" ]] || { metal_llm_setup_usage; return $?; }
@@ -367,9 +372,12 @@ metal_llm_setup() {
         }
     done
 
+    metal_llm_artifact_verification_begin "$artifact_check" "$dry_run" || return 1
+
     local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
     local remaining_bytes build_reserve_bytes required_bytes available_bytes
-    remaining_bytes=$(metal_llm_remaining_artifact_bytes "$model_manifest" "$artifact_dir") || return 1
+    metal_llm_remaining_artifact_bytes "$model_manifest" "$model_id" "$artifact_dir" || return 1
+    remaining_bytes=$METAL_LLM_REMAINING_ARTIFACT_BYTES
     build_reserve_bytes=${METAL_LLM_BUILD_RESERVE_BYTES:-5368709120}
     [[ "$build_reserve_bytes" == <-> ]] || {
         metal_llm_die 'METAL_LLM_BUILD_RESERVE_BYTES must be a non-negative integer'
@@ -406,8 +414,7 @@ metal_llm_setup() {
     done
 
     local artifact_id artifact_filename artifact_url artifact_bytes artifact_sha artifact_license
-    local final_path part_path existing_bytes existing_sha download_required partial_bytes
-    local actual_bytes actual_sha
+    local final_path part_path download_required partial_bytes dry_run_missing_artifact=0
     typeset -a curl_arguments
     while IFS=$'\t' read -r artifact_id artifact_filename artifact_url artifact_bytes artifact_sha artifact_license; do
         final_path="$artifact_dir/$artifact_filename"
@@ -423,6 +430,11 @@ metal_llm_setup() {
         print -- "expected bytes: $artifact_bytes"
 
         if (( dry_run == 1 )); then
+            if [[ -e "$final_path" ]]; then
+                metal_llm_verify_model_artifact "$model_manifest" "$model_id" "$artifact_dir" "$artifact_id" || return 1
+            else
+                dry_run_missing_artifact=1
+            fi
             [[ -n "${HF_TOKEN:-}" ]] && print -- 'authorization: Bearer <redacted>'
             print -- "verify bytes: $part_path"
             print -- "verify sha256: $part_path"
@@ -431,15 +443,9 @@ metal_llm_setup() {
         fi
 
         if [[ -e "$final_path" ]]; then
-            [[ -f "$final_path" ]] || { metal_llm_die "artifact path is not a regular file: $final_path"; return 1; }
-            existing_bytes=$(metal_llm_file_size "$final_path") || return 1
-            existing_sha=$(metal_llm_sha256 "$final_path") || return 1
-            if [[ "$existing_bytes" == "$artifact_bytes" && "$existing_sha" == "$artifact_sha" ]]; then
-                print -- "using verified artifact: $artifact_id"
-                continue
-            fi
-            metal_llm_die "refusing to overwrite unverified artifact: $final_path"
-            return 1
+            metal_llm_verify_model_artifact "$model_manifest" "$model_id" "$artifact_dir" "$artifact_id" || return 1
+            print -- "using verified artifact: $artifact_id"
+            continue
         fi
 
         mkdir -p "$artifact_dir"
@@ -468,21 +474,17 @@ metal_llm_setup() {
             curl "${curl_arguments[@]}" || return 1
         fi
 
-        actual_bytes=$(metal_llm_file_size "$part_path") || return 1
-        if [[ "$actual_bytes" != "$artifact_bytes" ]]; then
-            metal_llm_die "byte count mismatch for $artifact_id: expected $artifact_bytes, got $actual_bytes"
-            return 1
-        fi
-        actual_sha=$(metal_llm_sha256 "$part_path") || return 1
-        if [[ "$actual_sha" != "$artifact_sha" ]]; then
-            metal_llm_die "checksum mismatch for $artifact_id: expected $artifact_sha, got $actual_sha"
-            return 1
-        fi
-
-        [[ ! -e "$final_path" ]] || { metal_llm_die "refusing to overwrite artifact: $final_path"; return 1; }
-        mv "$part_path" "$final_path" || return 1
+        metal_llm_install_verified_artifact \
+            "$model_manifest" "$model_id" "$artifact_dir" "$artifact_id" "$part_path" || return 1
         print -- "verified artifact: $artifact_id"
     done < <(jq -er '.artifacts[] | [.id, .filename, .url, (.bytes | tostring), .sha256, .license_url] | @tsv' "$model_manifest")
+
+    if (( dry_run == 1 && dry_run_missing_artifact == 1 )); then
+        metal_llm_artifact_verification_finalize 0 || return 1
+    else
+        metal_llm_artifact_verification_finalize 1 || return 1
+    fi
+    metal_llm_print_artifact_verification_summary || return 1
 
     print -- 'next command:'
     print -- "./bin/metal-llm serve $model_id --profile auto"

@@ -21,7 +21,7 @@ help_output=$("$cli" help)
 for command_name in doctor setup serve bench report help; do
     assert_contains "$help_output" "$command_name"
 done
-assert_contains "$help_output" 'metal-llm setup MODEL [--dry-run] [--yes]'
+assert_contains "$help_output" 'metal-llm setup MODEL [--artifact-check cached|full] [--dry-run] [--yes]'
 assert_contains "$help_output" 'METAL_LLM_BUILD_RESERVE_BYTES'
 assert_contains "$help_output" 'metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off]'
 assert_contains "$help_output" 'metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off]'

@@ -21,7 +21,7 @@ metal_llm_help() {
     print -- ''
     print -- 'commands:'
     print -- '  metal-llm doctor'
-    print -- '  metal-llm setup MODEL [--dry-run] [--yes]'
+    print -- '  metal-llm setup MODEL [--artifact-check cached|full] [--dry-run] [--yes]'
     print -- '  metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
     print -- '  metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
     print -- '    serve defaults: --profile auto and model vision default'
