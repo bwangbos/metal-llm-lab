@@ -381,7 +381,7 @@
       "runtime": "tuned",
       "context": 262144,
       "mtp_policy": "dynamic",
-      "status": "pending-acceptance"
+      "status": "recommended"
     },
     {
       "id": "stable",

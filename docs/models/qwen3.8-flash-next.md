@@ -23,8 +23,8 @@ operation.
 | Profile | Runtime | Context | MTP policy | Status |
 | --- | --- | ---: | --- | --- |
 | `fast` | `tuned` | 32,768 | `on` | Supported short-request preset |
-| `long` | `tuned` | 262,144 | `off` | Supported policy; full allocation pending acceptance |
-| `auto` | `tuned` | 262,144 | `dynamic` | Implemented; pending hardware acceptance |
+| `long` | `tuned` | 262,144 | `off` | Supported; allocation accepted on M5 Max 128 GiB |
+| `auto` | `tuned` | 262,144 | `dynamic` | Recommended on the accepted M5 Max 128 GiB configuration |
 | `stable` | `upstream` | 32,768 | `off` | Reference only; not recommended |
 
 Vision defaults on independently for every preset and loads the pinned F16
@@ -46,11 +46,10 @@ spells the same manifest choices using the runtime's accepted long options):
 --spec-type draft-mtp --spec-draft-n-max 2 -ngld all
 ```
 
-The earlier 131,072-token allocation succeeded during a recorded local session
-with the target and MTP loaded. That does not establish that the current
-262,144-token target, projector, and MTP configuration fits together. `auto`
-therefore remains pending acceptance, and the `long` preset intentionally omits
-MTP because the context study favored no-MTP at long context.
+The 262,144-token target, projector, and MTP configuration passed allocation and
+the complete acceptance matrix on the exact M5 Max 128 GiB host. `auto` is
+recommended for that accepted configuration. The `long` preset intentionally
+omits MTP because the context study favored no-MTP at long context.
 
 Dynamic routing uses the fixed threshold of 32,768 effective prompt tokens.
 Effective length includes template and image expansion: counts at or below the

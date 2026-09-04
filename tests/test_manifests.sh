@@ -46,7 +46,9 @@ jq -e '
     ($schema["$defs"].profile.required | sort) ==
       (["id", "runtime", "context", "mtp_policy", "status"] | sort) and
     ($schema["$defs"].profile.properties.runtime.enum | sort) == (["tuned", "upstream"] | sort) and
-    ($schema["$defs"].profile.properties.mtp_policy.enum | sort) == (["dynamic", "off", "on"] | sort)
+    ($schema["$defs"].profile.properties.mtp_policy.enum | sort) == (["dynamic", "off", "on"] | sort) and
+    ($schema["$defs"].profile.properties.status.enum | sort) ==
+      (["pending-acceptance", "recommended", "reference", "supported"] | sort)
 ' "$model_schema" >/dev/null
 
 jq -e '
@@ -131,7 +133,7 @@ for manifest_file in "${model_files[@]}"; do
         .profiles == [
           {id: "fast", runtime: "tuned", context: 32768, mtp_policy: "on", status: "supported"},
           {id: "long", runtime: "tuned", context: 262144, mtp_policy: "off", status: "supported"},
-          {id: "auto", runtime: "tuned", context: 262144, mtp_policy: "dynamic", status: "pending-acceptance"},
+          {id: "auto", runtime: "tuned", context: 262144, mtp_policy: "dynamic", status: "recommended"},
           {id: "stable", runtime: "upstream", context: 32768, mtp_policy: "off", status: "reference"}
         ] and
         ([.profiles[].id] | length == (unique | length))

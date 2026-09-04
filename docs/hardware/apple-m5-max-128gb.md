@@ -13,12 +13,12 @@ model processes can exhaust that headroom.
 The earlier 131,072-token server allocation passed. A 250,000-token synthetic
 cache-depth benchmark also completed while `iogpu.wired_limit_mb` remained
 automatic (`0`), `memory_pressure -Q` reported 40% effective free memory, and
-`vm_stat` showed no throttled pages. Neither observation proves that the current
-`auto` configuration can load the target, projector, MTP sidecar, and a 262,144-
-token context together. That exact 256K configuration remains pending hardware
-acceptance; the launcher must fail rather than silently reducing context or
-disabling a capability. This project does not change memory-wire limits, macOS
-power settings, or other system settings.
+`vm_stat` showed no throttled pages. The later acceptance run directly proved
+that the `auto` configuration can load the target, projector, MTP sidecar, and a
+262,144-token context together on this exact host. The launcher must still fail
+rather than silently reducing context or disabling a capability. This project
+does not change memory-wire limits, macOS power settings, or other system
+settings.
 
 Only one full-model process is supported. A second process failed prompt-batch
 decoding with result `-3` while the server held the model, then succeeded after
@@ -38,8 +38,9 @@ downloads nor builds anything:
 METAL_LLM_INTEGRATION=1 zsh tests/integration/test_dynamic_mtp.sh
 ```
 
-Successful output from that command is evidence for review, not permission to
-rewrite prior measurements or bypass the separate recommendation gate.
+The integration evidence and the complete performance matrix passed; see the
+[acceptance record](../experiments/2026-09-03-dynamic-mtp-acceptance.md). The
+result is machine-specific and does not rewrite the prior measurements.
 
 Machine-readable identity is in
 [`manifests/hardware/apple-m5-max-128gb.json`](../../manifests/hardware/apple-m5-max-128gb.json),

@@ -112,7 +112,8 @@ metal_llm_validate_model_manifest() {
         (.runtime | type == "string" and $manifest.runtime_aliases[.] != null) and
         (.context | type == "number" and floor == . and . > 0 and . <= $manifest.max_context) and
         (.mtp_policy == "on" or .mtp_policy == "off" or .mtp_policy == "dynamic") and
-        (.status == "supported" or .status == "pending-acceptance" or .status == "reference") and
+        (.status == "supported" or .status == "pending-acceptance" or
+          .status == "recommended" or .status == "reference") and
         (if .runtime == "upstream" then .mtp_policy == "off" else true end) and
         (if .mtp_policy == "on" or .mtp_policy == "dynamic" then .runtime == "tuned" else true end)
       )) and

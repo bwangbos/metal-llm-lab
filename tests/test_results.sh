@@ -6,6 +6,8 @@ cli="$source_root/bin/metal-llm"
 schema="$source_root/schemas/result.schema.json"
 raw_result="$source_root/results/raw/2026-09-03-qwen38-m5-max.json"
 summary="$source_root/results/summaries/qwen3.8-flash-next-m5-max.md"
+dynamic_raw_result="$source_root/results/raw/2026-09-03-qwen38-dynamic-mtp.json"
+dynamic_summary="$source_root/results/summaries/qwen3.8-flash-next-dynamic-mtp.md"
 
 fail() {
     print -u2 -- "$1"
@@ -18,12 +20,43 @@ assert_contains() {
     [[ "$haystack" == *"$needle"* ]] || fail "missing expected output: $needle"
 }
 
-for required_file in "$schema" "$raw_result" "$summary"; do
+for required_file in "$schema" "$raw_result" "$summary" "$dynamic_raw_result" "$dynamic_summary"; do
     [[ -f "$required_file" ]] || fail "missing ${required_file#$source_root/}"
     case "$required_file" in
         *.json) jq empty "$required_file" ;;
     esac
 done
+
+jq -e '
+  .suite_id == "dynamic-mtp-performance" and
+  .configuration.acceptance_variant == "multi-policy-endpoint" and
+  .configuration.mtp_policies == ["on", "off", "dynamic"] and
+  .configuration.dynamic_threshold == 32768 and
+  .configuration.context_allocation == 262144 and
+  .configuration.vision == true and
+  .configuration.effective_prompt_lengths == [29000, 30000, 32767, 32768, 32769, 33868, 98304] and
+  .configuration.warmups_per_cell == 1 and
+  .configuration.samples_per_cell == 5 and
+  .configuration.throughput_tolerance_percent == 5 and
+  (.runs | length) == 105 and
+  (.configuration.statistics | length) == 21 and
+  (.configuration.dynamic_fixed_comparisons | length) == 7 and
+  all(.configuration.dynamic_fixed_comparisons[]; .passed == true) and
+  ([.runs[] | select(.mtp_policy == "on" and .mtp_selected == true)] | length) == 35 and
+  ([.runs[] | select(.mtp_policy == "off" and .mtp_selected == false)] | length) == 35 and
+  ([.runs[] | select(.mtp_policy == "dynamic" and .mtp_selected == true)] | length) == 20 and
+  ([.runs[] | select(.mtp_policy == "dynamic" and .mtp_selected == false)] | length) == 15 and
+  .interpretation.performance_gate_passed == true
+' "$dynamic_raw_result" >/dev/null || fail 'dynamic-MTP raw acceptance evidence is incomplete'
+
+jq -e '
+  (.configuration.dynamic_fixed_comparisons[] | select(.effective_prompt_tokens == 32767) |
+    .fixed_policy == "on" and .percent_delta == 1.2630904893804473) and
+  (.configuration.dynamic_fixed_comparisons[] | select(.effective_prompt_tokens == 32769) |
+    .fixed_policy == "off" and .percent_delta == 4.909370120449208) and
+  (.configuration.dynamic_fixed_comparisons[] | select(.effective_prompt_tokens == 98304) |
+    .fixed_policy == "off" and .percent_delta == 2.1573777541598282)
+' "$dynamic_raw_result" >/dev/null || fail 'dynamic-MTP boundary comparisons changed'
 
 jq -e '
     .["$defs"].run.required as $required |
@@ -86,7 +119,8 @@ jq -e '
 
 private_path_pattern='/''Users/[A-Za-z0-9._-]+/'
 if unsafe_match=$(rg -n "$private_path_pattern|(^|[\"_])(api[_-]?key|token|password|secret)[\"_ ]*:" \
-    "$schema" "$raw_result" "$summary" "$source_root/docs" 2>/dev/null); then
+    "$schema" "$raw_result" "$summary" "$dynamic_raw_result" "$dynamic_summary" \
+    "$source_root/docs" 2>/dev/null); then
     fail "committed result or documentation contains a private path or secret-like key:\n$unsafe_match"
 fi
 
@@ -95,7 +129,9 @@ assert_contains "$generated" '| 99,405 | 34.4737 | 21.2468 | 160/188 |'
 assert_contains "$generated" '| 28,705 | 40.755 | 0.567 | 41.279 | 3.082 | +1.29% |'
 assert_contains "$generated" '23.80 tok/s'
 assert_contains "$generated" 'approximately 33.6K'
-cmp -s <(print -r -- "$generated") "$summary" || fail 'report output differs from committed summary'
+assert_contains "$(<"$dynamic_summary")" '| 32,767 | on | 44.778118828762345 | 44.2195854504937 | +1.2630904893804473% | Pass |'
+assert_contains "$(<"$dynamic_summary")" '| 32,769 | off | 43.14954799180947 | 41.1303088964011 | +4.909370120449208% | Pass |'
+assert_contains "$(<"$dynamic_summary")" '| 98,304 | off | 40.313009802029555 | 39.461672458980104 | +2.1573777541598282% | Pass |'
 $cli report --check >/dev/null
 
 temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-results.XXXXXX")
@@ -275,6 +311,16 @@ assert_multi_policy_invalid '.runs[1].runtime_alias = "upstream"' 'run runtime d
 assert_multi_policy_invalid '.runs[2].mtp_selected = false' 'dynamic route disabled at threshold'
 assert_multi_policy_invalid '.runs[2].mtp_threshold = 30000' 'dynamic row threshold differs from acceptance threshold'
 assert_multi_policy_invalid '.runs[0].mtp_threshold = 32768' 'fixed row carries a threshold'
+
+cp "$dynamic_raw_result" "$fixture_root/results/raw/result.json"
+$fixture_cli report >/dev/null
+$fixture_cli report --check >/dev/null
+jq '.configuration.dynamic_fixed_comparisons[2].percent_delta = 99' \
+    "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
+if dynamic_drift_output=$($fixture_cli report --check 2>&1); then
+    fail 'report --check accepted dynamic-MTP summary drift'
+fi
+assert_contains "$dynamic_drift_output" 'summary differs from generated output'
 
 jq '.runs[0].hardware_id = "unknown-hardware"' "$raw_result" > "$fixture_root/results/raw/result.json"
 if invalid_output=$($fixture_cli report --check 2>&1); then
