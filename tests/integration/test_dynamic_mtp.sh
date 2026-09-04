@@ -265,10 +265,8 @@ append_validated_run() {
         fail "$case_id selected the wrong fixed route"
     fi
     if [[ "$speculative" == true ]]; then
-        jq -e '
-          (.draft_n | type == "number" and floor == . and . > 0) and
-          (.draft_n_accepted | type == "number" and floor == . and . >= 0 and . <= .draft_n)
-        ' <<< "$timing" >/dev/null || fail "$case_id lacks valid speculative draft statistics"
+        metal_llm_validate_speculative_draft_statistics "$timing" || \
+            fail "$case_id lacks valid speculative draft statistics"
         draft_n=$(jq -er '.draft_n' <<< "$timing")
         accepted=$(jq -er '.draft_n_accepted' <<< "$timing")
     else

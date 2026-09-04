@@ -32,3 +32,12 @@ metal_llm_wait_for_process_diagnostic() {
         sleep "$poll_seconds"
     done
 }
+
+metal_llm_validate_speculative_draft_statistics() {
+    local timing=$1
+    jq -e '
+      (.draft_n | type == "number" and floor == . and . > 0) and
+      (.draft_n_accepted | type == "number" and floor == . and . >= 0) and
+      (.draft_n_accepted <= .draft_n)
+    ' <<< "$timing" >/dev/null 2>&1
+}

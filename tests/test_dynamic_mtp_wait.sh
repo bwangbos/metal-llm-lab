@@ -15,6 +15,24 @@ fail() {
 
 typeset -f metal_llm_wait_for_process_diagnostic >/dev/null || \
     fail 'missing diagnostic-driven process wait helper'
+typeset -f metal_llm_validate_speculative_draft_statistics >/dev/null || \
+    fail 'missing speculative draft-statistics validator'
+
+metal_llm_validate_speculative_draft_statistics \
+  '{"draft_n":10,"draft_n_accepted":10}' || \
+    fail 'draft-statistics validator rejected valid complete acceptance'
+metal_llm_validate_speculative_draft_statistics \
+  '{"draft_n":10,"draft_n_accepted":0}' || \
+    fail 'draft-statistics validator rejected valid zero acceptance'
+for invalid_statistics in \
+  '{"draft_n":10,"draft_n_accepted":11}' \
+  '{"draft_n":10.5,"draft_n_accepted":10}' \
+  '{"draft_n":10,"draft_n_accepted":-1}' \
+  '{"draft_n":10}'; do
+    if metal_llm_validate_speculative_draft_statistics "$invalid_statistics"; then
+        fail "draft-statistics validator accepted invalid input: $invalid_statistics"
+    fi
+done
 
 ps() {
     local process_pid=''
