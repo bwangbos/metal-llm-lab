@@ -16,10 +16,10 @@
     { "revision": "a38a256463cf2454dac1954bf129850cf767723c", "file": "0010-ggml-cuda-guard-graph-key-against-empty-graph.patch" },
     { "revision": "f9aa445300b8fcf12cec0834ab6b39b1be3f19a0", "file": "0011-qwen4exp-reject-draft-only-export-without-target.patch" },
     { "revision": "831e5d6f6e0d7b6c8d5757b1da41480ab33a0528", "file": "0012-qwen4exp-expose-optimized-graph-helpers-to-mtp.patch" },
-    { "revision": "202d4be9fdc0535ee22dcf04c4559118d7748001", "file": "0013-server-gate-mtp-by-effective-prompt.patch" }
+    { "revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95", "file": "0013-server-gate-mtp-by-effective-prompt.patch" }
   ],
-  "tested_revision": "202d4be9fdc0535ee22dcf04c4559118d7748001",
-  "tested_tree_sha": "3eaf84fd5e0f7a29ce9395aa0283b9ade26f7f7c",
+  "tested_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+  "tested_tree_sha": "4f3c051ed7ae4e856cb6d7d95f5c1af6984fc72d",
   "build": {
     "generator": "Ninja",
     "build_type": "Release",

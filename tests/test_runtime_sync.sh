@@ -80,7 +80,7 @@ expected_dry_run+=$'patch: 0010-ggml-cuda-guard-graph-key-against-empty-graph.pa
 expected_dry_run+=$'patch: 0011-qwen4exp-reject-draft-only-export-without-target.patch\n'
 expected_dry_run+=$'patch: 0012-qwen4exp-expose-optimized-graph-helpers-to-mtp.patch\n'
 expected_dry_run+=$'patch: 0013-server-gate-mtp-by-effective-prompt.patch\n'
-expected_dry_run+='tested tree: 3eaf84fd5e0f7a29ce9395aa0283b9ade26f7f7c'
+expected_dry_run+='tested tree: 4f3c051ed7ae4e856cb6d7d95f5c1af6984fc72d'
 actual_dry_run=$("$sync_script" "$runtime_id" --dry-run)
 [[ "$actual_dry_run" == "$expected_dry_run" ]] || {
     diff -u <(print -r -- "$expected_dry_run") <(print -r -- "$actual_dry_run") || true
