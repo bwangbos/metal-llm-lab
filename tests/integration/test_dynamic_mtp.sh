@@ -17,6 +17,7 @@ source "$root/lib/runtime-state.zsh"
 source "$root/lib/managed-process.zsh"
 source "$root/lib/bench.zsh"
 source "$root/lib/report.zsh"
+source "$root/tests/integration/dynamic_mtp_helpers.zsh"
 
 fail() {
     print -u2 -- "dynamic-MTP integration: $1"
@@ -319,28 +320,27 @@ integration_timestamp=$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)
 metal_llm_validate_benchmark_timestamp "$integration_timestamp" || exit 1
 
 # Reject a second managed full-model launch. The candidate PID and its start
-# identity are recorded before it can ever be stopped by this harness.
+# identity are recorded before it can ever be stopped by this harness. A normal
+# serve verifies the full build and artifact set before it reaches the lease, so
+# wait for the exact lease diagnostic rather than assuming verification finishes
+# within a short process-duration window.
 second_log="$scratch/second-server.log"
-set +e
+expected_lease_rejection='managed full-model process is already active'
+second_serve_timeout_seconds=900
 "$root/bin/metal-llm" serve "$model_id" --profile fast --vision on > "$second_log" 2>&1 &
 second_pid=$!
 second_started=$(process_start_identity "$second_pid" 2>/dev/null || true)
-for attempt in {1..30}; do
-    kill -0 "$second_pid" 2>/dev/null || break
-    sleep 1
-done
-if kill -0 "$second_pid" 2>/dev/null; then
-    stop_if_same_process "$second_pid" "$second_started"
-    wait "$second_pid" 2>/dev/null
-    set -e
-    fail 'second managed serve attempt did not fail promptly'
-fi
-wait "$second_pid" 2>/dev/null
-second_status=$?
+[[ -n "$second_started" ]] || fail 'could not record the second serve attempt start identity'
+set +e
+metal_llm_wait_for_process_diagnostic "$second_pid" "$second_started" \
+  "$second_log" "$expected_lease_rejection" "$second_serve_timeout_seconds" 1
+second_wait_status=$?
 set -e
-[[ "$second_status" -ne 0 ]] || fail 'second managed serve attempt unexpectedly succeeded'
-grep -Fq 'managed full-model process is already active' "$second_log" || \
-    fail 'second managed serve attempt failed for the wrong reason'
+case "$second_wait_status" in
+    0) ;;
+    124) fail "timed out after $second_serve_timeout_seconds seconds waiting for second serve lease rejection" ;;
+    *) fail "second managed serve did not exit with the exact lease rejection (wait status $second_wait_status)" ;;
+esac
 second_pid=''
 second_started=''
 
