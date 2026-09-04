@@ -2,37 +2,74 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://metal-llm-lab.dev/schemas/result.schema.json",
   "title": "Metal LLM Lab benchmark result",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schema_version", "experiment_id", "date", "model_id", "provenance", "runs"],
-  "properties": {
-    "schema_version": { "const": 1 },
-    "experiment_id": { "$ref": "#/$defs/id" },
-    "date": { "type": "string", "format": "date" },
-    "model_id": { "$ref": "#/$defs/id" },
-    "suite_id": { "$ref": "#/$defs/id" },
-    "benchmark_mode": { "enum": ["local", "endpoint"] },
-    "provenance": { "$ref": "#/$defs/provenance" },
-    "summary": {
+  "oneOf": [
+    { "$ref": "#/$defs/result_v1" },
+    { "$ref": "#/$defs/result_v2" }
+  ],
+  "$defs": {
+    "common_result": {
       "type": "object",
-      "additionalProperties": false,
-      "required": ["output", "title"],
+      "required": ["schema_version", "experiment_id", "date", "model_id", "provenance", "runs"],
       "properties": {
-        "output": { "type": "string", "pattern": "^[a-z0-9.-]+\\.md$" },
-        "title": { "type": "string", "minLength": 1 }
+        "schema_version": { "type": "integer" },
+        "experiment_id": { "$ref": "#/$defs/id" },
+        "date": { "type": "string", "format": "date" },
+        "model_id": { "$ref": "#/$defs/id" },
+        "suite_id": { "$ref": "#/$defs/id" },
+        "benchmark_mode": { "enum": ["local", "endpoint"] },
+        "provenance": {},
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["output", "title"],
+          "properties": {
+            "output": { "type": "string", "pattern": "^[a-z0-9.-]+\\.md$" },
+            "title": { "type": "string", "minLength": 1 }
+          }
+        },
+        "environment": { "type": "object" },
+        "configuration": { "type": "object" },
+        "interpretation": { "type": "object" },
+        "validations": { "type": "array", "items": { "type": "object" } },
+        "runs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/run" }
+        }
       }
     },
-    "environment": { "type": "object" },
-    "configuration": { "type": "object" },
-    "interpretation": { "type": "object" },
-    "validations": { "type": "array", "items": { "type": "object" } },
-    "runs": {
-      "type": "array",
-      "minItems": 1,
-      "items": { "$ref": "#/$defs/run" }
-    }
-  },
-  "$defs": {
+    "result_v1": {
+      "allOf": [
+        { "$ref": "#/$defs/common_result" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": { "const": 1 },
+            "experiment_id": {}, "date": {}, "model_id": {}, "suite_id": {},
+            "benchmark_mode": {}, "provenance": { "$ref": "#/$defs/provenance_v1" },
+            "summary": {}, "environment": {}, "configuration": {},
+            "interpretation": {}, "validations": {}, "runs": {}
+          }
+        }
+      ]
+    },
+    "result_v2": {
+      "allOf": [
+        { "$ref": "#/$defs/common_result" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": { "const": 2 },
+            "experiment_id": {}, "date": {}, "model_id": {}, "suite_id": {},
+            "benchmark_mode": {}, "provenance": { "$ref": "#/$defs/provenance_v2" },
+            "summary": {}, "environment": {}, "configuration": {},
+            "interpretation": {}, "validations": {}, "runs": {}
+          }
+        }
+      ]
+    },
     "id": {
       "type": "string",
       "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
@@ -45,9 +82,76 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
-    "provenance": {
-      "type": ["object", "null"],
+    "artifact_verification": {
+      "type": "object",
       "additionalProperties": false,
+      "required": ["requested_mode", "effective_mode", "cache_hits", "cache_misses", "full_hashes", "receipt_set_sha256"],
+      "properties": {
+        "requested_mode": { "enum": ["cached", "full"] },
+        "effective_mode": { "enum": ["cached", "full", "mixed"] },
+        "cache_hits": { "type": "integer", "minimum": 0 },
+        "cache_misses": { "type": "integer", "minimum": 0 },
+        "full_hashes": { "type": "integer", "minimum": 0 },
+        "receipt_set_sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "effective_mode": { "const": "cached" },
+            "cache_hits": { "type": "integer", "minimum": 1 },
+            "cache_misses": { "const": 0 },
+            "full_hashes": { "const": 0 }
+          }
+        },
+        {
+          "properties": {
+            "effective_mode": { "const": "full" },
+            "cache_hits": { "const": 0 },
+            "full_hashes": { "type": "integer", "minimum": 1 }
+          }
+        },
+        {
+          "properties": {
+            "effective_mode": { "const": "mixed" },
+            "cache_hits": { "type": "integer", "minimum": 1 },
+            "full_hashes": { "type": "integer", "minimum": 1 }
+          }
+        }
+      ]
+    },
+    "provenance_v1": {
+      "allOf": [
+        { "$ref": "#/$defs/provenance_fields" },
+        {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "repository": {}, "hardware": {}, "system": {}, "profile_id": {},
+            "runtime_alias": {}, "context": {}, "vision": {}, "mtp_policy": {},
+            "mtp_threshold": {}, "runtime": {}, "model_manifest_sha256": {},
+            "artifacts": {}, "suite": {}
+          }
+        }
+      ]
+    },
+    "provenance_v2": {
+      "allOf": [
+        { "$ref": "#/$defs/provenance_fields" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["artifact_verification"],
+          "properties": {
+            "repository": {}, "hardware": {}, "system": {}, "profile_id": {},
+            "runtime_alias": {}, "context": {}, "vision": {}, "mtp_policy": {},
+            "mtp_threshold": {}, "runtime": {}, "model_manifest_sha256": {},
+            "artifacts": {}, "suite": {},
+            "artifact_verification": { "$ref": "#/$defs/artifact_verification" }
+          }
+        }
+      ]
+    },
+    "provenance_fields": {
       "required": ["repository", "hardware", "system", "profile_id", "runtime_alias", "context", "vision", "mtp_policy", "mtp_threshold", "runtime", "model_manifest_sha256", "artifacts", "suite"],
       "properties": {
         "repository": {

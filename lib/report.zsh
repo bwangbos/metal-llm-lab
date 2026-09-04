@@ -250,6 +250,12 @@ metal_llm_validate_result() {
         end;
       def valid($value; $input_spec):
         resolved($input_spec) as $spec |
+        (if $spec | has("allOf") then
+          [$spec.allOf[] | valid($value; .)] | all
+         else true end) and
+        (if $spec | has("oneOf") then
+          ([$spec.oneOf[] | valid($value; .) | select(.)] | length) == 1
+         else true end) and
         (if $spec | has("const") then $value == $spec.const else true end) and
         (if $spec | has("enum") then [$spec.enum[] | . as $choice | $value == $choice] | any else true end) and
         (if $spec | has("type") then type_ok($value; $spec.type) else true end) and

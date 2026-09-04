@@ -390,7 +390,15 @@ lease_dir="$managed_tmp/metal-llm-lab/full-model.lease"
 lease_record="$lease_dir/identity.json"
 [[ -f "$lease_record" ]] || fail 'serve did not publish a managed full-model identity record'
 "$real_jq" -e --arg model fixture-model --arg profile auto --arg host 127.0.0.1 --argjson port 8080 '
-  .schema_version == 2 and .owner_kind == "serve" and
+  (keys | sort) == ([
+    "schema_version", "owner_kind", "owner_token", "pid", "process_started_at",
+    "model_id", "profile_id", "runtime_alias", "context", "vision", "mtp_policy",
+    "mtp_threshold", "runtime_id", "runtime_revision", "runtime_tree_sha",
+    "runtime_manifest_sha256", "build_receipt_sha256", "executable_name",
+    "executable_sha256", "model_manifest_sha256", "artifacts",
+    "artifact_verification", "host", "port"
+  ] | sort) and
+  .schema_version == 3 and .owner_kind == "serve" and
   .model_id == $model and .profile_id == $profile and
   .runtime_alias == "tuned" and .context == 262144 and .vision == true and
   .mtp_policy == "dynamic" and .mtp_threshold == 32768 and
@@ -405,7 +413,17 @@ lease_record="$lease_dir/identity.json"
   (.executable_sha256 | test("^[0-9a-f]{64}$")) and
   (.model_manifest_sha256 | test("^[0-9a-f]{64}$")) and
   (.artifacts | type == "array" and map(.id) == ["model", "projector", "mtp"] and
-    all(.[].sha256; test("^[0-9a-f]{64}$")))
+    all(.[].sha256; test("^[0-9a-f]{64}$"))) and
+  .artifact_verification == {
+    requested_mode: "cached", effective_mode: "full", cache_hits: 0,
+    cache_misses: 3, full_hashes: 3,
+    receipt_set_sha256: .artifact_verification.receipt_set_sha256
+  } and
+  (.artifact_verification | keys | sort) == ([
+    "requested_mode", "effective_mode", "cache_hits", "cache_misses",
+    "full_hashes", "receipt_set_sha256"
+  ] | sort) and
+  (.artifact_verification.receipt_set_sha256 | test("^[0-9a-f]{64}$"))
 ' "$lease_record" >/dev/null || fail 'serve published an incomplete managed identity record'
 
 # Old and partially upgraded live records are invalid and must neither be
@@ -415,7 +433,17 @@ sleep 60 &!
 invalid_identity_pid=$!
 for identity_mutation in \
     'del(.runtime_alias, .context, .mtp_policy, .mtp_threshold) | .schema_version = 1' \
-    'del(.mtp_threshold)'; do
+    '.schema_version = 2' \
+    'del(.mtp_threshold)' \
+    'del(.artifact_verification.full_hashes)' \
+    '.artifact_verification.unexpected = true' \
+    '.artifact_verification.cache_hits = -1' \
+    '.artifact_verification.requested_mode = "other"' \
+    '.artifact_verification.effective_mode = "other"' \
+    '.artifact_verification.receipt_set_sha256 = "BAD"' \
+    '.artifact_verification.effective_mode = "cached"' \
+    '.artifact_verification.effective_mode = "full" | .artifact_verification.full_hashes = 0' \
+    '.artifact_verification.effective_mode = "mixed" | .artifact_verification.cache_hits = 0'; do
     "$real_jq" --argjson pid "$invalid_identity_pid" --arg started "fixture-start-$invalid_identity_pid" \
       "$identity_mutation | .pid = \$pid | .process_started_at = \$started" \
       "$temporary_root/valid-identity.json" > "$lease_record"

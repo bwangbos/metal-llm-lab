@@ -17,13 +17,14 @@ metal_llm_validate_managed_identity() {
     local record=$1
     jq -e '
       (keys | sort) == ([
-        "artifacts", "build_receipt_sha256", "executable_name", "executable_sha256", "host",
-        "context", "model_id", "model_manifest_sha256", "mtp_policy", "mtp_threshold",
-        "owner_kind", "owner_token", "pid", "port", "process_started_at", "profile_id",
-        "runtime_alias", "runtime_id", "runtime_manifest_sha256", "runtime_revision",
-        "runtime_tree_sha", "schema_version", "vision"
+        "artifact_verification", "artifacts", "build_receipt_sha256", "executable_name",
+        "executable_sha256", "host", "context", "model_id", "model_manifest_sha256",
+        "mtp_policy", "mtp_threshold", "owner_kind", "owner_token", "pid", "port",
+        "process_started_at", "profile_id", "runtime_alias", "runtime_id",
+        "runtime_manifest_sha256", "runtime_revision", "runtime_tree_sha", "schema_version",
+        "vision"
       ] | sort) and
-      .schema_version == 2 and (.owner_kind == "serve" or .owner_kind == "local-bench") and
+      .schema_version == 3 and (.owner_kind == "serve" or .owner_kind == "local-bench") and
       (.owner_token | type == "string" and test("^[0-9a-f]{64}$")) and
       (.pid | type == "number" and . > 1 and floor == .) and
       (.process_started_at | type == "string" and length > 0) and
@@ -52,6 +53,22 @@ metal_llm_validate_managed_identity() {
         (.id | type == "string" and test("^[a-z0-9]+([.-][a-z0-9]+)*$")) and
         (.bytes | type == "number" and . > 0 and floor == .) and
         (.sha256 | type == "string" and test("^[0-9a-f]{64}$")))) and
+      (.artifact_verification |
+        type == "object" and
+        (keys | sort) == (["requested_mode", "effective_mode", "cache_hits", "cache_misses",
+          "full_hashes", "receipt_set_sha256"] | sort) and
+        (.requested_mode == "cached" or .requested_mode == "full") and
+        (.effective_mode == "cached" or .effective_mode == "full" or .effective_mode == "mixed") and
+        ([.cache_hits, .cache_misses, .full_hashes] |
+          all(type == "number" and . >= 0 and floor == .)) and
+        (.receipt_set_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+        (if .effective_mode == "cached" then
+          .cache_hits > 0 and .cache_misses == 0 and .full_hashes == 0
+        elif .effective_mode == "full" then
+          .cache_hits == 0 and .full_hashes > 0
+        else
+          .effective_mode == "mixed" and .cache_hits > 0 and .full_hashes > 0
+        end)) and
       (.host | type == "string" and length > 0) and
       (.port | type == "number" and . >= 1 and . <= 65535 and floor == .)
     ' "$record" >/dev/null 2>&1
@@ -165,7 +182,7 @@ metal_llm_acquire_managed_lease() {
     if ! jq -cn --argjson identity "$identity_json" --arg token "$owner_token" \
         --argjson pid "$$" --arg started "$process_started" '
         $identity + {
-          schema_version: 2,
+          schema_version: 3,
           owner_token: $token,
           pid: $pid,
           process_started_at: $started

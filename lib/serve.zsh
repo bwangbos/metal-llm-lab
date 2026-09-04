@@ -259,6 +259,7 @@ metal_llm_serve() {
         --arg executable_name llama-server --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
         --arg model_manifest_sha "$model_manifest_sha" \
         --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
+        --argjson artifact_verification "$METAL_LLM_ARTIFACT_VERIFICATION_JSON" \
         --arg host "$host" --argjson port "$port" '
       {
         owner_kind: $owner_kind, model_id: $model, profile_id: $profile,
@@ -267,7 +268,8 @@ metal_llm_serve() {
         runtime_id: $runtime, runtime_revision: $runtime_revision, runtime_tree_sha: $runtime_tree,
         runtime_manifest_sha256: $runtime_manifest_sha, build_receipt_sha256: $receipt_sha,
         executable_name: $executable_name, executable_sha256: $executable_sha,
-        model_manifest_sha256: $model_manifest_sha, artifacts: $artifacts, host: $host, port: $port
+        model_manifest_sha256: $model_manifest_sha, artifacts: $artifacts,
+        artifact_verification: $artifact_verification, host: $host, port: $port
       }
     ') || return 1
     metal_llm_acquire_managed_lease "$identity_json" || return 1

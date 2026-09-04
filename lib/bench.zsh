@@ -494,7 +494,8 @@ metal_llm_bench() {
           --arg receipt_sha "$METAL_LLM_VERIFIED_BUILD_RECEIPT_SHA256" \
           --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
           --arg model_manifest_sha "$current_model_manifest_sha" \
-          --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" '
+          --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
+          --arg verification_receipt_sha "$METAL_LLM_ARTIFACT_RECEIPT_SET_SHA256" '
           .host == $host and .port == $port and
           .profile_id == $profile and .runtime_alias == $runtime_alias and
           .context == $context and .vision == $vision and
@@ -503,7 +504,8 @@ metal_llm_bench() {
           .runtime_revision == $revision and .runtime_tree_sha == $tree and
           .runtime_manifest_sha256 == $manifest_sha and .build_receipt_sha256 == $receipt_sha and
           .executable_name == "llama-server" and .executable_sha256 == $executable_sha and
-          .model_manifest_sha256 == $model_manifest_sha and .artifacts == $artifacts
+          .model_manifest_sha256 == $model_manifest_sha and .artifacts == $artifacts and
+          .artifact_verification.receipt_set_sha256 == $verification_receipt_sha
         ' "$managed_identity_record" >/dev/null || {
             metal_llm_die "managed endpoint identity does not match resolved configuration at $host:$port"
             return 1
@@ -612,7 +614,8 @@ metal_llm_bench() {
           --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
           --arg model_manifest_sha "$model_manifest_sha" \
           --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
-          --arg suite "$suite_id" --arg suite_sha "$suite_sha" --argjson fixtures "$fixtures_json" '
+          --arg suite "$suite_id" --arg suite_sha "$suite_sha" --argjson fixtures "$fixtures_json" \
+          --argjson artifact_verification "$METAL_LLM_ARTIFACT_VERIFICATION_JSON" '
           {
             repository: {revision: $repository_revision, tree_sha: $repository_tree, clean: true},
             hardware: {id: $hardware, chip: $chip, unified_memory_bytes: $memory},
@@ -630,6 +633,7 @@ metal_llm_bench() {
             },
             model_manifest_sha256: $model_manifest_sha,
             artifacts: $artifacts,
+            artifact_verification: $artifact_verification,
             suite: {id: $suite, sha256: $suite_sha, fixtures: $fixtures}
           }
         ') || return 1
@@ -646,6 +650,7 @@ metal_llm_bench() {
           --arg executable_name llama-bench --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
           --arg model_manifest_sha "$model_manifest_sha" \
           --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
+          --argjson artifact_verification "$METAL_LLM_ARTIFACT_VERIFICATION_JSON" \
           --arg host "$host" --argjson port "$port" '
           {
             owner_kind: $owner_kind, model_id: $model, profile_id: null,
@@ -654,7 +659,8 @@ metal_llm_bench() {
             runtime_id: $runtime, runtime_revision: $runtime_revision, runtime_tree_sha: $runtime_tree,
             runtime_manifest_sha256: $runtime_manifest_sha, build_receipt_sha256: $receipt_sha,
             executable_name: $executable_name, executable_sha256: $executable_sha,
-            model_manifest_sha256: $model_manifest_sha, artifacts: $artifacts, host: $host, port: $port
+            model_manifest_sha256: $model_manifest_sha, artifacts: $artifacts,
+            artifact_verification: $artifact_verification, host: $host, port: $port
           }
         ') || return 1
         metal_llm_acquire_managed_lease "$identity_json" || return 1
@@ -873,7 +879,7 @@ metal_llm_bench() {
       --arg experiment_id "$compact_timestamp-$suite_id" --arg date "${now[1,10]}" \
       --arg model "$model_id" --arg suite "$suite_id" --arg mode "$mode" \
       --argjson provenance "$provenance_json" '
-      {schema_version: 1, experiment_id: ($experiment_id | ascii_downcase), date: $date,
+      {schema_version: 2, experiment_id: ($experiment_id | ascii_downcase), date: $date,
        model_id: $model, suite_id: $suite, benchmark_mode: $mode, provenance: $provenance, runs: .}
     ' "$run_buffer" > "$result_part"; then
         rm -f -- "$run_buffer" "$result_part"
