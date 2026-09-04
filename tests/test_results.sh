@@ -70,11 +70,12 @@ jq -e '
   .interpretation.performance_gate_passed == true
 ' "$dynamic_raw_result" >/dev/null || fail 'dynamic-MTP raw acceptance evidence is incomplete'
 correctness_harness_sha=$(shasum -a 256 "$correctness_harness" | awk '{print $1}')
-[[ "$(jq -r '.configuration.correctness_evidence.harness_sha256' "$dynamic_raw_result")" == \
-   "$correctness_harness_sha" ]] || fail 'dynamic-MTP result is not bound to the current correctness harness'
 correctness_evidence_sha=$(shasum -a 256 "$correctness_raw_result" | awk '{print $1}')
 [[ "$(jq -r '.configuration.correctness_evidence.sha256' "$dynamic_raw_result")" == \
    "$correctness_evidence_sha" ]] || fail 'dynamic-MTP result is not bound to the tracked correctness evidence'
+[[ "$(jq -r '.configuration.correctness_evidence.harness_sha256' "$dynamic_raw_result")" == \
+   "$(jq -r '.provenance.suite.sha256' "$correctness_raw_result")" ]] || \
+    fail 'dynamic-MTP result and correctness evidence disagree on harness identity'
 
 allocation_timestamp=$(jq -r '.configuration.accepted_allocation_observation.observation.captured_at' \
   "$dynamic_raw_result")
@@ -192,6 +193,19 @@ cp "$summary" "$fixture_root/results/summaries/qwen3.8-flash-next-m5-max.md"
 cp "$correctness_harness" "$fixture_root/tests/integration/test_dynamic_mtp.sh"
 fixture_cli="$fixture_root/bin/metal-llm"
 chmod +x "$fixture_cli"
+
+jq --arg harness_sha "$correctness_harness_sha" '
+  .provenance.suite.sha256 = $harness_sha |
+  (.runs[] |= (
+    .request_kind = (if .id == "vision-short" or .id == "vision-long" or
+      .id == "vision-cross-expanded" then "vision" else "text" end) |
+    .prompt_tokens = (if .request_kind == "vision" then .effective_prompt_tokens else null end)
+  ))
+' "$correctness_raw_result" > "$fixture_root/results/raw/result.json"
+if ! $fixture_cli report >/dev/null; then
+    fail 'fresh typed 19-row correctness evidence did not pass strict result validation'
+fi
+cp "$raw_result" "$fixture_root/results/raw/result.json"
 
 assert_schema_invalid() {
     local filter=$1

@@ -7,6 +7,180 @@ root=${0:A:h:h:h}
 METAL_LLM_ROOT=$root
 export METAL_LLM_ROOT
 
+fail() {
+    print -u2 -- "dynamic-MTP integration: $1"
+    return 1
+}
+
+extract_timing() {
+    local response=$1 streaming=$2 parsed signatures
+    if [[ "$streaming" == true ]]; then
+        parsed=$(jq -Rsce '
+          [splits("\n") | rtrimstr("\r") | select(startswith("data:")) |
+           sub("^data:[ ]?"; "") | select(length > 0 and . != "[DONE]") | fromjson] |
+          select(length > 0)
+        ' <<< "$response") || fail 'invalid streaming response'
+        jq -e 'last | .timings | type == "object"' <<< "$parsed" >/dev/null || \
+            fail 'stream has no terminal timing metadata'
+        signatures=$(jq -c '[.[] | select(.timings? != null) | .timings |
+          {speculative, speculative_policy, effective_prompt_tokens, speculative_threshold}]' \
+          <<< "$parsed")
+        jq -e 'length > 0 and (unique | length) == 1' <<< "$signatures" >/dev/null || \
+            fail 'stream changed route metadata'
+        jq -c 'last.timings' <<< "$parsed"
+    else
+        jq -ce 'select(type == "object") | .timings | select(type == "object")' <<< "$response" || \
+            fail 'non-streaming response has no timing metadata'
+    fi
+}
+
+extract_usage_prompt_tokens() {
+    local response=$1 streaming=$2 parsed
+    if [[ "$streaming" == true ]]; then
+        parsed=$(jq -Rsce '
+          [splits("\n") | rtrimstr("\r") | select(startswith("data:")) |
+           sub("^data:[ ]?"; "") | select(length > 0 and . != "[DONE]") | fromjson] |
+          select(length > 0)
+        ' <<< "$response") || fail 'invalid streaming response usage'
+        jq -cer '
+          ([.[] | select(has("usage")) | .usage] | last // {}) as $usage |
+          select($usage | type == "object") |
+          (if ($usage | has("prompt_tokens")) then $usage.prompt_tokens else null end) |
+          select(. == null or (type == "number" and floor == . and . >= 0))
+        ' <<< "$parsed" || fail 'stream has invalid prompt-token usage'
+    else
+        jq -cer '
+          select(type == "object") |
+          (if has("usage") then .usage else {} end) as $usage |
+          select($usage | type == "object") |
+          (if ($usage | has("prompt_tokens")) then $usage.prompt_tokens else null end) |
+          select(. == null or (type == "number" and floor == . and . >= 0))
+        ' <<< "$response" || fail 'non-streaming response has invalid prompt-token usage'
+    fi
+}
+
+append_validated_run() {
+    local case_id=$1 response=$2 streaming=$3 case_kind=$4 expected_count=$5 expected_route=$6
+    local max_tokens=$7 notes=$8 endpoint=$9 payload_sha=${10}
+    local timing usage_prompt_tokens request_kind speculative effective draft_n accepted output_sha
+    timing=$(extract_timing "$response" "$streaming")
+    usage_prompt_tokens=$(extract_usage_prompt_tokens "$response" "$streaming")
+    [[ "$case_kind" == vision ]] && request_kind=vision || request_kind=text
+    metal_llm_validate_endpoint_timing "$timing" dynamic "$threshold" "$case_kind" 1024 \
+      "$usage_prompt_tokens" || {
+        fail "$case_id has route metadata inconsistent with the managed policy"
+        return 1
+    }
+    speculative=$(metal_llm_extract_speculative_route "$timing") || \
+        fail "$case_id has no boolean speculative route"
+    effective=$(jq -er '.effective_prompt_tokens' <<< "$timing") || \
+        fail "$case_id has no effective prompt-token count"
+    if [[ "$expected_count" != any && "$effective" != "$expected_count" ]]; then
+        fail "$case_id reported $effective effective tokens, expected $expected_count"
+    fi
+    if [[ "$expected_route" == on && "$speculative" != true ]] ||
+       [[ "$expected_route" == off && "$speculative" != false ]]; then
+        fail "$case_id selected the wrong fixed route"
+    fi
+    if [[ "$speculative" == true ]]; then
+        metal_llm_validate_speculative_draft_statistics "$timing" || \
+            fail "$case_id lacks valid speculative draft statistics"
+        draft_n=$(jq -er '.draft_n' <<< "$timing") || \
+            fail "$case_id has no speculative draft count"
+        accepted=$(jq -er '.draft_n_accepted' <<< "$timing") || \
+            fail "$case_id has no accepted speculative draft count"
+    else
+        jq -e '
+          ((.draft_n // 0) == 0) and ((.draft_n_accepted // 0) == 0)
+        ' <<< "$timing" >/dev/null || fail "$case_id collected draft statistics on the conventional route"
+        draft_n=0
+        accepted=0
+    fi
+    output_sha=$(print -rn -- "$response" | shasum -a 256 | awk '{print $1}') || \
+        fail "$case_id response could not be hashed"
+    jq -cn \
+      --arg id "$case_id" --arg request_kind "$request_kind" \
+      --arg timestamp "$integration_timestamp" \
+      --arg repository "$repository_revision" --arg hardware "$hardware_id" \
+      --arg runtime "$runtime_id" --arg runtime_revision "$METAL_LLM_VERIFIED_RUNTIME_REVISION" \
+      --argjson context "$context" --argjson selected "$speculative" \
+      --argjson prompt "$usage_prompt_tokens" \
+      --argjson effective "$effective" --argjson threshold "$threshold" \
+      --argjson max_tokens "$max_tokens" --arg sha "$output_sha" \
+      --argjson draft "$draft_n" --argjson accepted "$accepted" \
+      --arg endpoint "$endpoint" --arg payload_sha "$payload_sha" --arg notes "$notes" '
+      {
+        id: $id, experiment: "dynamic-mtp-acceptance", measurement_kind: "single_run",
+        request_kind: $request_kind,
+        timestamp: $timestamp, repository_revision: $repository,
+        hardware_id: $hardware, runtime_id: $runtime, runtime_revision: $runtime_revision,
+        profile: null, profile_id: "auto", runtime_alias: "tuned", context: $context,
+        vision: true, mtp_policy: "dynamic", mtp_selected: $selected,
+        mtp_threshold: $threshold, prompt_tokens: $prompt, effective_prompt_tokens: $effective,
+        generated_tokens: null, prompt_tokens_per_second: null,
+        generation_tokens_per_second: null, output_sha256: $sha,
+        draft_acceptance: (($accepted | tostring) + "/" + ($draft | tostring)),
+        command: ["curl", "POST", $endpoint, ("payload-sha256:" + $payload_sha)],
+        generation_settings: {temperature: 0, seed: 1234, max_tokens: $max_tokens, reasoning: false, draft_n_max: 2},
+        notes: $notes
+      }
+    ' >> "$run_buffer" || fail "$case_id validated run could not be recorded"
+    typeset -g LAST_EFFECTIVE=$effective
+    typeset -g LAST_SPECULATIVE=$speculative
+}
+
+dynamic_mtp_correctness_collector_self_test() {
+    local run_buffer integration_timestamp repository_revision hardware_id runtime_id context threshold
+    local METAL_LLM_VERIFIED_RUNTIME_REVISION response invalid_response rows
+    run_buffer=$(mktemp "${TMPDIR:-/tmp}/metal-llm-dynamic-mtp-self-test.XXXXXX") || return 1
+    integration_timestamp=2026-09-04T00:00:00Z
+    repository_revision=1111111111111111111111111111111111111111
+    hardware_id=apple-m5-max-128gb
+    runtime_id=llama-cpp-qwen38-hybrid
+    METAL_LLM_VERIFIED_RUNTIME_REVISION=2222222222222222222222222222222222222222
+    context=262144
+    threshold=32768
+
+    response='{"usage":{"prompt_tokens":33},"timings":{"speculative":true,"speculative_policy":"dynamic","effective_prompt_tokens":33,"speculative_threshold":32768,"draft_n":2,"draft_n_accepted":1}}'
+    append_validated_run self-test-text "$response" false api 33 on 1 \
+      'Collector self-test text row.' /completion 3333333333333333333333333333333333333333333333333333333333333333 || return 1
+    response='{"usage":{"prompt_tokens":32769},"timings":{"speculative":false,"speculative_policy":"dynamic","effective_prompt_tokens":32769,"speculative_threshold":32768,"draft_n":0,"draft_n_accepted":0}}'
+    append_validated_run self-test-vision "$response" false vision 32769 off 1 \
+      'Collector self-test vision row.' /v1/chat/completions 4444444444444444444444444444444444444444444444444444444444444444 || return 1
+
+    invalid_response='{"usage":{"prompt_tokens":32768},"timings":{"speculative":false,"speculative_policy":"dynamic","effective_prompt_tokens":32769,"speculative_threshold":32768,"draft_n":0,"draft_n_accepted":0}}'
+    if append_validated_run self-test-substituted "$invalid_response" false vision 32769 off 1 \
+      'Collector self-test substituted row.' /v1/chat/completions \
+      5555555555555555555555555555555555555555555555555555555555555555 2>/dev/null; then
+        rm -f -- "$run_buffer"
+        fail 'collector accepted substituted text-only prompt usage for a vision route'
+        return 1
+    fi
+
+    rows=$(jq -s . "$run_buffer") || return 1
+    jq -e '
+      length == 2 and
+      .[0].request_kind == "text" and .[0].prompt_tokens == 33 and
+      .[1].request_kind == "vision" and .[1].prompt_tokens == 32769 and
+      .[1].effective_prompt_tokens == 32769 and .[1].mtp_selected == false
+    ' <<< "$rows" >/dev/null || {
+        rm -f -- "$run_buffer"
+        fail 'collector did not serialize typed request kind and prompt usage'
+        return 1
+    }
+    rm -f -- "$run_buffer"
+    print -- 'dynamic-MTP correctness collector self-test: PASS'
+}
+
+if [[ "${1:-}" == --self-test ]]; then
+    (( $# == 1 )) || fail 'usage: test_dynamic_mtp.sh --self-test'
+    source "$root/lib/common.zsh"
+    source "$root/lib/bench.zsh"
+    source "$root/tests/integration/dynamic_mtp_helpers.zsh"
+    dynamic_mtp_correctness_collector_self_test
+    exit $?
+fi
+
 if [[ "${METAL_LLM_INTEGRATION:-0}" != 1 ]]; then
     print -- 'SKIP: dynamic-MTP integration requires METAL_LLM_INTEGRATION=1'
     exit 0
@@ -20,11 +194,6 @@ source "$root/lib/managed-process.zsh"
 source "$root/lib/bench.zsh"
 source "$root/lib/report.zsh"
 source "$root/tests/integration/dynamic_mtp_helpers.zsh"
-
-fail() {
-    print -u2 -- "dynamic-MTP integration: $1"
-    return 1
-}
 
 for required_command in git jq curl shasum system_profiler uname ps awk base64; do
     command -v "$required_command" >/dev/null 2>&1 || fail "missing required command: $required_command"
@@ -247,90 +416,6 @@ curl "${health_arguments[@]}" "http://$host:$port/health" >/dev/null 2>&1 || \
 typeset -a post_arguments
 post_arguments=(-fsS --connect-timeout 5 --max-time 900 -H 'Content-Type: application/json')
 [[ -z "${METAL_LLM_API_KEY:-}" ]] || post_arguments+=(-H "Authorization: Bearer $METAL_LLM_API_KEY")
-
-extract_timing() {
-    local response=$1 streaming=$2 parsed signatures
-    if [[ "$streaming" == true ]]; then
-        parsed=$(jq -Rsce '
-          [splits("\n") | rtrimstr("\r") | select(startswith("data:")) |
-           sub("^data:[ ]?"; "") | select(length > 0 and . != "[DONE]") | fromjson] |
-          select(length > 0)
-        ' <<< "$response") || fail 'invalid streaming response'
-        jq -e 'last | .timings | type == "object"' <<< "$parsed" >/dev/null || \
-            fail 'stream has no terminal timing metadata'
-        signatures=$(jq -c '[.[] | select(.timings? != null) | .timings |
-          {speculative, speculative_policy, effective_prompt_tokens, speculative_threshold}]' \
-          <<< "$parsed")
-        jq -e 'length > 0 and (unique | length) == 1' <<< "$signatures" >/dev/null || \
-            fail 'stream changed route metadata'
-        jq -c 'last.timings' <<< "$parsed"
-    else
-        jq -ce 'select(type == "object") | .timings | select(type == "object")' <<< "$response" || \
-            fail 'non-streaming response has no timing metadata'
-    fi
-}
-
-append_validated_run() {
-    local case_id=$1 response=$2 streaming=$3 case_kind=$4 expected_count=$5 expected_route=$6
-    local max_tokens=$7 notes=$8 endpoint=$9 payload_sha=${10}
-    local timing speculative effective draft_n accepted output_sha
-    timing=$(extract_timing "$response" "$streaming")
-    metal_llm_validate_endpoint_timing "$timing" dynamic "$threshold" "$case_kind" 1024 || \
-        fail "$case_id has route metadata inconsistent with the managed policy"
-    speculative=$(metal_llm_extract_speculative_route "$timing") || \
-        fail "$case_id has no boolean speculative route"
-    effective=$(jq -er '.effective_prompt_tokens' <<< "$timing") || \
-        fail "$case_id has no effective prompt-token count"
-    if [[ "$expected_count" != any && "$effective" != "$expected_count" ]]; then
-        fail "$case_id reported $effective effective tokens, expected $expected_count"
-    fi
-    if [[ "$expected_route" == on && "$speculative" != true ]] ||
-       [[ "$expected_route" == off && "$speculative" != false ]]; then
-        fail "$case_id selected the wrong fixed route"
-    fi
-    if [[ "$speculative" == true ]]; then
-        metal_llm_validate_speculative_draft_statistics "$timing" || \
-            fail "$case_id lacks valid speculative draft statistics"
-        draft_n=$(jq -er '.draft_n' <<< "$timing") || \
-            fail "$case_id has no speculative draft count"
-        accepted=$(jq -er '.draft_n_accepted' <<< "$timing") || \
-            fail "$case_id has no accepted speculative draft count"
-    else
-        jq -e '
-          ((.draft_n // 0) == 0) and ((.draft_n_accepted // 0) == 0)
-        ' <<< "$timing" >/dev/null || fail "$case_id collected draft statistics on the conventional route"
-        draft_n=0
-        accepted=0
-    fi
-    output_sha=$(print -rn -- "$response" | shasum -a 256 | awk '{print $1}') || \
-        fail "$case_id response could not be hashed"
-    jq -cn \
-      --arg id "$case_id" --arg timestamp "$integration_timestamp" \
-      --arg repository "$repository_revision" --arg hardware "$hardware_id" \
-      --arg runtime "$runtime_id" --arg runtime_revision "$METAL_LLM_VERIFIED_RUNTIME_REVISION" \
-      --argjson context "$context" --argjson selected "$speculative" \
-      --argjson effective "$effective" --argjson threshold "$threshold" \
-      --argjson max_tokens "$max_tokens" --arg sha "$output_sha" \
-      --argjson draft "$draft_n" --argjson accepted "$accepted" \
-      --arg endpoint "$endpoint" --arg payload_sha "$payload_sha" --arg notes "$notes" '
-      {
-        id: $id, experiment: "dynamic-mtp-acceptance", measurement_kind: "single_run",
-        timestamp: $timestamp, repository_revision: $repository,
-        hardware_id: $hardware, runtime_id: $runtime, runtime_revision: $runtime_revision,
-        profile: null, profile_id: "auto", runtime_alias: "tuned", context: $context,
-        vision: true, mtp_policy: "dynamic", mtp_selected: $selected,
-        mtp_threshold: $threshold, prompt_tokens: null, effective_prompt_tokens: $effective,
-        generated_tokens: null, prompt_tokens_per_second: null,
-        generation_tokens_per_second: null, output_sha256: $sha,
-        draft_acceptance: (($accepted | tostring) + "/" + ($draft | tostring)),
-        command: ["curl", "POST", $endpoint, ("payload-sha256:" + $payload_sha)],
-        generation_settings: {temperature: 0, seed: 1234, max_tokens: $max_tokens, reasoning: false, draft_n_max: 2},
-        notes: $notes
-      }
-    ' >> "$run_buffer" || fail "$case_id validated run could not be recorded"
-    typeset -g LAST_EFFECTIVE=$effective
-    typeset -g LAST_SPECULATIVE=$speculative
-}
 
 post_case() {
     local case_id=$1 endpoint=$2 payload=$3 streaming=$4 case_kind=$5 expected_count=$6

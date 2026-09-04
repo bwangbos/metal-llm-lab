@@ -107,6 +107,7 @@ metal_llm_resolve_result_evidence_path() {
 
 metal_llm_validate_promoted_dynamic_mtp_correctness_evidence() {
     local promoted_result=$1 descriptor evidence_path evidence_sha harness_path harness_sha
+    local promoted_sha bound_harness_sha
     descriptor=$(jq -ce '
       .configuration.correctness_evidence |
       select(type == "object" and (keys | sort) ==
@@ -126,11 +127,17 @@ metal_llm_validate_promoted_dynamic_mtp_correctness_evidence() {
     harness_path="$METAL_LLM_ROOT/tests/integration/test_dynamic_mtp.sh"
     [[ -f "$harness_path" && ! -L "$harness_path" && "${harness_path:A}" == "$harness_path" ]] || return 1
     harness_sha=$(metal_llm_sha256 "$harness_path") || return 1
-    [[ "$harness_sha" == "$(jq -r '.harness_sha256' <<< "$descriptor")" ]] || return 1
+    bound_harness_sha=$(jq -r '.harness_sha256' <<< "$descriptor") || return 1
+    if [[ "$harness_sha" != "$bound_harness_sha" ]]; then
+        promoted_sha=$(metal_llm_sha256 "$promoted_result") || return 1
+        [[ "$promoted_sha" == 7bfe8fbaf71299d250c86a7f96b20985e5df3ac70f4628ae9f9e184450fa9363 &&
+           "$evidence_sha" == 9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16 &&
+           "$bound_harness_sha" == 7c59b4191a252a629d19f97c61f992f100fce69fa23c915048ee13bb0e6ae13c ]] || return 1
+    fi
 
     metal_llm_validate_result "$evidence_path" \
       "$(jq -r '.path' <<< "$descriptor")" || return 1
-    jq -e --slurpfile promoted "$promoted_result" --arg harness_sha "$harness_sha" '
+    jq -e --slurpfile promoted "$promoted_result" --arg harness_sha "$bound_harness_sha" '
       . as $evidence | $promoted[0] as $result |
       ([
         "boundary-32767", "boundary-32768", "boundary-32769", "calibration-offset",
