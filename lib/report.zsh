@@ -245,7 +245,7 @@ metal_llm_validate_result() {
         matches_common_provenance($provenance) and
         .mtp_policy == $provenance.mtp_policy and .mtp_threshold == $provenance.mtp_threshold;
       def multi_policy_endpoint_acceptance:
-        .model_id == "qwen3.8-flash-next" and
+        .model_id == "qwen3.8-flash-next" and .suite_id == "dynamic-mtp-performance" and
         .configuration.acceptance_variant == "multi-policy-endpoint" and
         .configuration.mtp_policies == ["on", "off", "dynamic"] and
         .configuration.dynamic_threshold == 32768 and
@@ -310,7 +310,8 @@ metal_llm_validate_result() {
         return 1
     }
 
-    if [[ "$(jq -r '.suite_id // empty' "$result_file")" == dynamic-mtp-performance ]]; then
+    if [[ "$(jq -r '.configuration.acceptance_variant // empty' "$result_file")" == \
+        multi-policy-endpoint ]]; then
         metal_llm_validate_dynamic_mtp_derived_data "$result_file" || {
             metal_llm_die "invalid dynamic-MTP derived data: $result_label"
             return 1

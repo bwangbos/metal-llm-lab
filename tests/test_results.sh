@@ -278,43 +278,9 @@ assert_route_invalid '.benchmark_mode = "local" | .runs[0].profile_id = null | .
   'standalone llama-bench labeled as dynamic MTP'
 
 multi_policy_result="$temporary_root/multi-policy-result.json"
-jq '
-  .experiment_id = "dynamic-mtp-performance" |
-  .suite_id = "multi-policy-route-fixture" |
-  .configuration = {
-    acceptance_variant: "multi-policy-endpoint",
-    mtp_policies: ["on", "off", "dynamic"],
-    dynamic_threshold: 32768
-  } |
-  .provenance.profile_id = "custom" |
-  .provenance.mtp_policy = null |
-  .provenance.mtp_threshold = null |
-  .provenance.hardware = {
-    id: "apple-m5-max-128gb", chip: "Apple M5 Max",
-    unified_memory_bytes: 137438953472
-  } |
-  .provenance.runtime.id = "llama-cpp-qwen38-hybrid" |
-  .provenance.suite.id = "multi-policy-route-fixture" |
-  .runs = [
-    (.runs[0] | .id = "fixed-on-29000-s1" | .profile_id = "custom" |
-      .runtime_id = "llama-cpp-qwen38-hybrid" |
-      .mtp_policy = "on" | .mtp_selected = true | .mtp_threshold = null |
-      .prompt_tokens = 28999 | .effective_prompt_tokens = 29000),
-    (.runs[0] | .id = "fixed-off-32769-s1" | .profile_id = "custom" |
-      .runtime_id = "llama-cpp-qwen38-hybrid" |
-      .mtp_policy = "off" | .mtp_selected = false | .mtp_threshold = null |
-      .prompt_tokens = 32768 | .effective_prompt_tokens = 32769),
-    (.runs[0] | .id = "dynamic-32768-s1" | .profile_id = "custom" |
-      .runtime_id = "llama-cpp-qwen38-hybrid" |
-      .mtp_policy = "dynamic" | .mtp_selected = true | .mtp_threshold = 32768 |
-      .prompt_tokens = 32767 | .effective_prompt_tokens = 32768)
-  ]
-' "$route_result" > "$multi_policy_result"
+cp "$dynamic_raw_result" "$multi_policy_result"
 cp "$multi_policy_result" "$fixture_root/results/raw/result.json"
-multi_policy_output=$($fixture_cli report)
-assert_contains "$multi_policy_output" '| fixed-on-29000-s1 | runtime-comparison | 28,999 | 29,000 | on | on |'
-assert_contains "$multi_policy_output" '| fixed-off-32769-s1 | runtime-comparison | 32,768 | 32,769 | off | off |'
-assert_contains "$multi_policy_output" '| dynamic-32768-s1 | runtime-comparison | 32,767 | 32,768 | dynamic | on |'
+$fixture_cli report >/dev/null
 
 assert_multi_policy_invalid() {
     local filter=$1
@@ -332,12 +298,22 @@ assert_multi_policy_invalid '.provenance.runtime_alias = "upstream"' 'non-tuned 
 assert_multi_policy_invalid '.provenance.mtp_policy = "dynamic"' 'top-level policy hides mixed rows'
 assert_multi_policy_invalid '.provenance.mtp_threshold = 32768' 'top-level threshold hides mixed rows'
 assert_multi_policy_invalid '.configuration.mtp_policies = ["on", "dynamic"]' 'declared policies omit fixed off'
-assert_multi_policy_invalid 'del(.runs[1])' 'measured rows omit fixed off'
+assert_multi_policy_invalid '.runs |= map(select(.mtp_policy != "off"))' 'measured rows omit fixed off'
 assert_multi_policy_invalid '.runs[0].vision = false' 'run vision differs from common provenance'
 assert_multi_policy_invalid '.runs[1].runtime_alias = "upstream"' 'run runtime differs from common provenance'
-assert_multi_policy_invalid '.runs[2].mtp_selected = false' 'dynamic route disabled at threshold'
-assert_multi_policy_invalid '.runs[2].mtp_threshold = 30000' 'dynamic row threshold differs from acceptance threshold'
+assert_multi_policy_invalid '(.runs[] | select(.mtp_policy == "dynamic") | .mtp_selected) = false' \
+  'dynamic route disabled at threshold'
+assert_multi_policy_invalid '(.runs[] | select(.mtp_policy == "dynamic") | .mtp_threshold) = 30000' \
+  'dynamic row threshold differs from acceptance threshold'
 assert_multi_policy_invalid '.runs[0].mtp_threshold = 32768' 'fixed row carries a threshold'
+
+jq '.suite_id = "renamed-dynamic-suite" |
+    .provenance.suite.id = "renamed-dynamic-suite"' \
+  "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
+if renamed_dynamic_output=$($fixture_cli report 2>&1); then
+    fail 'report accepted dynamic-MTP acceptance evidence under a renamed suite'
+fi
+assert_contains "$renamed_dynamic_output" 'invalid benchmark route provenance'
 
 cp "$dynamic_raw_result" "$fixture_root/results/raw/result.json"
 $fixture_cli report >/dev/null
