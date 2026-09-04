@@ -27,6 +27,7 @@ for required_text in \
   'samples_per_cell=5' \
   'throughput_tolerance_percent=5' \
   'generated_tokens=128' \
+  'source "$root/lib/setup.zsh"' \
   'cache_prompt: false' \
   'temperature: 0' \
   'seed: 1234' \

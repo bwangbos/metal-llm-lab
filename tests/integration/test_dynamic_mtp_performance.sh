@@ -14,6 +14,7 @@ fi
 
 source "$root/lib/common.zsh"
 source "$root/lib/profile.zsh"
+source "$root/lib/setup.zsh"
 source "$root/lib/runtime-state.zsh"
 source "$root/lib/managed-process.zsh"
 source "$root/lib/bench.zsh"
