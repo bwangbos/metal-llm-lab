@@ -6,6 +6,7 @@ METAL_LLM_ROOT=${0:A:h:h}
 export METAL_LLM_ROOT
 
 source "$METAL_LLM_ROOT/lib/common.zsh"
+source "$METAL_LLM_ROOT/lib/artifact-verification.zsh"
 source "$METAL_LLM_ROOT/lib/doctor.zsh"
 source "$METAL_LLM_ROOT/lib/profile.zsh"
 source "$METAL_LLM_ROOT/lib/setup.zsh"
