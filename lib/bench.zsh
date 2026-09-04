@@ -1,7 +1,7 @@
 metal_llm_bench_usage() {
-    metal_llm_error 'usage: metal-llm bench MODEL --suite SUITE [--mode local] [--runtime tuned|upstream] [--dry-run]'
-    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint [--profile auto|fast|long|stable] [--vision on|off] [--dry-run]'
-    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--dry-run]'
+    metal_llm_error 'usage: metal-llm bench MODEL --suite SUITE [--mode local] [--runtime tuned|upstream] [--artifact-check cached|full] [--dry-run]'
+    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint [--profile auto|fast|long|stable] [--vision on|off] [--artifact-check cached|full] [--dry-run]'
+    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--artifact-check cached|full] [--dry-run]'
     return 2
 }
 
@@ -257,9 +257,10 @@ metal_llm_validate_endpoint_timing() {
 
 metal_llm_bench() {
     local model_id='' suite_id='' mode='' dry_run=0 argument
+    local artifact_check=cached
     local requested_profile='' requested_vision='' requested_runtime=''
     local requested_mtp='' requested_context=''
-    local profile_seen=0 vision_seen=0 runtime_seen=0 mtp_seen=0 context_seen=0
+    local profile_seen=0 vision_seen=0 runtime_seen=0 mtp_seen=0 context_seen=0 artifact_check_seen=0
     while (( $# > 0 )); do
         argument=$1
         shift
@@ -268,6 +269,16 @@ metal_llm_bench() {
                 (( dry_run == 0 )) || { metal_llm_bench_usage; return $?; }
                 dry_run=1
                 ;;
+            --artifact-check)
+                (( $# > 0 && artifact_check_seen == 0 )) || { metal_llm_bench_usage; return $?; }
+                case "$1" in
+                    cached|full) artifact_check=$1 ;;
+                    *) metal_llm_bench_usage; return $? ;;
+                esac
+                artifact_check_seen=1
+                shift
+                ;;
+            --artifact-check=*) metal_llm_bench_usage; return $? ;;
             --suite)
                 (( $# > 0 )) || { metal_llm_bench_usage; return $?; }
                 [[ -z "$suite_id" ]] || { metal_llm_bench_usage; return $?; }
@@ -441,19 +452,18 @@ metal_llm_bench() {
         metal_llm_die "invalid runtime manifest: $runtime_manifest"
         return 1
     }
+    local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
+    metal_llm_artifact_verification_begin "$artifact_check" "$dry_run" || return 1
+    metal_llm_verify_configuration_artifacts "$model_manifest" "$model_id" "$artifact_dir" \
+      "$artifact_configuration" || return 1
+    metal_llm_artifact_verification_finalize 1 || return 1
     local bench_executable='' model_path=''
     if [[ "$mode" == local ]]; then
         metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-bench || return 1
         bench_executable=$METAL_LLM_VERIFIED_EXECUTABLE
-        local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
-        metal_llm_profile_artifact_identities "$model_manifest" "$artifact_dir" \
-          "$artifact_configuration" || return 1
         model_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$model_artifact_id") || return 1
     elif (( dry_run == 0 )); then
         metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-server || return 1
-        local endpoint_artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
-        metal_llm_profile_artifact_identities "$model_manifest" "$endpoint_artifact_dir" \
-          "$artifact_configuration" || return 1
     fi
 
     [[ -z "${METAL_LLM_HARDWARE_ID:-}" ]] || {
@@ -652,6 +662,7 @@ metal_llm_bench() {
         trap "metal_llm_release_managed_lease '$managed_owner_token'" EXIT
         trap "metal_llm_release_managed_lease '$managed_owner_token'; exit 130" HUP INT TERM
     fi
+    metal_llm_print_artifact_verification_summary || return 1
     local run_buffer
     run_buffer=$(mktemp "${TMPDIR:-/tmp}/metal-llm-bench-runs.XXXXXX") || return 1
     : > "$run_buffer"

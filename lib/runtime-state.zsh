@@ -1,37 +1,19 @@
 metal_llm_artifact_path() {
-    local manifest=$1
-    local artifact_dir=$2
-    local artifact_id=$3
-    local artifact_record artifact_filename expected_bytes expected_sha artifact_path actual_bytes actual_sha
+    metal_llm_verified_artifact_path "$3"
+}
 
-    artifact_record=$(jq -er --arg id "$artifact_id" '
-        first(.artifacts[] | select(.id == $id)) |
-        [.filename, (.bytes | tostring), .sha256] | @tsv
-    ' "$manifest" 2>/dev/null) || {
-        metal_llm_die "artifact not found in manifest: $artifact_id"
-        return 1
-    }
-    IFS=$'\t' read -r artifact_filename expected_bytes expected_sha <<< "$artifact_record"
-    artifact_path="$artifact_dir/$artifact_filename"
-    [[ -e "$artifact_path" ]] || {
-        metal_llm_die "artifact is missing: $artifact_id ($artifact_path)"
-        return 1
-    }
-    [[ -f "$artifact_path" && ! -L "$artifact_path" ]] || {
-        metal_llm_die "artifact is not a regular file: $artifact_id ($artifact_path)"
-        return 1
-    }
-    actual_bytes=$(metal_llm_file_size "$artifact_path") || return 1
-    [[ "$actual_bytes" == "$expected_bytes" ]] || {
-        metal_llm_die "byte count mismatch for $artifact_id: expected $expected_bytes, got $actual_bytes"
-        return 1
-    }
-    actual_sha=$(metal_llm_sha256 "$artifact_path") || return 1
-    [[ "$actual_sha" == "$expected_sha" ]] || {
-        metal_llm_die "checksum mismatch for $artifact_id: expected $expected_sha, got $actual_sha"
-        return 1
-    }
-    print -- "$artifact_path"
+# Deprecated compatibility entry point for direct library consumers. Command
+# paths own their verification session and call the shared verifier directly.
+metal_llm_profile_artifact_identities() {
+    local runtime_state_source=${functions_source[metal_llm_profile_artifact_identities]}
+    (( $+functions[metal_llm_artifact_verification_begin] )) || \
+        source "${runtime_state_source:A:h}/artifact-verification.zsh"
+    local manifest=$1 artifact_dir=$2 configuration=$3 model_id
+    model_id=$(jq -er '.id' "$manifest") || return 1
+    metal_llm_artifact_verification_begin full 1 || return 1
+    metal_llm_verify_configuration_artifacts "$manifest" "$model_id" "$artifact_dir" \
+        "$configuration" || return 1
+    metal_llm_artifact_verification_finalize 1
 }
 
 metal_llm_detect_hardware_manifest() {
@@ -78,44 +60,6 @@ metal_llm_detect_hardware_manifest() {
     METAL_LLM_DETECTED_HARDWARE_ID=$(jq -er '.id' "$METAL_LLM_DETECTED_HARDWARE_MANIFEST") || return 1
     typeset -g METAL_LLM_DETECTED_CHIP="$chip"
     typeset -g METAL_LLM_DETECTED_MEMORY_BYTES="$memory_bytes"
-}
-
-metal_llm_profile_artifact_identities() {
-    local manifest=$1
-    local artifact_dir=$2
-    local normalized_configuration=$3
-    local artifact_id identities
-    typeset -a artifact_ids
-
-    jq -e 'type == "object"' <<< "$normalized_configuration" >/dev/null 2>&1 || {
-        metal_llm_die 'artifact identity requires normalized configuration JSON'
-        return 1
-    }
-    jq -e '.schema_version == 2' "$manifest" >/dev/null 2>&1 || {
-        metal_llm_die 'normalized artifact identity requires a schema-v2 model manifest'
-        return 1
-    }
-    artifact_ids=("${(@f)$(jq -er --argjson configuration "$normalized_configuration" '
-      reduce (
-        .text_model.artifact_ids[] ,
-        (if $configuration.vision.enabled then
-          $configuration.vision.projector_artifact_id else empty end),
-        (if $configuration.mtp.policy != "off" then
-          $configuration.mtp.artifact_id else empty end)
-      ) as $id ([]; if index($id) then . else . + [$id] end)[]
-    ' "$manifest")}") || return 1
-    (( ${#artifact_ids} > 0 )) || {
-        metal_llm_die 'effective configuration has no model artifacts'
-        return 1
-    }
-    for artifact_id in "${artifact_ids[@]}"; do
-        metal_llm_artifact_path "$manifest" "$artifact_dir" "$artifact_id" >/dev/null || return 1
-    done
-    identities=$(jq -c --argjson ids "$(jq -cn --args '$ARGS.positional' -- "${artifact_ids[@]}")" '
-      [.artifacts[] | select(.id as $id | $ids | index($id)) |
-        {id: .id, bytes: .bytes, sha256: .sha256}]
-    ' "$manifest") || return 1
-    typeset -g METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES="$identities"
 }
 
 metal_llm_verify_runtime_source_checkout() {

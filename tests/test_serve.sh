@@ -18,6 +18,15 @@ assert_equals() {
     [[ "$actual" == "$expected" ]] || fail "expected:\n$expected\nactual:\n$actual"
 }
 
+assert_count() {
+    local haystack=$1
+    local needle=$2
+    local expected=$3
+    local actual
+    actual=$(print -r -- "$haystack" | /usr/bin/grep -F -c -- "$needle" || true)
+    (( actual == expected )) || fail "expected $expected occurrences of '$needle', got $actual"
+}
+
 assert_passthrough_rejected() {
     local description=$1
     shift
@@ -188,7 +197,14 @@ print -- "fixture-start-$pid"
 EOF
 chmod +x "$fake_bin/uname" "$fake_bin/system_profiler" "$fake_bin/ps"
 ln -s "$real_jq" "$fake_bin/jq"
-ln -s "$real_shasum" "$fake_bin/shasum"
+cat > "$fake_bin/shasum" <<EOF
+#!/bin/zsh
+for argument in "\$@"; do
+  [[ "\$argument" == *.gguf ]] && print -r -- "\$argument" >> "\${SERVE_TEST_ARTIFACT_HASH_LOG:?}"
+done
+exec "$real_shasum" "\$@"
+EOF
+chmod +x "$fake_bin/shasum"
 test_path="$fake_bin:/bin:/usr/bin"
 cli="$fixture_root/bin/metal-llm"
 model_path="$artifact_dir/model.gguf"
@@ -201,32 +217,50 @@ common_hybrid="command: $hybrid_server -m $model_path -ngl all -fit off -fa on -
 network_defaults='-np 1 --host 127.0.0.1 --port 8080'
 mtp_flags="--spec-draft-model $mtp_path --spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-ngl all"
 dynamic_threshold='--spec-draft-max-prompt-tokens 32768'
+export SERVE_TEST_ARTIFACT_HASH_LOG="$temporary_root/artifact-hashes.log"
+: > "$SERVE_TEST_ARTIFACT_HASH_LOG"
 
 lab_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
 auto_output=$(PATH="$test_path" "$cli" serve fixture-model --dry-run)
-assert_equals "$auto_output" "$common_hybrid -c 262144 $network_defaults -mm $projector_path --image-min-tokens 1024 $mtp_flags $dynamic_threshold"
+assert_contains "$auto_output" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=3 full_hashes=3'
+assert_contains "$auto_output" "$common_hybrid -c 262144 $network_defaults -mm $projector_path --image-min-tokens 1024 $mtp_flags $dynamic_threshold"
+assert_count "$auto_output" 'artifact verification:' 1
+assert_equals "$(wc -l < "$SERVE_TEST_ARTIFACT_HASH_LOG" | tr -d ' ')" 3
+for required_path in "$model_path" "$projector_path" "$mtp_path"; do
+    assert_count "$(<"$SERVE_TEST_ARTIFACT_HASH_LOG")" "${required_path:A}" 1
+done
 [[ ! -e "$managed_tmp/metal-llm-lab" ]] || fail 'serve --dry-run wrote managed lease state'
 lab_after=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
 assert_equals "$lab_after" "$lab_before"
 
 fast_output=$(PATH="$test_path" "$cli" serve fixture-model --profile fast --dry-run)
-assert_equals "$fast_output" "$common_hybrid -c 32768 $network_defaults -mm $projector_path --image-min-tokens 1024 $mtp_flags"
+assert_contains "$fast_output" 'artifact verification: requested=cached effective=full'
+assert_contains "$fast_output" "$common_hybrid -c 32768 $network_defaults -mm $projector_path --image-min-tokens 1024 $mtp_flags"
+assert_count "$fast_output" 'artifact verification:' 1
 
 long_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --vision off --dry-run)
-assert_equals "$long_output" "$common_hybrid -c 262144 $network_defaults"
+assert_contains "$long_output" 'artifact verification: requested=cached effective=full'
+assert_contains "$long_output" "$common_hybrid -c 262144 $network_defaults"
+assert_count "$long_output" 'artifact verification:' 1
 [[ "$long_output" != *'spec-'* ]] || fail 'long profile unexpectedly enabled MTP'
 [[ "$long_output" != *'-mm '* ]] || fail 'long profile with vision off unexpectedly enabled a projector'
 
 stable_output=$(PATH="$test_path" "$cli" serve fixture-model --profile stable --dry-run)
-assert_equals "$stable_output" "command: $stable_server -m $model_path -ngl all -fit off -fa on -lm mmap -lzm on -c 32768 $network_defaults -mm $projector_path --image-min-tokens 1024"
+assert_contains "$stable_output" 'artifact verification: requested=cached effective=full'
+assert_contains "$stable_output" "command: $stable_server -m $model_path -ngl all -fit off -fa on -lm mmap -lzm on -c 32768 $network_defaults -mm $projector_path --image-min-tokens 1024"
+assert_count "$stable_output" 'artifact verification:' 1
 
 custom_output=$(PATH="$test_path" "$cli" serve fixture-model --profile custom --runtime tuned \
     --mtp dynamic --context 65536 --vision off --dry-run)
-assert_equals "$custom_output" "$common_hybrid -c 65536 $network_defaults $mtp_flags $dynamic_threshold"
+assert_contains "$custom_output" 'artifact verification: requested=cached effective=full'
+assert_contains "$custom_output" "$common_hybrid -c 65536 $network_defaults $mtp_flags $dynamic_threshold"
+assert_count "$custom_output" 'artifact verification:' 1
 
 override_output=$(METAL_LLM_HOST=0.0.0.0 METAL_LLM_PORT=9000 METAL_LLM_PARALLEL=4 \
     PATH="$test_path" "$cli" serve fixture-model --profile fast --dry-run -- --threads 8)
-assert_equals "$override_output" "$common_hybrid -c 32768 -np 4 --host 0.0.0.0 --port 9000 -mm $projector_path --image-min-tokens 1024 $mtp_flags --threads 8"
+assert_contains "$override_output" 'artifact verification: requested=cached effective=full'
+assert_contains "$override_output" "$common_hybrid -c 32768 -np 4 --host 0.0.0.0 --port 9000 -mm $projector_path --image-min-tokens 1024 $mtp_flags --threads 8"
+assert_count "$override_output" 'artifact verification:' 1
 benign_equals_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run -- --threads=8)
 assert_contains "$benign_equals_output" '--threads=8'
 
@@ -246,6 +280,11 @@ assert_serve_usage_rejected 'explicit empty runtime' --profile custom --runtime 
 assert_serve_usage_rejected 'explicit empty named-profile runtime override' --profile fast --runtime ''
 assert_serve_usage_rejected 'explicit empty MTP policy' --profile custom --runtime tuned --mtp '' --context 65536
 assert_serve_usage_rejected 'explicit empty context' --profile custom --runtime tuned --mtp off --context ''
+assert_serve_usage_rejected 'missing artifact-check value' --artifact-check
+assert_serve_usage_rejected 'duplicate artifact-check option' --artifact-check cached --artifact-check full
+assert_serve_usage_rejected 'removed artifact-check off value' --artifact-check off
+assert_serve_usage_rejected 'unknown artifact-check value' --artifact-check other
+assert_serve_usage_rejected 'artifact-check equals form' --artifact-check=full
 
 assert_serve_usage_rejected 'empty-first duplicate profile' --profile '' --profile fast
 assert_serve_usage_rejected 'empty-first duplicate vision' --vision '' --vision off
@@ -305,6 +344,7 @@ assert_passthrough_rejected 'option smuggled as a tuning value' --threads -m
 assert_passthrough_rejected 'nonpositive tuning value' --threads=0
 assert_passthrough_rejected 'positional passthrough value' unexpected-value
 assert_passthrough_rejected 'nested option delimiter' --
+assert_passthrough_rejected 'lab artifact-check option after passthrough delimiter' --artifact-check full
 
 secret='serve-secret-must-not-leak'
 secret_output=$(METAL_LLM_API_KEY="$secret" PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run)
@@ -320,9 +360,31 @@ fi
 assert_contains "$passthrough_secret_output" 'unsupported serve passthrough option'
 
 export SERVE_TEST_EXEC_LOG="$temporary_root/exec.log"
-METAL_LLM_API_KEY="$secret" PATH="$test_path" "$cli" serve fixture-model
+: > "$SERVE_TEST_ARTIFACT_HASH_LOG"
+serve_run_output=$(METAL_LLM_API_KEY="$secret" PATH="$test_path" "$cli" serve fixture-model)
+assert_contains "$serve_run_output" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=3 full_hashes=3'
+assert_count "$serve_run_output" 'artifact verification:' 1
+assert_equals "$(wc -l < "$SERVE_TEST_ARTIFACT_HASH_LOG" | tr -d ' ')" 3
+for required_path in "$model_path" "$projector_path" "$mtp_path"; do
+    assert_count "$(<"$SERVE_TEST_ARTIFACT_HASH_LOG")" "${required_path:A}" 1
+done
 serve_exec_log=$(command cat "$SERVE_TEST_EXEC_LOG")
 assert_contains "$serve_exec_log" "--api-key $secret"
+
+: > "$SERVE_TEST_ARTIFACT_HASH_LOG"
+warm_output=$(PATH="$test_path" "$cli" serve fixture-model --dry-run)
+assert_contains "$warm_output" 'artifact verification: requested=cached effective=cached cache_hits=3 cache_misses=0 full_hashes=0'
+assert_count "$warm_output" 'artifact verification:' 1
+[[ ! -s "$SERVE_TEST_ARTIFACT_HASH_LOG" ]] || fail 'warm cached serve hashed a GGUF body'
+
+full_inventory_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+: > "$SERVE_TEST_ARTIFACT_HASH_LOG"
+full_output=$(PATH="$test_path" "$cli" serve fixture-model --dry-run --artifact-check full)
+assert_contains "$full_output" 'artifact verification: requested=full effective=full cache_hits=0 cache_misses=0 full_hashes=3'
+assert_count "$full_output" 'artifact verification:' 1
+assert_equals "$(wc -l < "$SERVE_TEST_ARTIFACT_HASH_LOG" | tr -d ' ')" 3
+full_inventory_after=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+assert_equals "$full_inventory_after" "$full_inventory_before"
 
 lease_dir="$managed_tmp/metal-llm-lab/full-model.lease"
 lease_record="$lease_dir/identity.json"

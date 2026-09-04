@@ -19,6 +19,15 @@ assert_contains() {
     [[ "$haystack" == *"$needle"* ]] || fail "missing expected output: $needle"
 }
 
+assert_count() {
+    local haystack=$1
+    local needle=$2
+    local expected=$3
+    local actual
+    actual=$(print -r -- "$haystack" | /usr/bin/grep -F -c -- "$needle" || true)
+    (( actual == expected )) || fail "expected $expected occurrences of '$needle', got $actual"
+}
+
 [[ -f "$suite" ]] || fail 'missing benchmarks/suites/qwen3.8-smoke.json'
 jq -e '
     .schema_version == 1 and .id == "qwen3.8-smoke" and .default_mode == "local" and
@@ -253,6 +262,14 @@ print -- '1999-01-02T03:04:05Z'
 EOF
 chmod +x "$fake_bin/system_profiler" "$fake_bin/ps" "$fake_bin/sw_vers" "$fake_bin/xcrun" "$fake_bin/pmset" \
   "$fake_bin/date"
+cat > "$fake_bin/shasum" <<EOF
+#!/bin/zsh
+for argument in "\$@"; do
+  [[ "\$argument" == *.gguf ]] && print -r -- "\$argument" >> "\${BENCH_TEST_ARTIFACT_HASH_LOG:?}"
+done
+exec "$real_shasum" "\$@"
+EOF
+chmod +x "$fake_bin/shasum"
 
 $real_git -C "$fixture_root" init -q
 $real_git -C "$fixture_root" add .gitignore bin lib schemas benchmarks manifests
@@ -275,7 +292,9 @@ common_environment=(
   FAKE_BENCH_LOG="$temporary_root/bench.log"
   FAKE_CURL_LOG="$temporary_root/curl.log"
   FAKE_AUTH_CAPTURE="$temporary_root/auth.capture"
+  BENCH_TEST_ARTIFACT_HASH_LOG="$temporary_root/artifact-hashes.log"
 )
+: > "$temporary_root/artifact-hashes.log"
 
 lease_dir="$managed_tmp/metal-llm-lab/full-model.lease"
 lease_record="$lease_dir/identity.json"
@@ -355,7 +374,32 @@ write_live_server_identity() {
       }' > "$lease_record"
 }
 
+assert_bench_usage_rejected() {
+    local description=$1
+    shift
+    local usage_output usage_status
+    if usage_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+        --suite qwen3.8-smoke "$@" --dry-run 2>&1); then
+        fail "bench accepted invalid parser input: $description"
+    else
+        usage_status=$?
+    fi
+    (( usage_status == 2 )) || fail "bench parser rejection exited $usage_status, expected 2: $description"
+    assert_contains "$usage_output" 'usage: metal-llm bench MODEL --suite SUITE'
+}
+
+assert_bench_usage_rejected 'missing artifact-check value' --artifact-check
+assert_bench_usage_rejected 'duplicate artifact-check option' --artifact-check cached --artifact-check full
+assert_bench_usage_rejected 'removed artifact-check off value' --artifact-check off
+assert_bench_usage_rejected 'unknown artifact-check value' --artifact-check other
+assert_bench_usage_rejected 'artifact-check equals form' --artifact-check=full
+
+local_lab_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+: > "$temporary_root/artifact-hashes.log"
 dry_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model --suite qwen3.8-smoke --dry-run)
+assert_contains "$dry_output" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=1 full_hashes=1'
+assert_count "$dry_output" 'artifact verification:' 1
+assert_count "$(<"$temporary_root/artifact-hashes.log")" "${fixture_root:A}/.lab/artifacts/fixture-model/model.gguf" 1
 assert_contains "$dry_output" 'llama-bench'
 assert_contains "$dry_output" '-p 512 -n 0'
 assert_contains "$dry_output" '-p 0 -n 128'
@@ -364,6 +408,8 @@ assert_contains "$dry_output" '-p 0 -n 128'
 [[ "$dry_output" != *'HTTP POST'* ]] || fail 'local mode included endpoint cases'
 dry_result_files=("$results_dir"/*(N))
 (( ${#dry_result_files} == 0 )) || fail 'bench --dry-run wrote a result file'
+local_lab_after=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+[[ "$local_lab_after" == "$local_lab_before" ]] || fail 'local benchmark dry-run changed .lab files'
 
 upstream_dry=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
   --suite qwen3.8-smoke --runtime upstream --dry-run)
@@ -381,7 +427,11 @@ if invalid_runtime_output=$(env "${common_environment[@]}" "$fixture_cli" bench 
 fi
 assert_contains "$invalid_runtime_output" 'runtime must be tuned or upstream'
 
+: > "$temporary_root/artifact-hashes.log"
 run_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model --suite qwen3.8-smoke)
+assert_contains "$run_output" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=1 full_hashes=1'
+assert_count "$run_output" 'artifact verification:' 1
+assert_count "$(<"$temporary_root/artifact-hashes.log")" "${fixture_root:A}/.lab/artifacts/fixture-model/model.gguf" 1
 assert_contains "$run_output" 'wrote benchmark result:'
 [[ "$run_output" != *'command_json='* ]] || fail 'local benchmark leaked an internal shell variable'
 result_files=("$results_dir"/*.json(N))
@@ -444,6 +494,23 @@ partial_files=("$results_dir"/*.part*(N))
 (( ${#partial_files} == 0 )) || fail 'bench left a partial result behind'
 bench_log_contents=$(command cat -- "$temporary_root/bench.log")
 assert_contains "$bench_log_contents" '-m'
+
+: > "$temporary_root/artifact-hashes.log"
+warm_local_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --dry-run)
+assert_contains "$warm_local_output" 'artifact verification: requested=cached effective=cached cache_hits=1 cache_misses=0 full_hashes=0'
+assert_count "$warm_local_output" 'artifact verification:' 1
+[[ ! -s "$temporary_root/artifact-hashes.log" ]] || fail 'warm cached local bench hashed a GGUF body'
+
+local_full_inventory_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+: > "$temporary_root/artifact-hashes.log"
+full_local_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --dry-run --artifact-check full)
+assert_contains "$full_local_output" 'artifact verification: requested=full effective=full cache_hits=0 cache_misses=0 full_hashes=1'
+assert_count "$full_local_output" 'artifact verification:' 1
+assert_count "$(<"$temporary_root/artifact-hashes.log")" "${fixture_root:A}/.lab/artifacts/fixture-model/model.gguf" 1
+local_full_inventory_after=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+[[ "$local_full_inventory_after" == "$local_full_inventory_before" ]] || fail 'full local benchmark dry-run changed .lab state'
 
 collision_target="$temporary_root/collision-target.json"
 collision_part="$temporary_root/collision-part.json"
@@ -607,11 +674,22 @@ mkdir -p "$endpoint_results"
 # Strict receipt verification checks both recorded runtime executables even
 # though endpoint mode invokes only the already loaded server.
 
+rm -rf -- "$fixture_root/.lab/verification"
+endpoint_lab_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+: > "$temporary_root/artifact-hashes.log"
 endpoint_dry=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
     METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
     --suite qwen3.8-smoke --mode endpoint --dry-run)
+assert_contains "$endpoint_dry" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=3 full_hashes=3'
+assert_count "$endpoint_dry" 'artifact verification:' 1
+for required_name in model projector mtp; do
+  assert_count "$(<"$temporary_root/artifact-hashes.log")" \
+    "${fixture_root:A}/.lab/artifacts/fixture-model/$required_name.gguf" 1
+done
 assert_contains "$endpoint_dry" 'HTTP POST'
 [[ "$endpoint_dry" != *'llama-bench'* ]] || fail 'endpoint mode included local cases'
+endpoint_lab_after=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+[[ "$endpoint_lab_after" == "$endpoint_lab_before" ]] || fail 'endpoint benchmark dry-run changed .lab files'
 
 clear_managed_lease
 no_identity_results="$temporary_root/no-identity-results"
@@ -633,6 +711,28 @@ if inactive_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$endp
     fail 'endpoint mode ran when its managed server was not responding'
 fi
 assert_contains "$inactive_output" 'endpoint mode requires a running endpoint'
+
+: > "$temporary_root/artifact-hashes.log"
+warm_endpoint_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
+  METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --mode endpoint --dry-run)
+assert_contains "$warm_endpoint_output" 'artifact verification: requested=cached effective=cached cache_hits=3 cache_misses=0 full_hashes=0'
+assert_count "$warm_endpoint_output" 'artifact verification:' 1
+[[ ! -s "$temporary_root/artifact-hashes.log" ]] || fail 'warm cached endpoint bench hashed a GGUF body'
+
+endpoint_full_inventory_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+: > "$temporary_root/artifact-hashes.log"
+full_endpoint_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
+  METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --mode endpoint --dry-run --artifact-check full)
+assert_contains "$full_endpoint_output" 'artifact verification: requested=full effective=full cache_hits=0 cache_misses=0 full_hashes=3'
+assert_count "$full_endpoint_output" 'artifact verification:' 1
+for required_name in model projector mtp; do
+  assert_count "$(<"$temporary_root/artifact-hashes.log")" \
+    "${fixture_root:A}/.lab/artifacts/fixture-model/$required_name.gguf" 1
+done
+endpoint_full_inventory_after=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+[[ "$endpoint_full_inventory_after" == "$endpoint_full_inventory_before" ]] || fail 'full endpoint benchmark dry-run changed .lab state'
 
 if mismatch_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 \
     METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \

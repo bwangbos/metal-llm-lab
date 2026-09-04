@@ -1,6 +1,6 @@
 metal_llm_serve_usage() {
-    metal_llm_error 'usage: metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
-    metal_llm_error '       metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
+    metal_llm_error 'usage: metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off] [--artifact-check cached|full] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
+    metal_llm_error '       metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--artifact-check cached|full] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
     return 2
 }
 
@@ -62,7 +62,8 @@ metal_llm_validate_serve_extra_arguments() {
 metal_llm_serve() {
     local model_id='' requested_profile='' requested_vision='' requested_runtime=''
     local requested_mtp='' requested_context='' dry_run=0 passthrough=0 argument
-    local profile_seen=0 vision_seen=0 runtime_seen=0 mtp_seen=0 context_seen=0
+    local artifact_check=cached
+    local profile_seen=0 vision_seen=0 runtime_seen=0 mtp_seen=0 context_seen=0 artifact_check_seen=0
     typeset -a extra_arguments
     extra_arguments=()
 
@@ -81,6 +82,16 @@ metal_llm_serve() {
                 (( dry_run == 0 )) || { metal_llm_serve_usage; return $?; }
                 dry_run=1
                 ;;
+            --artifact-check)
+                (( $# > 0 && artifact_check_seen == 0 )) || { metal_llm_serve_usage; return $?; }
+                case "$1" in
+                    cached|full) artifact_check=$1 ;;
+                    *) metal_llm_serve_usage; return $? ;;
+                esac
+                artifact_check_seen=1
+                shift
+                ;;
+            --artifact-check=*) metal_llm_serve_usage; return $? ;;
             --profile)
                 (( $# > 0 )) || { metal_llm_serve_usage; return $?; }
                 (( profile_seen == 0 )) || { metal_llm_serve_usage; return $?; }
@@ -177,12 +188,13 @@ metal_llm_serve() {
         metal_llm_die "invalid runtime manifest: $runtime_manifest"
         return 1
     }
+    metal_llm_artifact_verification_begin "$artifact_check" "$dry_run" || return 1
+    local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
+    metal_llm_verify_configuration_artifacts "$model_manifest" "$model_id" "$artifact_dir" \
+        "$effective_profile" || return 1
+    metal_llm_artifact_verification_finalize 1 || return 1
     metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-server || return 1
     local server_executable=$METAL_LLM_VERIFIED_EXECUTABLE
-
-    local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
-    metal_llm_profile_artifact_identities "$model_manifest" "$artifact_dir" \
-        "$effective_profile" || return 1
 
     local model_path projector_path='' mtp_path=''
     model_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$model_artifact_id") || return 1
@@ -228,6 +240,7 @@ metal_llm_serve() {
     [[ -z "$api_key" ]] || command_arguments+=(--api-key "$api_key")
     command_arguments+=("${extra_arguments[@]}")
 
+    metal_llm_print_artifact_verification_summary || return 1
     if (( dry_run == 1 )); then
         metal_llm_print_serve_command "${command_arguments[@]}"
         return
