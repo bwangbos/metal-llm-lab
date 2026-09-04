@@ -96,15 +96,35 @@ metal_llm_validate_result() {
           .mtp_selected == false and .mtp_threshold == null
         else false end) and
         (if .runtime_alias == "upstream" then .mtp_policy == "off" else true end);
-      def matches_provenance($provenance):
+      def matches_common_provenance($provenance):
         .repository_revision == $provenance.repository.revision and
         .hardware_id == $provenance.hardware.id and
         .profile_id == $provenance.profile_id and
         .runtime_alias == $provenance.runtime_alias and
         .context == $provenance.context and .vision == $provenance.vision and
-        .mtp_policy == $provenance.mtp_policy and .mtp_threshold == $provenance.mtp_threshold and
         .runtime_id == $provenance.runtime.id and
         .runtime_revision == $provenance.runtime.tested_revision;
+      def matches_provenance($provenance):
+        matches_common_provenance($provenance) and
+        .mtp_policy == $provenance.mtp_policy and .mtp_threshold == $provenance.mtp_threshold;
+      def multi_policy_endpoint_acceptance:
+        .model_id == "qwen3.8-flash-next" and .suite_id == "dynamic-mtp-performance" and
+        .configuration.acceptance_variant == "multi-policy-endpoint" and
+        .configuration.mtp_policies == ["on", "off", "dynamic"] and
+        .configuration.dynamic_threshold == 32768 and
+        .provenance.hardware.id == "apple-m5-max-128gb" and
+        .provenance.hardware.chip == "Apple M5 Max" and
+        .provenance.hardware.unified_memory_bytes == 137438953472 and
+        .provenance.profile_id == "custom" and .provenance.runtime_alias == "tuned" and
+        .provenance.context == 262144 and .provenance.vision == true and
+        .provenance.mtp_policy == null and .provenance.mtp_threshold == null and
+        .provenance.runtime.id == "llama-cpp-qwen38-hybrid" and
+        ([.runs[].mtp_policy] | unique) == ["dynamic", "off", "on"] and
+        all(.runs[];
+          endpoint_route and matches_common_provenance($root.provenance) and
+          (if .mtp_policy == "dynamic" then
+             .mtp_threshold == $root.configuration.dynamic_threshold
+           else .mtp_threshold == null end));
       (if .benchmark_mode == "local" then
          .provenance != null and .suite_id == .provenance.suite.id and
          .provenance.profile_id == null and
@@ -118,13 +138,17 @@ metal_llm_validate_result() {
          (.provenance.runtime_alias == "tuned" or .provenance.runtime_alias == "upstream") and
          (.provenance.context | type == "number" and floor == . and . > 0) and
          (.provenance.vision | type == "boolean") and
-         (.provenance.mtp_policy == "on" or .provenance.mtp_policy == "off" or
-           .provenance.mtp_policy == "dynamic") and
-         (if .provenance.mtp_policy == "dynamic" then
-            (.provenance.mtp_threshold | type == "number" and floor == . and . > 0)
-          else .provenance.mtp_threshold == null end) and
-         (if .provenance.runtime_alias == "upstream" then .provenance.mtp_policy == "off" else true end) and
-         .provenance.runtime.executable.name == "llama-server"
+         .provenance.runtime.executable.name == "llama-server" and
+         (if .provenance.mtp_policy == null then
+            multi_policy_endpoint_acceptance
+          else
+            (.provenance.mtp_policy == "on" or .provenance.mtp_policy == "off" or
+              .provenance.mtp_policy == "dynamic") and
+            (if .provenance.mtp_policy == "dynamic" then
+               (.provenance.mtp_threshold | type == "number" and floor == . and . > 0)
+             else .provenance.mtp_threshold == null end) and
+            (if .provenance.runtime_alias == "upstream" then .provenance.mtp_policy == "off" else true end)
+          end)
        else
          .provenance == null and
          (has("benchmark_mode") | not) and (has("suite_id") | not)
@@ -135,7 +159,12 @@ metal_llm_validate_result() {
           (if $root.provenance == null then true else matches_provenance($root.provenance) end)
         elif $root.benchmark_mode == "endpoint" then
           endpoint_route and
-          (if $root.provenance == null then true else matches_provenance($root.provenance) end)
+          (if $root.provenance.mtp_policy == null then
+             matches_common_provenance($root.provenance) and
+             (if .mtp_policy == "dynamic" then
+                .mtp_threshold == $root.configuration.dynamic_threshold
+              else .mtp_threshold == null end)
+           else matches_provenance($root.provenance) end)
         else
           historical_route_unknown
         end)
