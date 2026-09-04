@@ -212,6 +212,8 @@ metal_llm_validate_endpoint_timing() {
     local timing=$1
     local configured_policy=$2
     local configured_threshold=$3
+    local case_kind=$4
+    local image_min_tokens=$5
     local threshold_json=${configured_threshold/__null__/null}
 
     jq -e --arg policy "$configured_policy" --argjson threshold "$threshold_json" '
@@ -230,6 +232,15 @@ metal_llm_validate_endpoint_timing() {
         metal_llm_die 'endpoint timing metadata does not match managed MTP policy'
         return 1
     }
+    if [[ "$case_kind" == vision ]]; then
+        jq -e --argjson image_min_tokens "${image_min_tokens/__null__/null}" '
+          ($image_min_tokens | type == "number" and floor == . and . > 0) and
+          .effective_prompt_tokens >= $image_min_tokens
+        ' <<< "$timing" >/dev/null 2>&1 || {
+            metal_llm_die 'endpoint effective prompt count is below resolved vision expansion minimum'
+            return 1
+        }
+    fi
     typeset -g METAL_LLM_BENCH_MTP_SELECTED
     typeset -g METAL_LLM_BENCH_EFFECTIVE_PROMPT_TOKENS
     METAL_LLM_BENCH_MTP_SELECTED=$(jq -r '.speculative' <<< "$timing") || return 1
@@ -328,7 +339,8 @@ metal_llm_bench() {
     fi
 
     local profile_id='__null__' runtime_alias runtime_id model_artifact_id context='__null__'
-    local vision_enabled='__null__' mtp_policy='__null__' mtp_threshold='__null__'
+    local vision_enabled='__null__' vision_image_min_tokens='__null__'
+    local mtp_policy='__null__' mtp_threshold='__null__'
     local gpu_layers fit flash_attention load_mode lazy_mmap
     local effective_profile='' managed_identity_record='' artifact_configuration
     local mtp_artifact_id='__null__' spec_type='__null__' draft_n_max='__null__'
@@ -396,7 +408,10 @@ metal_llm_bench() {
         profile_record=$(jq -er '
           [
             .profile_id, .runtime_alias, .runtime_id, .model_artifact_id, (.context | tostring),
-            (.vision.enabled | tostring), .mtp.policy, (.mtp.artifact_id // "__null__"),
+            (.vision.enabled | tostring),
+            (if .vision.image_min_tokens == null then "__null__"
+             else (.vision.image_min_tokens | tostring) end),
+            .mtp.policy, (.mtp.artifact_id // "__null__"),
             (.mtp.spec_type // "__null__"),
             (if .mtp.draft_n_max == null then "__null__" else (.mtp.draft_n_max | tostring) end),
             (if .mtp.gpu_layers == null then "__null__" else (.mtp.gpu_layers | tostring) end),
@@ -407,7 +422,7 @@ metal_llm_bench() {
           ] | @tsv
         ' <<< "$effective_profile") || return 1
         IFS=$'\t' read -r profile_id runtime_alias runtime_id model_artifact_id context \
-          vision_enabled mtp_policy mtp_artifact_id spec_type draft_n_max draft_gpu_layers \
+          vision_enabled vision_image_min_tokens mtp_policy mtp_artifact_id spec_type draft_n_max draft_gpu_layers \
           mtp_threshold gpu_layers fit flash_attention load_mode lazy_mmap <<< "$profile_record"
         artifact_configuration=$effective_profile
     fi
@@ -780,7 +795,10 @@ metal_llm_bench() {
             prompt_tokens=$(jq -er '.prompt_tokens' <<< "$METAL_LLM_BENCH_RESPONSE_USAGE") || prompt_tokens=null
             generated_tokens=$(jq -er '.completion_tokens' <<< "$METAL_LLM_BENCH_RESPONSE_USAGE") || generated_tokens=null
             metal_llm_validate_endpoint_timing "$METAL_LLM_BENCH_RESPONSE_TIMING" \
-              "$mtp_policy" "$mtp_threshold" || { rm -f -- "$run_buffer"; return 1; }
+              "$mtp_policy" "$mtp_threshold" "$case_kind" "$vision_image_min_tokens" || {
+                rm -f -- "$run_buffer"
+                return 1
+            }
             command_json=$(metal_llm_command_json "${recorded_curl_arguments[@]}") || {
                 rm -f -- "$run_buffer"
                 return 1

@@ -172,7 +172,10 @@ if [[ "$request" == *'"image_url"'* ]]; then
 fi
 [[ "${FAKE_BAD_SHORT_ROUTE:-0}" == 0 || "$request" == *'"image_url"'* ]] || speculative=false
 [[ "${FAKE_BAD_LONG_ROUTE:-0}" == 0 || "$request" != *'"image_url"'* ]] || speculative=true
-[[ "${FAKE_TEXT_ONLY_TIMING:-0}" == 0 || "$request" != *'"image_url"'* ]] || effective_prompt_tokens=3
+if [[ "${FAKE_TEXT_ONLY_TIMING:-0}" == 1 && "$request" == *'"image_url"'* ]]; then
+  effective_prompt_tokens=3
+  speculative=true
+fi
 timings=',"timings":{"speculative":'$speculative',"speculative_policy":"dynamic","effective_prompt_tokens":'$effective_prompt_tokens',"speculative_threshold":32768}'
 [[ "${FAKE_OMIT_TIMINGS:-0}" == 0 ]] || timings=''
 usage=',"usage":{"prompt_tokens":3,"completion_tokens":2}'
@@ -690,7 +693,7 @@ assert_endpoint_route_failure() {
 assert_endpoint_route_failure FAKE_OMIT_TIMINGS=1 'missing final endpoint timing metadata'
 assert_endpoint_route_failure FAKE_BAD_SHORT_ROUTE=1 'endpoint timing metadata does not match managed MTP policy'
 assert_endpoint_route_failure FAKE_BAD_LONG_ROUTE=1 'endpoint timing metadata does not match managed MTP policy'
-assert_endpoint_route_failure FAKE_TEXT_ONLY_TIMING=1 'endpoint timing metadata does not match managed MTP policy'
+assert_endpoint_route_failure FAKE_TEXT_ONLY_TIMING=1 'endpoint effective prompt count is below resolved vision expansion minimum'
 assert_endpoint_route_failure FAKE_STREAM_ROUTE_CHANGE=1 'endpoint stream changed MTP route metadata'
 
 endpoint_secret='endpoint-secret-must-not-leak'

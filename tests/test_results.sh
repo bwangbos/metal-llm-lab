@@ -192,10 +192,19 @@ assert_route_invalid() {
 
 assert_route_invalid '.runs[0].mtp_threshold = null' 'dynamic route without threshold'
 assert_route_invalid '.provenance = null' 'new endpoint harness without provenance'
+assert_route_invalid 'del(.benchmark_mode, .suite_id) | .provenance = null' \
+  'route-enriched row disguised as provenance-null history'
+assert_route_invalid '.provenance.repository.revision = ("f" * 40)' \
+  'run repository revision differs from provenance'
+assert_route_invalid '.provenance.hardware.id = "invented-hardware"' \
+  'run hardware differs from provenance'
+assert_route_invalid '.provenance.suite.id = "other-suite"' \
+  'top-level suite differs from provenance'
+assert_route_invalid 'del(.suite_id)' 'new endpoint harness without top-level suite identity'
 assert_route_invalid '.runs[0].mtp_selected = false' 'dynamic route disabled at threshold'
 assert_route_invalid '.runs[0].effective_prompt_tokens = 32769' 'dynamic route enabled above threshold'
-assert_route_invalid '.runs[0].prompt_tokens = 3 | .runs[0].effective_prompt_tokens = 3 | .runs[0].mtp_selected = false' \
-  'text-only count substituted for expanded effective count'
+assert_route_invalid '.runs[0].effective_prompt_tokens = 262145 | .runs[0].mtp_selected = false' \
+  'effective prompt count exceeds configured context'
 assert_route_invalid '.runs[0].mtp_policy = "on" | .runs[0].mtp_selected = false | .runs[0].mtp_threshold = null' \
   'fixed-on route disabled'
 assert_route_invalid '.runs[0].mtp_policy = "off" | .runs[0].mtp_selected = true | .runs[0].mtp_threshold = null' \
@@ -204,8 +213,6 @@ assert_route_invalid '.runs[0].mtp_policy = "on" | .runs[0].mtp_threshold = 3276
   'fixed policy retained a threshold'
 assert_route_invalid '.benchmark_mode = "local" | .runs[0].profile_id = null | .runs[0].context = null | .runs[0].vision = null' \
   'standalone llama-bench labeled as dynamic MTP'
-assert_route_invalid '.runs[0].profile_id = null | .runs[0].runtime_alias = "tuned" | .runs[0].context = null | .runs[0].vision = null | .runs[0].mtp_policy = null | .runs[0].mtp_selected = null | .runs[0].effective_prompt_tokens = null | .runs[0].mtp_threshold = null' \
-  'partially invented historical runtime alias'
 
 jq '.runs[0].hardware_id = "unknown-hardware"' "$raw_result" > "$fixture_root/results/raw/result.json"
 if invalid_output=$($fixture_cli report --check 2>&1); then
@@ -258,6 +265,29 @@ jq '
     .profile_id = "auto" | .runtime_alias = "tuned" | .context = 262144 |
     .vision = true | .mtp_policy = "dynamic" | .mtp_selected = true |
     .mtp_threshold = 32768 | .prompt_tokens = 24)
+' "$raw_result" > "$fixture_root/results/raw/result.json"
+if historical_route_output=$($fixture_cli report 2>&1); then
+    fail 'report accepted invented route provenance in imported history'
+fi
+assert_contains "$historical_route_output" 'invalid benchmark route provenance'
+
+jq --slurpfile route "$route_result" '
+  .benchmark_mode = "endpoint" | .suite_id = $route[0].suite_id |
+  .provenance = $route[0].provenance |
+  (.runs[] |= (
+    .repository_revision = $route[0].provenance.repository.revision |
+    .hardware_id = $route[0].provenance.hardware.id |
+    .runtime_id = $route[0].provenance.runtime.id |
+    .runtime_revision = $route[0].provenance.runtime.tested_revision |
+    .profile_id = $route[0].provenance.profile_id |
+    .runtime_alias = $route[0].provenance.runtime_alias |
+    .context = $route[0].provenance.context |
+    .vision = $route[0].provenance.vision |
+    .mtp_policy = $route[0].provenance.mtp_policy |
+    .mtp_selected = (.effective_prompt_tokens <= $route[0].provenance.mtp_threshold) |
+    .mtp_threshold = $route[0].provenance.mtp_threshold |
+    .prompt_tokens = null
+  ))
 ' "$raw_result" > "$fixture_root/results/raw/result.json"
 route_summary_output=$($fixture_cli report)
 assert_contains "$route_summary_output" '## MTP route provenance'

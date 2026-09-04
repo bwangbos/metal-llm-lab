@@ -85,6 +85,7 @@ metal_llm_validate_result() {
         (.context | type == "number" and floor == . and . > 0) and
         (.vision | type == "boolean") and
         (.effective_prompt_tokens | type == "number" and floor == . and . >= 0) and
+        .effective_prompt_tokens <= .context and
         (.mtp_selected | type == "boolean") and
         (if .mtp_policy == "dynamic" then
           (.mtp_threshold | type == "number" and floor == . and . > 0) and
@@ -96,6 +97,8 @@ metal_llm_validate_result() {
         else false end) and
         (if .runtime_alias == "upstream" then .mtp_policy == "off" else true end);
       def matches_provenance($provenance):
+        .repository_revision == $provenance.repository.revision and
+        .hardware_id == $provenance.hardware.id and
         .profile_id == $provenance.profile_id and
         .runtime_alias == $provenance.runtime_alias and
         .context == $provenance.context and .vision == $provenance.vision and
@@ -103,13 +106,14 @@ metal_llm_validate_result() {
         .runtime_id == $provenance.runtime.id and
         .runtime_revision == $provenance.runtime.tested_revision;
       (if .benchmark_mode == "local" then
-         .provenance != null and .provenance.profile_id == null and
+         .provenance != null and .suite_id == .provenance.suite.id and
+         .provenance.profile_id == null and
          (.provenance.runtime_alias == "tuned" or .provenance.runtime_alias == "upstream") and
          .provenance.context == null and .provenance.vision == null and
          .provenance.mtp_policy == null and .provenance.mtp_threshold == null and
          .provenance.runtime.executable.name == "llama-bench"
        elif .benchmark_mode == "endpoint" then
-         .provenance != null and
+         .provenance != null and .suite_id == .provenance.suite.id and
          (.provenance.profile_id | type == "string" and length > 0) and
          (.provenance.runtime_alias == "tuned" or .provenance.runtime_alias == "upstream") and
          (.provenance.context | type == "number" and floor == . and . > 0) and
@@ -121,7 +125,10 @@ metal_llm_validate_result() {
           else .provenance.mtp_threshold == null end) and
          (if .provenance.runtime_alias == "upstream" then .provenance.mtp_policy == "off" else true end) and
          .provenance.runtime.executable.name == "llama-server"
-       else true end) and
+       else
+         .provenance == null and
+         (has("benchmark_mode") | not) and (has("suite_id") | not)
+       end) and
       all(.runs[];
         if $root.benchmark_mode == "local" then
           local_runtime_only and
@@ -130,7 +137,7 @@ metal_llm_validate_result() {
           endpoint_route and
           (if $root.provenance == null then true else matches_provenance($root.provenance) end)
         else
-          historical_route_unknown or endpoint_route
+          historical_route_unknown
         end)
     ' "$result_file" >/dev/null 2>&1 || {
         metal_llm_die "invalid benchmark route provenance: $result_label"
