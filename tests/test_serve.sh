@@ -60,32 +60,29 @@ mtp_sha=$($real_shasum -a 256 "$artifact_dir/mtp.gguf" | awk '{print $1}')
     --arg projector_sha "$projector_sha" \
     --arg mtp_sha "$mtp_sha" '
     {
-      schema_version: 1,
+      schema_version: 2,
       id: "fixture-model",
       name: "Fixture Model",
+      default_profile: "auto",
+      max_context: 262144,
+      runtime_aliases: {tuned: "hybrid", upstream: "stable"},
       artifacts: [
         {id: "model", kind: "model", filename: "model.gguf", url: "https://example.invalid/model", bytes: 5, sha256: $model_sha, license_url: "https://example.invalid/license"},
         {id: "projector", kind: "projector", filename: "projector.gguf", url: "https://example.invalid/projector", bytes: 9, sha256: $projector_sha, license_url: "https://example.invalid/license"},
         {id: "mtp", kind: "mtp", filename: "mtp.gguf", url: "https://example.invalid/mtp", bytes: 3, sha256: $mtp_sha, license_url: "https://example.invalid/license"}
       ],
-      text_model: {artifact_ids: ["model"], total_bytes: 5},
+      text_model: {entry_artifact_id: "model", artifact_ids: ["model"], total_bytes: 5},
+      capabilities: {
+        vision: {default_enabled: true, projector_artifact_id: "projector", image_min_tokens: 1024},
+        mtp: {artifact_id: "mtp", spec_type: "draft-mtp", draft_n_max: 2,
+              gpu_layers: "all", dynamic_threshold: 32768}
+      },
+      metal: {gpu_layers: "all", fit: false, flash_attention: true, load_mode: "mmap", lazy_mmap: true},
       profiles: [
-        {id: "fast", runtime_id: "hybrid", model_artifact_id: "model", context: 32768,
-         vision: {enabled: false, projector_artifact_id: null, image_min_tokens: null},
-         mtp: {enabled: true, artifact_id: "mtp", spec_type: "draft-mtp", draft_n_max: 2, gpu_layers: "all"},
-         metal: {gpu_layers: "all", fit: false, flash_attention: true, load_mode: "mmap", lazy_mmap: true}},
-        {id: "vision", runtime_id: "hybrid", model_artifact_id: "model", context: 32768,
-         vision: {enabled: true, projector_artifact_id: "projector", image_min_tokens: 1024},
-         mtp: {enabled: true, artifact_id: "mtp", spec_type: "draft-mtp", draft_n_max: 2, gpu_layers: "all"},
-         metal: {gpu_layers: "all", fit: false, flash_attention: true, load_mode: "mmap", lazy_mmap: true}},
-        {id: "long", runtime_id: "hybrid", model_artifact_id: "model", context: 131072,
-         vision: {enabled: false, projector_artifact_id: null, image_min_tokens: null},
-         mtp: {enabled: false, artifact_id: null, spec_type: null, draft_n_max: null, gpu_layers: null},
-         metal: {gpu_layers: "all", fit: false, flash_attention: true, load_mode: "mmap", lazy_mmap: true}},
-        {id: "stable", runtime_id: "stable", model_artifact_id: "model", context: 32768,
-         vision: {enabled: false, projector_artifact_id: null, image_min_tokens: null},
-         mtp: {enabled: false, artifact_id: null, spec_type: null, draft_n_max: null, gpu_layers: null},
-         metal: {gpu_layers: "all", fit: false, flash_attention: true, load_mode: "mmap", lazy_mmap: true}}
+        {id: "fast", runtime: "tuned", context: 32768, mtp_policy: "on", status: "supported"},
+        {id: "long", runtime: "tuned", context: 262144, mtp_policy: "off", status: "supported"},
+        {id: "auto", runtime: "tuned", context: 262144, mtp_policy: "dynamic", status: "pending-acceptance"},
+        {id: "stable", runtime: "upstream", context: 32768, mtp_policy: "off", status: "reference"}
       ]
     }' > "$fixture_root/manifests/models/fixture-model.json"
 
@@ -190,28 +187,73 @@ stable_server="$fixture_root/.lab/runtimes/stable/build-metal/bin/llama-server"
 common_hybrid="command: $hybrid_server -m $model_path -ngl all -fit off -fa on -lm mmap -lzm on"
 network_defaults='-np 1 --host 127.0.0.1 --port 8080'
 mtp_flags="--spec-draft-model $mtp_path --spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-ngl all"
+dynamic_threshold='--spec-draft-max-prompt-tokens 32768'
+
+lab_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+auto_output=$(PATH="$test_path" "$cli" serve fixture-model --dry-run)
+assert_equals "$auto_output" "$common_hybrid -c 262144 $network_defaults -mm $projector_path --image-min-tokens 1024 $mtp_flags $dynamic_threshold"
+[[ ! -e "$managed_tmp/metal-llm-lab" ]] || fail 'serve --dry-run wrote managed lease state'
+lab_after=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+assert_equals "$lab_after" "$lab_before"
 
 fast_output=$(PATH="$test_path" "$cli" serve fixture-model --profile fast --dry-run)
-assert_equals "$fast_output" "$common_hybrid -c 32768 $network_defaults $mtp_flags"
+assert_equals "$fast_output" "$common_hybrid -c 32768 $network_defaults -mm $projector_path --image-min-tokens 1024 $mtp_flags"
 
-vision_output=$(PATH="$test_path" "$cli" serve fixture-model --profile vision --dry-run)
-assert_equals "$vision_output" "$common_hybrid -c 32768 $network_defaults -mm $projector_path --image-min-tokens 1024 $mtp_flags"
-
-long_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run)
-assert_equals "$long_output" "$common_hybrid -c 131072 $network_defaults"
+long_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --vision off --dry-run)
+assert_equals "$long_output" "$common_hybrid -c 262144 $network_defaults"
 [[ "$long_output" != *'spec-'* ]] || fail 'long profile unexpectedly enabled MTP'
+[[ "$long_output" != *'-mm '* ]] || fail 'long profile with vision off unexpectedly enabled a projector'
 
 stable_output=$(PATH="$test_path" "$cli" serve fixture-model --profile stable --dry-run)
-assert_equals "$stable_output" "command: $stable_server -m $model_path -ngl all -fit off -fa on -lm mmap -lzm on -c 32768 $network_defaults"
+assert_equals "$stable_output" "command: $stable_server -m $model_path -ngl all -fit off -fa on -lm mmap -lzm on -c 32768 $network_defaults -mm $projector_path --image-min-tokens 1024"
 
-auto_output=$(PATH="$test_path" "$cli" serve fixture-model --profile auto --dry-run)
-assert_equals "$auto_output" "$vision_output"
+custom_output=$(PATH="$test_path" "$cli" serve fixture-model --profile custom --runtime tuned \
+    --mtp dynamic --context 65536 --vision off --dry-run)
+assert_equals "$custom_output" "$common_hybrid -c 65536 $network_defaults $mtp_flags $dynamic_threshold"
 
-override_output=$(METAL_LLM_HOST=0.0.0.0 METAL_LLM_PORT=9000 METAL_LLM_PARALLEL=4 METAL_LLM_CONTEXT=4096 \
+override_output=$(METAL_LLM_HOST=0.0.0.0 METAL_LLM_PORT=9000 METAL_LLM_PARALLEL=4 \
     PATH="$test_path" "$cli" serve fixture-model --profile fast --dry-run -- --threads 8)
-assert_equals "$override_output" "$common_hybrid -c 4096 -np 4 --host 0.0.0.0 --port 9000 $mtp_flags --threads 8"
+assert_equals "$override_output" "$common_hybrid -c 32768 -np 4 --host 0.0.0.0 --port 9000 -mm $projector_path --image-min-tokens 1024 $mtp_flags --threads 8"
 benign_equals_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --dry-run -- --threads=8)
 assert_contains "$benign_equals_output" '--threads=8'
+
+if removed_profile_output=$(PATH="$test_path" "$cli" serve fixture-model --profile vision --dry-run 2>&1); then
+    fail 'serve accepted the removed vision profile'
+fi
+assert_contains "$removed_profile_output" 'profile vision was removed; select a preset and use --vision on'
+
+if obsolete_context_output=$(METAL_LLM_CONTEXT=4096 PATH="$test_path" "$cli" serve fixture-model --dry-run 2>&1); then
+    fail 'serve accepted removed METAL_LLM_CONTEXT'
+fi
+assert_contains "$obsolete_context_output" 'METAL_LLM_CONTEXT was removed; use --profile custom --runtime RUNTIME --mtp POLICY --context TOKENS'
+
+for invalid_named_arguments in \
+    '--profile fast --runtime tuned' \
+    '--profile fast --mtp on' \
+    '--profile fast --context 32768'; do
+    if named_output=$(PATH="$test_path" "$cli" serve fixture-model ${(z)invalid_named_arguments} --dry-run 2>&1); then
+        fail "named profile accepted custom controls: $invalid_named_arguments"
+    fi
+    assert_contains "$named_output" 'named profiles reject --runtime, --mtp, and --context; use --profile custom'
+done
+
+for incomplete_custom_arguments in \
+    '--profile custom --mtp off --context 65536' \
+    '--profile custom --runtime tuned --context 65536' \
+    '--profile custom --runtime tuned --mtp off'; do
+    if custom_error_output=$(PATH="$test_path" "$cli" serve fixture-model ${(z)incomplete_custom_arguments} --dry-run 2>&1); then
+        fail "serve accepted incomplete custom controls: $incomplete_custom_arguments"
+    fi
+    assert_contains "$custom_error_output" 'custom requires --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS'
+done
+
+for upstream_mtp in on dynamic; do
+    if upstream_output=$(PATH="$test_path" "$cli" serve fixture-model --profile custom \
+        --runtime upstream --mtp "$upstream_mtp" --context 32768 --dry-run 2>&1); then
+        fail "serve accepted upstream runtime with MTP $upstream_mtp"
+    fi
+    assert_contains "$upstream_output" 'runtime upstream supports only MTP policy off'
+done
 
 assert_passthrough_rejected 'short model override' -m other.gguf
 assert_passthrough_rejected 'long model equals override' --model=other.gguf
@@ -223,6 +265,7 @@ assert_passthrough_rejected 'draft model override' --spec-draft-model other-draf
 assert_passthrough_rejected 'draft count equals override' --spec-draft-n-max=8
 assert_passthrough_rejected 'draft GPU override' --spec-draft-ngl all
 assert_passthrough_rejected 'draft type override' --spec-type other
+assert_passthrough_rejected 'draft threshold override' --spec-draft-max-prompt-tokens 1
 assert_passthrough_rejected 'context override' -c 4096
 assert_passthrough_rejected 'batch-size override' --batch-size=128
 assert_passthrough_rejected 'micro-batch override' -ub 128
@@ -251,29 +294,54 @@ fi
 assert_contains "$passthrough_secret_output" 'unsupported serve passthrough option'
 
 export SERVE_TEST_EXEC_LOG="$temporary_root/exec.log"
-METAL_LLM_API_KEY="$secret" PATH="$test_path" "$cli" serve fixture-model --profile stable
+METAL_LLM_API_KEY="$secret" PATH="$test_path" "$cli" serve fixture-model
 serve_exec_log=$(command cat "$SERVE_TEST_EXEC_LOG")
 assert_contains "$serve_exec_log" "--api-key $secret"
 
 lease_dir="$managed_tmp/metal-llm-lab/full-model.lease"
 lease_record="$lease_dir/identity.json"
 [[ -f "$lease_record" ]] || fail 'serve did not publish a managed full-model identity record'
-"$real_jq" -e --arg model fixture-model --arg profile stable --arg host 127.0.0.1 --argjson port 8080 '
-  .schema_version == 1 and .owner_kind == "serve" and
+"$real_jq" -e --arg model fixture-model --arg profile auto --arg host 127.0.0.1 --argjson port 8080 '
+  .schema_version == 2 and .owner_kind == "serve" and
   .model_id == $model and .profile_id == $profile and
+  .runtime_alias == "tuned" and .context == 262144 and .vision == true and
+  .mtp_policy == "dynamic" and .mtp_threshold == 32768 and
   .host == $host and .port == $port and
   (.pid | type == "number" and . > 1 and floor == .) and
   (.process_started_at | type == "string" and length > 0) and
-  (.runtime_id == "stable") and
+  (.runtime_id == "hybrid") and
   (.runtime_revision == "1111111111111111111111111111111111111111") and
   (.runtime_tree_sha | test("^[0-9a-f]{40}$")) and
   (.runtime_manifest_sha256 | test("^[0-9a-f]{64}$")) and
   (.build_receipt_sha256 | test("^[0-9a-f]{64}$")) and
   (.executable_sha256 | test("^[0-9a-f]{64}$")) and
   (.model_manifest_sha256 | test("^[0-9a-f]{64}$")) and
-  (.artifacts | type == "array" and length == 1 and .[0].id == "model" and
-    (.[0].sha256 | test("^[0-9a-f]{64}$")))
+  (.artifacts | type == "array" and map(.id) == ["model", "projector", "mtp"] and
+    all(.[].sha256; test("^[0-9a-f]{64}$")))
 ' "$lease_record" >/dev/null || fail 'serve published an incomplete managed identity record'
+
+# Old and partially upgraded live records are invalid and must neither be
+# replaced nor cause the named process to receive a signal.
+cp "$lease_record" "$temporary_root/valid-identity.json"
+sleep 60 &!
+invalid_identity_pid=$!
+for identity_mutation in \
+    'del(.runtime_alias, .context, .mtp_policy, .mtp_threshold) | .schema_version = 1' \
+    'del(.mtp_threshold)'; do
+    "$real_jq" --argjson pid "$invalid_identity_pid" --arg started "fixture-start-$invalid_identity_pid" \
+      "$identity_mutation | .pid = \$pid | .process_started_at = \$started" \
+      "$temporary_root/valid-identity.json" > "$lease_record"
+    if invalid_identity_output=$(PATH="$test_path" "$cli" serve fixture-model --profile stable 2>&1); then
+        kill "$invalid_identity_pid" 2>/dev/null || true
+        wait "$invalid_identity_pid" 2>/dev/null || true
+        fail 'serve replaced an invalid managed identity that named a live PID'
+    fi
+    assert_contains "$invalid_identity_output" 'refusing to replace an invalid lease that names a live PID'
+    kill -0 "$invalid_identity_pid" 2>/dev/null || fail 'invalid identity recovery signaled the named PID'
+done
+kill "$invalid_identity_pid" 2>/dev/null || true
+wait "$invalid_identity_pid" 2>/dev/null || true
+cp "$temporary_root/valid-identity.json" "$lease_record"
 
 # A dead exec owner leaves a stale record; the next managed launch must recover
 # it without signaling the recorded PID.
@@ -307,7 +375,7 @@ PATH="$test_path" "$cli" serve fixture-model --profile stable >/dev/null
 if invalid_output=$(PATH="$test_path" "$cli" serve fixture-model --profile impossible --dry-run 2>&1); then
     fail 'serve accepted an invalid profile'
 fi
-assert_contains "$invalid_output" 'profile not found: impossible'
+assert_contains "$invalid_output" 'profile not found or duplicated: impossible'
 
 hybrid_receipt="$fixture_root/.lab/runtimes/hybrid/build-metal/build-receipt.json"
 mv "$hybrid_receipt" "$hybrid_receipt.missing"
@@ -397,7 +465,7 @@ assert_contains "$binary_output" 'bench binary checksum mismatch for stable'
 mv "$stable_bench.saved" "$stable_bench"
 
 mv "$artifact_dir/projector.gguf" "$artifact_dir/projector.gguf.missing"
-if missing_output=$(PATH="$test_path" "$cli" serve fixture-model --profile vision --dry-run 2>&1); then
+if missing_output=$(PATH="$test_path" "$cli" serve fixture-model --profile long --vision on --dry-run 2>&1); then
     fail 'serve accepted a missing projector artifact'
 fi
 assert_contains "$missing_output" 'artifact is missing: projector'
