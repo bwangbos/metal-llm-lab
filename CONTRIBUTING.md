@@ -15,6 +15,12 @@ security risk, follow [SECURITY.md](SECURITY.md) instead.
 Preserve raw benchmark outputs. Summaries should link to raw results and state
 known anomalies rather than replacing inconvenient measurements.
 
+Changes to artifact verification must include regression coverage for receipt
+validation and rendered result provenance, including cache hit/miss/full
+outcomes. The artifact receipt cache is only for model bodies; do not route
+runtime builds, source revisions, fixtures, leases, or other non-model
+integrity checks through it.
+
 ## Dynamic-MTP acceptance evidence
 
 The real acceptance harness is intentionally excluded from lightweight test

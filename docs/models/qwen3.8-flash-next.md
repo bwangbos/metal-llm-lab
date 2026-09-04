@@ -9,6 +9,12 @@ Q8 MTP sidecar by source URL, license URL, byte count, and SHA-256. The choices
 are locally tested artifact selections, not claims that one quantization is best
 on every Apple Silicon system.
 
+The first cold setup or explicit `--artifact-check full` rereads roughly 100 GB
+of model artifacts to verify their SHA-256 values. Normal warm `setup`, `serve`,
+and `bench` runs use the default `--artifact-check cached`, validate local
+artifact receipts, and avoid rereading those GGUF bodies. Switch back to full
+mode after suspicious artifact changes or before publishing high-stakes results.
+
 The `tuned` runtime is the ordered Qwen/MTP patch series at tested revision
 `b814e84c45f00fb0d9f3283175acc1a24fa90b95` and tested tree
 `4f3c051ed7ae4e856cb6d7d95f5c1af6984fc72d`. The `upstream` runtime is pinned
