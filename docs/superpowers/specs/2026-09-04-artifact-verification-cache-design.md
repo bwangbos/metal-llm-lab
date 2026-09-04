@@ -1,6 +1,6 @@
 # Cached model-artifact verification
 
-- Status: Proposed design; awaiting user approval
+- Status: Approved design; implementation plan written
 - Date: 2026-09-04
 
 ## Context
