@@ -214,6 +214,7 @@ metal_llm_validate_endpoint_timing() {
     local configured_threshold=$3
     local case_kind=$4
     local image_min_tokens=$5
+    local usage_prompt_tokens=${6:-null}
     local threshold_json=${configured_threshold/__null__/null}
 
     jq -e --arg policy "$configured_policy" --argjson threshold "$threshold_json" '
@@ -238,6 +239,13 @@ metal_llm_validate_endpoint_timing() {
           .effective_prompt_tokens >= $image_min_tokens
         ' <<< "$timing" >/dev/null 2>&1 || {
             metal_llm_die 'endpoint effective prompt count is below resolved vision expansion minimum'
+            return 1
+        }
+        jq -e --argjson usage_prompt_tokens "$usage_prompt_tokens" '
+          ($usage_prompt_tokens | type == "number" and floor == . and . >= 0) and
+          .effective_prompt_tokens == $usage_prompt_tokens
+        ' <<< "$timing" >/dev/null 2>&1 || {
+            metal_llm_die 'endpoint vision prompt-token usage does not match effective prompt timing'
             return 1
         }
     fi
@@ -648,7 +656,7 @@ metal_llm_bench() {
     run_buffer=$(mktemp "${TMPDIR:-/tmp}/metal-llm-bench-runs.XXXXXX") || return 1
     : > "$run_buffer"
 
-    local case_record case_id case_kind optional streaming prompt_tokens generated_tokens repetitions notes
+    local case_record case_id case_kind request_kind optional streaming prompt_tokens generated_tokens repetitions notes
     local max_tokens temperature seed prompt fixture bench_output throughput
     local command_json payload response content output_sha image_data image_mime expected_fixture_sha
     local flash_value=off lazy_value=off
@@ -658,6 +666,7 @@ metal_llm_bench() {
     while IFS= read -r case_record; do
         case_id=$(jq -r '.id' <<< "$case_record")
         case_kind=$(jq -r '.kind' <<< "$case_record")
+        [[ "$case_kind" == vision ]] && request_kind=vision || request_kind=text
         optional=$(jq -r '.optional // false' <<< "$case_record")
         [[ "$optional" == false || "$include_optional" == 1 ]] || continue
         notes=$(jq -r '.notes' <<< "$case_record")
@@ -795,7 +804,8 @@ metal_llm_bench() {
             prompt_tokens=$(jq -er '.prompt_tokens' <<< "$METAL_LLM_BENCH_RESPONSE_USAGE") || prompt_tokens=null
             generated_tokens=$(jq -er '.completion_tokens' <<< "$METAL_LLM_BENCH_RESPONSE_USAGE") || generated_tokens=null
             metal_llm_validate_endpoint_timing "$METAL_LLM_BENCH_RESPONSE_TIMING" \
-              "$mtp_policy" "$mtp_threshold" "$case_kind" "$vision_image_min_tokens" || {
+              "$mtp_policy" "$mtp_threshold" "$case_kind" "$vision_image_min_tokens" \
+              "$prompt_tokens" || {
                 rm -f -- "$run_buffer"
                 return 1
             }
@@ -804,7 +814,8 @@ metal_llm_bench() {
                 return 1
             }
             jq -n \
-              --arg id "$case_id" --arg timestamp "$now" --arg repo "$repository_revision" \
+              --arg id "$case_id" --arg request_kind "$request_kind" \
+              --arg timestamp "$now" --arg repo "$repository_revision" \
               --arg hardware "$hardware_id" --arg runtime "$runtime_id" --arg runtime_revision "$runtime_revision" \
               --arg profile_id "$profile_id" --arg runtime_alias "$runtime_alias" \
               --argjson context "$context" --argjson vision "$vision_enabled" \
@@ -817,6 +828,7 @@ metal_llm_bench() {
               --argjson command "$command_json" '
               {
                 id: $id, experiment: "suite-run", measurement_kind: "single_run",
+                request_kind: $request_kind,
                 timestamp: $timestamp, repository_revision: $repo,
                 hardware_id: $hardware, runtime_id: $runtime, runtime_revision: $runtime_revision,
                 profile: null, profile_id: $profile_id, runtime_alias: $runtime_alias,

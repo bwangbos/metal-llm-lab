@@ -52,7 +52,7 @@ Collection: 2026-09-04T13:13:16Z through 2026-09-04T15:14:26Z. Comparison metric
 
 | Check | Result |
 | --- | --- |
-| Dynamic-MTP correctness and isolation | Pass; staged evidence SHA-256 9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16 |
+| Dynamic-MTP correctness and isolation | Pass; tracked evidence SHA-256 9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16 |
 | Accepted default 262,144-token allocation memory observation | Pass; sanitized RSS and system memory pressure captured |
 | Complete 21-cell performance matrix | Pass; one warm-up and five measured samples per cell |
 | Dynamic-to-corresponding-fixed 5% generation-throughput tolerance | Pass |
@@ -72,7 +72,8 @@ The exact default `auto` configuration was observed healthy at 2026-09-04T15:56:
 - Runtime revision/tree: `b814e84c45f00fb0d9f3283175acc1a24fa90b95` / `4f3c051ed7ae4e856cb6d7d95f5c1af6984fc72d`
 - Runtime manifest/build receipt/executable: `5ea43ece0e2d2ba0b5b6cbfff360e053d86c8b9daf2774b1e5e056f1def87c52` / `1be74ce48fb2f94e0d0d96f6f3b50e0c9b055c4bc2c4918cea31194110ba1d15` / `c90e35ad4ac82dbc3bd94742890b25f7a6f9d186d4302101e2adbd2c14641969`
 - Model manifest: `b0b22769e4da1f0108a66f89ddb61d6ab30f824d76878035e6717104db8660cd`
-- Correctness evidence: `9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16`
+- Correctness evidence: [`results/raw/2026-09-03-qwen38-dynamic-mtp-correctness.json`](../raw/2026-09-03-qwen38-dynamic-mtp-correctness.json) (`9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16`)
+- Correctness repository revision/tree: `1e43502d1b780b039f8418125ad48f14d5fded4b` / `d1944deba7b3900d899afebf13c17e0485704973`
 - Correctness harness: `7c59b4191a252a629d19f97c61f992f100fce69fa23c915048ee13bb0e6ae13c`
 - Checkpoint identity: `998e93e3af0e62750a7a4f641bf1d0b36a1389d028c37b23d9e679aa43f9f3fb`
 - dynamic server log (`dynamic-session-1`): `82c2dfcb64b85d7659b4e992513a2c2b836b479ab9111390774b8d842b64f28b`

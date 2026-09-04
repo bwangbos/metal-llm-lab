@@ -170,15 +170,20 @@ if [[ "$request" == *'"image_url"'* ]]; then
   effective_prompt_tokens=32769
   speculative=false
 fi
+usage_prompt_tokens=$effective_prompt_tokens
 [[ "${FAKE_BAD_SHORT_ROUTE:-0}" == 0 || "$request" == *'"image_url"'* ]] || speculative=false
 [[ "${FAKE_BAD_LONG_ROUTE:-0}" == 0 || "$request" != *'"image_url"'* ]] || speculative=true
 if [[ "${FAKE_TEXT_ONLY_TIMING:-0}" == 1 && "$request" == *'"image_url"'* ]]; then
   effective_prompt_tokens=3
   speculative=true
 fi
+if [[ "${FAKE_SUBSTITUTED_VISION_TIMING:-0}" == 1 && "$request" == *'"image_url"'* ]]; then
+  effective_prompt_tokens=32768
+  speculative=true
+fi
 timings=',"timings":{"speculative":'$speculative',"speculative_policy":"dynamic","effective_prompt_tokens":'$effective_prompt_tokens',"speculative_threshold":32768}'
 [[ "${FAKE_OMIT_TIMINGS:-0}" == 0 ]] || timings=''
-usage=',"usage":{"prompt_tokens":3,"completion_tokens":2}'
+usage=',"usage":{"prompt_tokens":'$usage_prompt_tokens',"completion_tokens":2}'
 [[ "${FAKE_OMIT_USAGE:-0}" == 0 ]] || usage=''
 if [[ "${FAKE_NEGATIVE_USAGE:-0}" == 1 ]]; then
   usage=',"usage":{"prompt_tokens":-1,"completion_tokens":2}'
@@ -694,11 +699,13 @@ assert_endpoint_route_failure FAKE_OMIT_TIMINGS=1 'missing final endpoint timing
 assert_endpoint_route_failure FAKE_BAD_SHORT_ROUTE=1 'endpoint timing metadata does not match managed MTP policy'
 assert_endpoint_route_failure FAKE_BAD_LONG_ROUTE=1 'endpoint timing metadata does not match managed MTP policy'
 assert_endpoint_route_failure FAKE_TEXT_ONLY_TIMING=1 'endpoint effective prompt count is below resolved vision expansion minimum'
+assert_endpoint_route_failure FAKE_SUBSTITUTED_VISION_TIMING=1 \
+  'endpoint vision prompt-token usage does not match effective prompt timing'
 assert_endpoint_route_failure FAKE_STREAM_ROUTE_CHANGE=1 'endpoint stream changed MTP route metadata'
 
 endpoint_secret='endpoint-secret-must-not-leak'
 endpoint_output=$(env "${common_environment[@]}" METAL_LLM_API_KEY="$endpoint_secret" \
-    FAKE_SERVER_ACTIVE=1 FAKE_OMIT_USAGE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
+    FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
     METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
     --suite qwen3.8-smoke --mode endpoint)
 [[ "$endpoint_output" != *"$endpoint_secret"* ]] || fail 'endpoint benchmark printed METAL_LLM_API_KEY'
@@ -714,7 +721,8 @@ jq -e '
     .profile == null and .profile_id == "auto" and .runtime_alias == "tuned" and
     .runtime_id == "fixture-runtime" and .context == 262144 and .vision == true and
     .mtp_policy == "dynamic" and .mtp_threshold == 32768 and
-    .prompt_tokens == null and .generated_tokens == null and
+    (.request_kind == "text" or .request_kind == "vision") and
+    (.prompt_tokens | type == "number" and floor == . and . >= 0) and .generated_tokens == 2 and
     .prompt_tokens_per_second == null and .generation_tokens_per_second == null) and
   (.runs | map({id, effective_prompt_tokens, mtp_selected})) == [
     {id: "deterministic-api-smoke", effective_prompt_tokens: 32768, mtp_selected: true},
@@ -845,8 +853,8 @@ clear_managed_lease
 cp "$endpoint_files[1]" "$fixture_root/results/raw/endpoint.json"
 endpoint_report=$(env "${common_environment[@]}" "$fixture_cli" report)
 assert_contains "$endpoint_report" '| Run | Experiment | Prompt tokens | Effective prompt tokens | MTP policy | Selected route | Generated tokens | Prompt tok/s | Generation tok/s |'
-assert_contains "$endpoint_report" '| deterministic-api-smoke | suite-run | n/a | 32,768 | dynamic | on | n/a | n/a | n/a |'
-assert_contains "$endpoint_report" '| vision-spatial-smoke | suite-run | n/a | 32,769 | dynamic | off | n/a | n/a | n/a |'
+assert_contains "$endpoint_report" '| deterministic-api-smoke | suite-run | 32,768 | 32,768 | dynamic | on | 2 | n/a | n/a |'
+assert_contains "$endpoint_report" '| vision-spatial-smoke | suite-run | 32,769 | 32,769 | dynamic | off | 2 | n/a | n/a |'
 
 if mode_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
     --suite qwen3.8-smoke --mode mixed 2>&1); then

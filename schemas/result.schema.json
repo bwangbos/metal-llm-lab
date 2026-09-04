@@ -182,6 +182,7 @@
       ],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
+        "request_kind": { "enum": ["text", "vision"] },
         "experiment": { "$ref": "#/$defs/id" },
         "measurement_kind": {
           "enum": ["single_run", "three_run_mean"]

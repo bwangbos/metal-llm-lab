@@ -225,7 +225,8 @@ runtime_manifest="$root/manifests/runtimes/$runtime_id.json"
 hardware_manifest="$root/manifests/hardware/$hardware_id.json"
 collector_path="$root/tests/integration/test_dynamic_mtp_performance.sh"
 checkpoint_library_path="$root/lib/performance-checkpoint.zsh"
-integration_evidence="$root/.lab/task6-evidence/integration-acceptance.json"
+correctness_evidence_relative=results/raw/2026-09-03-qwen38-dynamic-mtp-correctness.json
+integration_evidence="$root/$correctness_evidence_relative"
 correctness_harness="$root/tests/integration/test_dynamic_mtp.sh"
 allocation_evidence="$root/.lab/task6-evidence/accepted-auto-allocation-observation.json"
 allocation_server_log="$root/.lab/task6-evidence/accepted-auto-allocation-server.log"
@@ -247,6 +248,8 @@ collector_sha=$(metal_llm_sha256 "$collector_path")
 checkpoint_library_sha=$(metal_llm_sha256 "$checkpoint_library_path")
 integration_evidence_sha=$(metal_llm_sha256 "$integration_evidence")
 correctness_harness_sha=$(metal_llm_sha256 "$correctness_harness")
+correctness_repository_revision=$(jq -er '.provenance.repository.revision' "$integration_evidence")
+correctness_repository_tree=$(jq -er '.provenance.repository.tree_sha' "$integration_evidence")
 allocation_evidence_sha=$(metal_llm_sha256 "$allocation_evidence")
 model_manifest_sha=$(metal_llm_sha256 "$model_manifest")
 runtime_manifest_sha=$(metal_llm_sha256 "$runtime_manifest")
@@ -857,6 +860,9 @@ jq -s \
   --arg receipt_sha "$common_receipt_sha" --arg executable_sha "$common_executable_sha" \
   --arg model_manifest_sha "$model_manifest_sha" --argjson artifacts "$common_artifacts" \
   --arg collector_sha "$collector_sha" --arg integration_sha "$integration_evidence_sha" \
+  --arg integration_path "$correctness_evidence_relative" \
+  --arg correctness_repository_revision "$correctness_repository_revision" \
+  --arg correctness_repository_tree "$correctness_repository_tree" \
   --arg correctness_harness_sha "$correctness_harness_sha" \
   --arg allocation_evidence_sha "$allocation_evidence_sha" \
   --argjson allocation_observation "$allocation_observation" \
@@ -909,8 +915,13 @@ jq -s \
       collection_started: $collection_started,
       collection_completed: $collection_completed,
       checkpoint_identity_sha256: $checkpoint_identity_sha,
-      correctness_evidence_sha256: $integration_sha,
-      correctness_harness_sha256: $correctness_harness_sha,
+      correctness_evidence: {
+        path: $integration_path,
+        sha256: $integration_sha,
+        repository_revision: $correctness_repository_revision,
+        repository_tree_sha: $correctness_repository_tree,
+        harness_sha256: $correctness_harness_sha
+      },
       accepted_allocation_observation: {
         evidence_sha256: $allocation_evidence_sha,
         observation: $allocation_observation
@@ -924,7 +935,7 @@ jq -s \
       limitation: "Machine-specific local measurements; output hashes are retained and no behavioral equivalence is inferred."
     },
     validations: [
-      {check: "Dynamic-MTP correctness and isolation", result: ("Pass; staged evidence SHA-256 " + $integration_sha)},
+      {check: "Dynamic-MTP correctness and isolation", result: ("Pass; tracked evidence SHA-256 " + $integration_sha)},
       {check: "Accepted default 262,144-token allocation memory observation",
        result: "Pass; sanitized RSS and system memory pressure captured"},
       {check: "Complete 21-cell performance matrix", result: "Pass; one warm-up and five measured samples per cell"},

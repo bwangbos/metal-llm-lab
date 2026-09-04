@@ -265,7 +265,13 @@
     "collection_started": "2026-09-04T13:13:16Z",
     "collection_completed": "2026-09-04T15:14:26Z",
     "checkpoint_identity_sha256": "998e93e3af0e62750a7a4f641bf1d0b36a1389d028c37b23d9e679aa43f9f3fb",
-    "correctness_evidence_sha256": "9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16",
+    "correctness_evidence": {
+      "path": "results/raw/2026-09-03-qwen38-dynamic-mtp-correctness.json",
+      "sha256": "9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "repository_tree_sha": "d1944deba7b3900d899afebf13c17e0485704973",
+      "harness_sha256": "7c59b4191a252a629d19f97c61f992f100fce69fa23c915048ee13bb0e6ae13c"
+    },
     "server_log_sha256": [
       {
         "policy": "dynamic",
@@ -1071,7 +1077,6 @@
         "passed": true
       }
     ],
-    "correctness_harness_sha256": "7c59b4191a252a629d19f97c61f992f100fce69fa23c915048ee13bb0e6ae13c",
     "accepted_allocation_observation": {
       "evidence_sha256": "25e70cbdb5d567f259f6bcc8b2d3e8451c7ad5ba8ad1b18551c27f04feb05949",
       "observation": {
@@ -1107,7 +1112,7 @@
   "validations": [
     {
       "check": "Dynamic-MTP correctness and isolation",
-      "result": "Pass; staged evidence SHA-256 9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16"
+      "result": "Pass; tracked evidence SHA-256 9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16"
     },
     {
       "check": "Accepted default 262,144-token allocation memory observation",

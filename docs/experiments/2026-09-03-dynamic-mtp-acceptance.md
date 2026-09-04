@@ -23,7 +23,8 @@ SHA-256 identities. It does not claim peak memory usage.
 Correctness and isolation used the opt-in integration harness. Its 19 retained
 rows covered threshold boundaries, multimodal expansion, streaming, slot reuse,
 concurrent opposite routes, deterministic correctness cases, and the one-process
-rule. The staged evidence SHA-256 is
+rule. The tracked [19-row correctness evidence](../../results/raw/2026-09-03-qwen38-dynamic-mtp-correctness.json)
+has SHA-256
 `9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16`.
 
 Performance used one full-model process at a time for fixed-on, fixed-off, and

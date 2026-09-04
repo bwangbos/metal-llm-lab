@@ -7,6 +7,7 @@ schema="$source_root/schemas/result.schema.json"
 raw_result="$source_root/results/raw/2026-09-03-qwen38-m5-max.json"
 summary="$source_root/results/summaries/qwen3.8-flash-next-m5-max.md"
 dynamic_raw_result="$source_root/results/raw/2026-09-03-qwen38-dynamic-mtp.json"
+correctness_raw_result="$source_root/results/raw/2026-09-03-qwen38-dynamic-mtp-correctness.json"
 dynamic_summary="$source_root/results/summaries/qwen3.8-flash-next-dynamic-mtp.md"
 correctness_harness="$source_root/tests/integration/test_dynamic_mtp.sh"
 
@@ -21,12 +22,16 @@ assert_contains() {
     [[ "$haystack" == *"$needle"* ]] || fail "missing expected output: $needle"
 }
 
-for required_file in "$schema" "$raw_result" "$summary" "$dynamic_raw_result" "$dynamic_summary"; do
+for required_file in "$schema" "$raw_result" "$summary" "$dynamic_raw_result" \
+  "$correctness_raw_result" "$dynamic_summary"; do
     [[ -f "$required_file" ]] || fail "missing ${required_file#$source_root/}"
     case "$required_file" in
         *.json) jq empty "$required_file" ;;
     esac
 done
+git -C "$source_root" ls-files --error-unmatch \
+  'results/raw/2026-09-03-qwen38-dynamic-mtp-correctness.json' >/dev/null 2>&1 || \
+    fail 'dynamic-MTP correctness evidence is not tracked for clean checkouts'
 
 jq -e '
   .suite_id == "dynamic-mtp-performance" and
@@ -39,6 +44,14 @@ jq -e '
   .configuration.warmups_per_cell == 1 and
   .configuration.samples_per_cell == 5 and
   .configuration.throughput_tolerance_percent == 5 and
+  (.configuration.correctness_evidence | keys | sort) ==
+    (["path", "sha256", "repository_revision", "repository_tree_sha", "harness_sha256"] | sort) and
+  .configuration.correctness_evidence.path ==
+    "results/raw/2026-09-03-qwen38-dynamic-mtp-correctness.json" and
+  (.configuration.correctness_evidence.sha256 | test("^[0-9a-f]{64}$")) and
+  (.configuration.correctness_evidence.repository_revision | test("^[0-9a-f]{40}$")) and
+  (.configuration.correctness_evidence.repository_tree_sha | test("^[0-9a-f]{40}$")) and
+  (.configuration.correctness_evidence.harness_sha256 | test("^[0-9a-f]{64}$")) and
   (.configuration.accepted_allocation_observation.evidence_sha256 |
     test("^[0-9a-f]{64}$")) and
   .configuration.accepted_allocation_observation.observation.context == 262144 and
@@ -57,8 +70,11 @@ jq -e '
   .interpretation.performance_gate_passed == true
 ' "$dynamic_raw_result" >/dev/null || fail 'dynamic-MTP raw acceptance evidence is incomplete'
 correctness_harness_sha=$(shasum -a 256 "$correctness_harness" | awk '{print $1}')
-[[ "$(jq -r '.configuration.correctness_harness_sha256' "$dynamic_raw_result")" == \
+[[ "$(jq -r '.configuration.correctness_evidence.harness_sha256' "$dynamic_raw_result")" == \
    "$correctness_harness_sha" ]] || fail 'dynamic-MTP result is not bound to the current correctness harness'
+correctness_evidence_sha=$(shasum -a 256 "$correctness_raw_result" | awk '{print $1}')
+[[ "$(jq -r '.configuration.correctness_evidence.sha256' "$dynamic_raw_result")" == \
+   "$correctness_evidence_sha" ]] || fail 'dynamic-MTP result is not bound to the tracked correctness evidence'
 
 allocation_timestamp=$(jq -r '.configuration.accepted_allocation_observation.observation.captured_at' \
   "$dynamic_raw_result")
@@ -146,7 +162,7 @@ jq -e '
 
 private_path_pattern='/''Users/[A-Za-z0-9._-]+/'
 if unsafe_match=$(rg -n "$private_path_pattern|(^|[\"_])(api[_-]?key|token|password|secret)[\"_ ]*:" \
-    "$schema" "$raw_result" "$summary" "$dynamic_raw_result" "$dynamic_summary" \
+    "$schema" "$raw_result" "$summary" "$dynamic_raw_result" "$correctness_raw_result" "$dynamic_summary" \
     "$source_root/docs" 2>/dev/null); then
     fail "committed result or documentation contains a private path or secret-like key:\n$unsafe_match"
 fi
@@ -164,14 +180,16 @@ $cli report --check >/dev/null
 temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-results.XXXXXX")
 trap 'rm -rf -- "$temporary_root"' EXIT
 fixture_root="$temporary_root/repository"
-mkdir -p "$fixture_root"/{bin,lib,schemas,results/raw,results/summaries,manifests/hardware,manifests/runtimes}
+mkdir -p "$fixture_root"/{bin,lib,schemas,results/raw,results/summaries,manifests/hardware,manifests/runtimes,tests/integration}
 cp "$source_root/bin/metal-llm" "$fixture_root/bin/metal-llm"
 cp "$source_root/lib"/*.zsh "$fixture_root/lib/"
 cp "$schema" "$fixture_root/schemas/result.schema.json"
 cp "$source_root/manifests/hardware"/*.json "$fixture_root/manifests/hardware/"
 cp "$source_root/manifests/runtimes"/*.json "$fixture_root/manifests/runtimes/"
 cp "$raw_result" "$fixture_root/results/raw/result.json"
+cp "$correctness_raw_result" "$fixture_root/results/raw/2026-09-03-qwen38-dynamic-mtp-correctness.json"
 cp "$summary" "$fixture_root/results/summaries/qwen3.8-flash-next-m5-max.md"
+cp "$correctness_harness" "$fixture_root/tests/integration/test_dynamic_mtp.sh"
 fixture_cli="$fixture_root/bin/metal-llm"
 chmod +x "$fixture_cli"
 
@@ -210,7 +228,8 @@ jq '
   del(.summary) |
   .benchmark_mode = "endpoint" | .suite_id = "qwen3.8-smoke" |
   .runs = [(.runs[0] |
-    .id = "dynamic-short" | .profile_id = "auto" | .runtime_alias = "tuned" |
+    .id = "dynamic-short" | .request_kind = "text" |
+    .profile_id = "auto" | .runtime_alias = "tuned" |
     .context = 262144 | .vision = true | .mtp_policy = "dynamic" |
     .mtp_selected = true | .mtp_threshold = 32768 | .prompt_tokens = 3 |
     .effective_prompt_tokens = 32768)] |
@@ -264,8 +283,12 @@ assert_route_invalid '.provenance.hardware.id = "invented-hardware"' \
 assert_route_invalid '.provenance.suite.id = "other-suite"' \
   'top-level suite differs from provenance'
 assert_route_invalid 'del(.suite_id)' 'new endpoint harness without top-level suite identity'
+assert_route_invalid 'del(.runs[0].request_kind)' 'new endpoint row without typed request kind'
 assert_route_invalid '.runs[0].mtp_selected = false' 'dynamic route disabled at threshold'
 assert_route_invalid '.runs[0].effective_prompt_tokens = 32769' 'dynamic route enabled above threshold'
+assert_route_invalid '.runs[0].request_kind = "vision" | .runs[0].prompt_tokens = 32769 |
+  .runs[0].effective_prompt_tokens = 32768 | .runs[0].mtp_selected = true' \
+  'vision route used substituted text-only timing count'
 assert_route_invalid '.runs[0].effective_prompt_tokens = 262145 | .runs[0].mtp_selected = false' \
   'effective prompt count exceeds configured context'
 assert_route_invalid '.runs[0].mtp_policy = "on" | .runs[0].mtp_selected = false | .runs[0].mtp_threshold = null' \
@@ -318,6 +341,76 @@ assert_contains "$renamed_dynamic_output" 'invalid benchmark route provenance'
 cp "$dynamic_raw_result" "$fixture_root/results/raw/result.json"
 $fixture_cli report >/dev/null
 $fixture_cli report --check >/dev/null
+
+fixture_correctness="$fixture_root/results/raw/2026-09-03-qwen38-dynamic-mtp-correctness.json"
+restore_correctness_fixture() {
+    cp "$correctness_raw_result" "$fixture_correctness"
+    cp "$dynamic_raw_result" "$fixture_root/results/raw/result.json"
+}
+
+assert_correctness_rejected() {
+    local description=$1
+    local expected_error=$2
+    if correctness_output=$($fixture_cli report --check 2>&1); then
+        fail "report --check accepted $description"
+    fi
+    assert_contains "$correctness_output" "$expected_error"
+}
+
+rm -f -- "$fixture_correctness"
+assert_correctness_rejected 'missing tracked correctness evidence' \
+  'invalid dynamic-MTP correctness evidence'
+
+restore_correctness_fixture
+jq '.runs[0].notes += " changed"' "$correctness_raw_result" > "$fixture_correctness.part"
+mv "$fixture_correctness.part" "$fixture_correctness"
+assert_correctness_rejected 'changed tracked correctness evidence' \
+  'invalid dynamic-MTP correctness evidence'
+
+restore_correctness_fixture
+print -r -- '{malformed' > "$fixture_correctness"
+malformed_sha=$(shasum -a 256 "$fixture_correctness" | awk '{print $1}')
+jq --arg sha "$malformed_sha" '.configuration.correctness_evidence.sha256 = $sha' \
+  "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
+assert_correctness_rejected 'malformed tracked correctness evidence' 'invalid result document'
+
+restore_correctness_fixture
+jq 'del(.runs[-1])' "$correctness_raw_result" > "$fixture_correctness.part"
+mv "$fixture_correctness.part" "$fixture_correctness"
+wrong_case_sha=$(shasum -a 256 "$fixture_correctness" | awk '{print $1}')
+jq --arg sha "$wrong_case_sha" '.configuration.correctness_evidence.sha256 = $sha' \
+  "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
+assert_correctness_rejected 'tracked correctness evidence with the wrong case set' \
+  'invalid dynamic-MTP correctness evidence'
+
+restore_correctness_fixture
+jq '.provenance.suite.sha256 = ("f" * 64)' \
+  "$correctness_raw_result" > "$fixture_correctness.part"
+mv "$fixture_correctness.part" "$fixture_correctness"
+wrong_harness_sha=$(shasum -a 256 "$fixture_correctness" | awk '{print $1}')
+jq --arg sha "$wrong_harness_sha" '.configuration.correctness_evidence.sha256 = $sha' \
+  "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
+assert_correctness_rejected 'tracked correctness evidence with the wrong harness identity' \
+  'invalid dynamic-MTP correctness evidence'
+
+restore_correctness_fixture
+jq '.configuration.correctness_evidence.sha256 = ("f" * 64)' \
+  "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
+assert_correctness_rejected 'tracked correctness evidence with the wrong bound hash' \
+  'invalid dynamic-MTP correctness evidence'
+
+restore_correctness_fixture
+jq '.provenance.repository.revision = ("f" * 40) |
+    (.runs[].repository_revision = ("f" * 40))' \
+  "$correctness_raw_result" > "$fixture_correctness.part"
+mv "$fixture_correctness.part" "$fixture_correctness"
+wrong_provenance_sha=$(shasum -a 256 "$fixture_correctness" | awk '{print $1}')
+jq --arg sha "$wrong_provenance_sha" '.configuration.correctness_evidence.sha256 = $sha' \
+  "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
+assert_correctness_rejected 'tracked correctness evidence with changed immutable provenance' \
+  'invalid dynamic-MTP correctness evidence'
+
+restore_correctness_fixture
 jq '.runs[0].generation_tokens_per_second += 1' \
     "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
 if dynamic_drift_output=$($fixture_cli report --check 2>&1); then
@@ -415,6 +508,7 @@ jq --slurpfile route "$route_result" '
     .runtime_alias = $route[0].provenance.runtime_alias |
     .context = $route[0].provenance.context |
     .vision = $route[0].provenance.vision |
+    .request_kind = "text" |
     .mtp_policy = $route[0].provenance.mtp_policy |
     .mtp_selected = (.effective_prompt_tokens <= $route[0].provenance.mtp_threshold) |
     .mtp_threshold = $route[0].provenance.mtp_threshold |

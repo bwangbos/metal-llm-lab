@@ -87,8 +87,87 @@ metal_llm_validate_accepted_allocation_observation() {
     ' <<< "$observation" >/dev/null 2>&1
 }
 
+metal_llm_resolve_result_evidence_path() {
+    local relative_path=$1 repository_root=${METAL_LLM_ROOT:A}
+    local current component
+    local -a components
+    [[ "$METAL_LLM_ROOT" == /* && "$repository_root" == "$METAL_LLM_ROOT" && \
+       -d "$repository_root" && ! -L "$repository_root" && \
+       "$relative_path" =~ '^results/raw/[a-z0-9][a-z0-9.-]*\.json$' ]] || return 1
+    components=("${(@s:/:)relative_path}")
+    current=$repository_root
+    for component in "${components[@]}"; do
+        [[ -n "$component" && "$component" != . && "$component" != .. ]] || return 1
+        current="$current/$component"
+        [[ -e "$current" && ! -L "$current" ]] || return 1
+    done
+    [[ -f "$current" && "${current:A}" == "$current" ]] || return 1
+    print -r -- "$current"
+}
+
+metal_llm_validate_promoted_dynamic_mtp_correctness_evidence() {
+    local promoted_result=$1 descriptor evidence_path evidence_sha harness_path harness_sha
+    descriptor=$(jq -ce '
+      .configuration.correctness_evidence |
+      select(type == "object" and (keys | sort) ==
+        (["path", "sha256", "repository_revision", "repository_tree_sha", "harness_sha256"] | sort) and
+        (.path | type == "string") and
+        (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+        (.repository_revision | type == "string" and test("^[0-9a-f]{40}$")) and
+        (.repository_tree_sha | type == "string" and test("^[0-9a-f]{40}$")) and
+        (.harness_sha256 | type == "string" and test("^[0-9a-f]{64}$")))
+    ' "$promoted_result") || return 1
+    evidence_path=$(metal_llm_resolve_result_evidence_path \
+      "$(jq -r '.path' <<< "$descriptor")") || return 1
+    evidence_sha=$(metal_llm_sha256 "$evidence_path") || return 1
+    [[ "$evidence_sha" == "$(jq -r '.sha256' <<< "$descriptor")" ]] || return 1
+    jq empty "$evidence_path" >/dev/null 2>&1 || return 1
+
+    harness_path="$METAL_LLM_ROOT/tests/integration/test_dynamic_mtp.sh"
+    [[ -f "$harness_path" && ! -L "$harness_path" && "${harness_path:A}" == "$harness_path" ]] || return 1
+    harness_sha=$(metal_llm_sha256 "$harness_path") || return 1
+    [[ "$harness_sha" == "$(jq -r '.harness_sha256' <<< "$descriptor")" ]] || return 1
+
+    metal_llm_validate_result "$evidence_path" \
+      "$(jq -r '.path' <<< "$descriptor")" || return 1
+    jq -e --slurpfile promoted "$promoted_result" --arg harness_sha "$harness_sha" '
+      . as $evidence | $promoted[0] as $result |
+      ([
+        "boundary-32767", "boundary-32768", "boundary-32769", "calibration-offset",
+        "concurrent-long", "concurrent-short", "json-long", "json-short", "reuse-long",
+        "reuse-short-first", "reuse-short-second", "text-long", "text-short", "tool-long",
+        "tool-short", "vision-cross-expanded", "vision-cross-text-control", "vision-long", "vision-short"
+      ] | sort) as $expected_ids |
+      (keys | sort) == ([
+        "schema_version", "experiment_id", "date", "model_id", "suite_id",
+        "benchmark_mode", "provenance", "runs"
+      ] | sort) and
+      .schema_version == 1 and .model_id == "qwen3.8-flash-next" and
+      .suite_id == "dynamic-mtp-acceptance" and .benchmark_mode == "endpoint" and
+      .provenance.repository.clean == true and
+      .provenance.repository.revision == $result.configuration.correctness_evidence.repository_revision and
+      .provenance.repository.tree_sha == $result.configuration.correctness_evidence.repository_tree_sha and
+      .provenance.hardware == $result.provenance.hardware and
+      .provenance.system == $result.provenance.system and
+      .provenance.profile_id == "auto" and .provenance.runtime_alias == "tuned" and
+      .provenance.context == 262144 and .provenance.vision == true and
+      .provenance.mtp_policy == "dynamic" and .provenance.mtp_threshold == 32768 and
+      .provenance.runtime == $result.provenance.runtime and
+      .provenance.model_manifest_sha256 == $result.provenance.model_manifest_sha256 and
+      .provenance.artifacts == $result.provenance.artifacts and
+      .provenance.suite.id == "dynamic-mtp-acceptance" and
+      .provenance.suite.sha256 == $harness_sha and
+      ([.runs[].id] | sort) == $expected_ids and
+      ([.runs[].id] | unique | length) == 19 and (.runs | length) == 19
+    ' "$evidence_path" >/dev/null 2>&1
+}
+
 metal_llm_validate_dynamic_mtp_derived_data() {
     local result_file=$1 derived allocation_observation allocation_sha expected_allocation_sha
+    metal_llm_validate_promoted_dynamic_mtp_correctness_evidence "$result_file" || {
+        metal_llm_die "invalid dynamic-MTP correctness evidence: ${result_file#$METAL_LLM_ROOT/}"
+        return 1
+    }
     derived=$(metal_llm_dynamic_mtp_derived_data "$result_file") || return 1
     allocation_observation=$(jq -c '.configuration.accepted_allocation_observation.observation' \
       "$result_file") || return 1
@@ -111,8 +190,6 @@ metal_llm_validate_dynamic_mtp_derived_data() {
       .configuration.warmups_per_cell == 1 and .configuration.samples_per_cell == 5 and
       .configuration.throughput_tolerance_percent == 5 and
       .configuration.comparison_metric == "generation_tokens_per_second" and
-      (.configuration.correctness_harness_sha256 | type == "string" and
-        test("^[0-9a-f]{64}$")) and
       ([.runs[].id] | sort) == $expected_ids and
       ([.runs[].id] | unique | length) == (.runs | length) and
       ($derived.statistics | length) == 21 and
@@ -223,6 +300,17 @@ metal_llm_validate_result() {
         (.vision | type == "boolean") and
         (.effective_prompt_tokens | type == "number" and floor == . and . >= 0) and
         .effective_prompt_tokens <= .context and
+        (if has("request_kind") then
+          if .request_kind == "vision" then
+            (.prompt_tokens | type == "number" and floor == . and . >= 0) and
+            .prompt_tokens == .effective_prompt_tokens
+          else .request_kind == "text" end
+        else
+          ($root.suite_id == "dynamic-mtp-performance" and
+            .experiment == "dynamic-mtp-performance") or
+          ($root.suite_id == "dynamic-mtp-acceptance" and
+            .experiment == "dynamic-mtp-acceptance" and .prompt_tokens == null)
+        end) and
         (.mtp_selected | type == "boolean") and
         (if .mtp_policy == "dynamic" then
           (.mtp_threshold | type == "number" and floor == . and . > 0) and
@@ -583,8 +671,13 @@ metal_llm_generate_dynamic_mtp_summary() {
         "- Runtime revision/tree: `" + .provenance.runtime.tested_revision + "` / `" + .provenance.runtime.tested_tree_sha + "`",
         "- Runtime manifest/build receipt/executable: `" + .provenance.runtime.manifest_sha256 + "` / `" + .provenance.runtime.build_receipt_sha256 + "` / `" + .provenance.runtime.executable.sha256 + "`",
         "- Model manifest: `" + .provenance.model_manifest_sha256 + "`",
-        "- Correctness evidence: `" + .configuration.correctness_evidence_sha256 + "`",
-        "- Correctness harness: `" + .configuration.correctness_harness_sha256 + "`",
+        "- Correctness evidence: [`" + .configuration.correctness_evidence.path + "`](../raw/" +
+          (.configuration.correctness_evidence.path | split("/") | last) + ") (`" +
+          .configuration.correctness_evidence.sha256 + "`)",
+        "- Correctness repository revision/tree: `" +
+          .configuration.correctness_evidence.repository_revision + "` / `" +
+          .configuration.correctness_evidence.repository_tree_sha + "`",
+        "- Correctness harness: `" + .configuration.correctness_evidence.harness_sha256 + "`",
         "- Checkpoint identity: `" + .configuration.checkpoint_identity_sha256 + "`"
       ] +
       [.configuration.server_log_sha256[] |
