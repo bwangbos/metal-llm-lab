@@ -86,6 +86,26 @@ metal_llm_resolve_profile() {
         metal_llm_die 'runtime upstream supports only MTP policy off'
         return 1
     fi
+    local runtime_id runtime_manifest repository_root
+    runtime_id=$(jq -er --arg runtime_alias "$runtime_alias" '
+      .runtime_aliases[$runtime_alias] |
+      select(type == "string" and test("^[a-z0-9]+([.-][a-z0-9]+)*$"))
+    ' "$model_manifest" 2>/dev/null) || {
+        metal_llm_die "model manifest has no valid runtime alias: $runtime_alias"
+        return 1
+    }
+    repository_root=${METAL_LLM_ROOT:-${model_manifest:A:h:h:h}}
+    runtime_manifest="$repository_root/manifests/runtimes/$runtime_id.json"
+    [[ -f "$runtime_manifest" ]] || {
+        metal_llm_die "runtime manifest not found for alias $runtime_alias: $runtime_id"
+        return 1
+    }
+    jq -e --arg runtime_id "$runtime_id" '
+      .schema_version == 1 and .id == $runtime_id
+    ' "$runtime_manifest" >/dev/null 2>&1 || {
+        metal_llm_die "runtime manifest identity mismatch for alias $runtime_alias: $runtime_id"
+        return 1
+    }
     [[ "$context" == <-> ]] || {
         metal_llm_die 'context must be a positive integer no larger than the model maximum'
         return 1
@@ -104,6 +124,7 @@ metal_llm_resolve_profile() {
     normalized=$(jq -cer \
       --arg profile_id "$profile_id" \
       --arg runtime_alias "$runtime_alias" \
+      --arg runtime_id "$runtime_id" \
       --arg mtp_policy "$mtp_policy" \
       --arg vision "$vision" \
       --argjson context "$context_number" '
@@ -113,8 +134,7 @@ metal_llm_resolve_profile() {
         .schema_version == 2 and
         ([.artifacts[].id] | length == (unique | length)) and
         (.runtime_aliases | type == "object") and
-        (.runtime_aliases[$runtime_alias] | type == "string" and
-          test("^[a-z0-9]+([.-][a-z0-9]+)*$")) and
+        (.runtime_aliases[$runtime_alias] == $runtime_id) and
         (.text_model.entry_artifact_id as $id |
           any(.artifacts[]; .id == $id and .kind == "model")) and
         (.capabilities.vision.projector_artifact_id as $id |
@@ -129,7 +149,7 @@ metal_llm_resolve_profile() {
       {
         profile_id: $profile_id,
         runtime_alias: $runtime_alias,
-        runtime_id: .runtime_aliases[$runtime_alias],
+        runtime_id: $runtime_id,
         context: $context,
         vision: (if $vision == "on" then {
           enabled: true,
