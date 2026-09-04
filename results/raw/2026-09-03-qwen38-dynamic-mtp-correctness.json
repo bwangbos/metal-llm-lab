@@ -1,0 +1,976 @@
+{
+  "schema_version": 1,
+  "experiment_id": "20260904t040734z-dynamic-mtp-acceptance",
+  "date": "2026-09-04",
+  "model_id": "qwen3.8-flash-next",
+  "suite_id": "dynamic-mtp-acceptance",
+  "benchmark_mode": "endpoint",
+  "provenance": {
+    "repository": {
+      "revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "tree_sha": "d1944deba7b3900d899afebf13c17e0485704973",
+      "clean": true
+    },
+    "hardware": {
+      "id": "apple-m5-max-128gb",
+      "chip": "Apple M5 Max",
+      "unified_memory_bytes": 137438953472
+    },
+    "system": {
+      "operating_system": "macOS",
+      "operating_system_version": "26.4",
+      "compiler": "Apple clang version 21.0.0 (clang-2100.0.123.102)",
+      "sdk": "26.4.1",
+      "power_source": "AC Power",
+      "low_power_mode": null
+    },
+    "profile_id": "auto",
+    "runtime_alias": "tuned",
+    "context": 262144,
+    "vision": true,
+    "mtp_policy": "dynamic",
+    "mtp_threshold": 32768,
+    "runtime": {
+      "id": "llama-cpp-qwen38-hybrid",
+      "tested_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "tested_tree_sha": "4f3c051ed7ae4e856cb6d7d95f5c1af6984fc72d",
+      "manifest_sha256": "5ea43ece0e2d2ba0b5b6cbfff360e053d86c8b9daf2774b1e5e056f1def87c52",
+      "build_receipt_sha256": "1be74ce48fb2f94e0d0d96f6f3b50e0c9b055c4bc2c4918cea31194110ba1d15",
+      "executable": {
+        "name": "llama-server",
+        "sha256": "c90e35ad4ac82dbc3bd94742890b25f7a6f9d186d4302101e2adbd2c14641969"
+      }
+    },
+    "model_manifest_sha256": "b0b22769e4da1f0108a66f89ddb61d6ab30f824d76878035e6717104db8660cd",
+    "artifacts": [
+      {
+        "id": "qwen38-text-00001",
+        "bytes": 693380288,
+        "sha256": "d74620aad612239711e0947f58d2614fa8f47335fb01f23e47b24a3315c3e730"
+      },
+      {
+        "id": "qwen38-text-00002",
+        "bytes": 38400184512,
+        "sha256": "77edf6523f6abbd7ba6a78aa1ef4a658dfaca544f9c5f46cf0efd0b0ff00bef0"
+      },
+      {
+        "id": "qwen38-text-00003",
+        "bytes": 1999024832,
+        "sha256": "50a95250ea2cfb5b9359bfbf37e8334959266c38777c134e1c7082c4a668f59d"
+      },
+      {
+        "id": "qwen38-text-00004",
+        "bytes": 1787651072,
+        "sha256": "0a32371569fd1564e82be13301a872847d00dce450db7c7f930f6978c0bccd6d"
+      },
+      {
+        "id": "qwen38-text-00005",
+        "bytes": 1654830080,
+        "sha256": "d545285f60dd11a2dfc46388a86af7ecb4c1bbdd86ac5364bb860ad3eefca8a4"
+      },
+      {
+        "id": "qwen38-text-00006",
+        "bytes": 1993256608,
+        "sha256": "64aacb4a86cc92a5a48f19619393f22af9b1a17d1c2dfbaded21bf936553994d"
+      },
+      {
+        "id": "qwen38-text-00007",
+        "bytes": 1725815808,
+        "sha256": "7cfd22c0de5dda2500643b9e13ef9c4aea338968ca29c1786226b325bc5948c6"
+      },
+      {
+        "id": "qwen38-text-00008",
+        "bytes": 1830961056,
+        "sha256": "408457d6a65f632b62ebec099112fb106ed1c1d3d5bc2bd9e189004bad9af550"
+      },
+      {
+        "id": "qwen38-text-00009",
+        "bytes": 1915366048,
+        "sha256": "c1f962654057e9a4f71af34ccada5d242af62a5c915b0694a0a152b30b24ba99"
+      },
+      {
+        "id": "qwen38-text-00010",
+        "bytes": 1711956000,
+        "sha256": "b85555c695efc1bd6852d005bd20931882b54c2d0f48a0912f846fe5e252b697"
+      },
+      {
+        "id": "qwen38-text-00011",
+        "bytes": 1844820928,
+        "sha256": "e5cb081065b8721583ddc29f5f71f5acb1d537c2d2a3bd8bc18e03d4340d2e43"
+      },
+      {
+        "id": "qwen38-text-00012",
+        "bytes": 1923724224,
+        "sha256": "cc9cb8624556958f65b9763c918ee077542e3d0cc1f6a81a647b2987860f1243"
+      },
+      {
+        "id": "qwen38-text-00013",
+        "bytes": 1703597888,
+        "sha256": "cd4abb2dc631a08f9b3885597f77bc24d1b1d9acd4662cafc17ebfb8e0b8959e"
+      },
+      {
+        "id": "qwen38-text-00014",
+        "bytes": 1844820928,
+        "sha256": "b14050af3b53ee789575a2a8159cb1524a2160a8b251e97fd367f2c0ffcf73d3"
+      },
+      {
+        "id": "qwen38-text-00015",
+        "bytes": 1909864352,
+        "sha256": "d6066a9799e1640b2609fa9c28b19d33ce1441c4737de11d3eb8e283d494c61f"
+      },
+      {
+        "id": "qwen38-text-00016",
+        "bytes": 1717457728,
+        "sha256": "76c95f5229b461e6c648f536a714457913fab50fb2608ffa64ec10ddbf8eabed"
+      },
+      {
+        "id": "qwen38-text-00017",
+        "bytes": 1853179072,
+        "sha256": "5a9428ca9bab16c1ada3b43bc98b60d3a884f7bded0aa9b468fb66dd6c36e68b"
+      },
+      {
+        "id": "qwen38-text-00018",
+        "bytes": 1901506240,
+        "sha256": "d4ad15dfa433fc1d0d09112bb175512321d41fe60a651b720e1c104cdd2c8f97"
+      },
+      {
+        "id": "qwen38-text-00019",
+        "bytes": 1725815872,
+        "sha256": "6ba1501407c639a126e74f483bfa4073da42ea24abecd251a7d560a0810855ba"
+      },
+      {
+        "id": "qwen38-text-00020",
+        "bytes": 1830961088,
+        "sha256": "96fc276c556886d19af5d1514876c59ad7d37005e99c329f35e4d4418515219b"
+      },
+      {
+        "id": "qwen38-text-00021",
+        "bytes": 1915366080,
+        "sha256": "f3c46604b832c24201c1d4d6ac22830ec729830f66e7bb91a2f8895ec41d62f9"
+      },
+      {
+        "id": "qwen38-text-00022",
+        "bytes": 1711956000,
+        "sha256": "5ae92fbdd717a4246620608a441571fd041dfb2a4bd20d969a8f6c8cd411b734"
+      },
+      {
+        "id": "qwen38-text-00023",
+        "bytes": 1844820928,
+        "sha256": "59bc05521ea68a8b6ff4b78fd275a0da975270384db05f2fbc62fbb901f28b15"
+      },
+      {
+        "id": "qwen38-text-00024",
+        "bytes": 1923724224,
+        "sha256": "14216d45769bc6ffec284e1be54ef9b200081fb528b97653ccaeedad896a5396"
+      },
+      {
+        "id": "qwen38-text-00025",
+        "bytes": 1703597888,
+        "sha256": "94bd0311975222d1c62f47fa6cde17bb56ad6f98c47c42c888a19e7d57b704af"
+      },
+      {
+        "id": "qwen38-text-00026",
+        "bytes": 1844820928,
+        "sha256": "b69a8f3b9896f7c0c1b75778d833ef8b0a3aa6d2df587444741a172a39f49c1f"
+      },
+      {
+        "id": "qwen38-text-00027",
+        "bytes": 1909864352,
+        "sha256": "35c3703530a17fcf42b8dbe8a582a3fe1be6e5d58885460fd46fd614585bec8b"
+      },
+      {
+        "id": "qwen38-text-00028",
+        "bytes": 1646472000,
+        "sha256": "8d01bec24d38b8876c8a011e04ccfca22584d9f86ea24c13e7e7b07a781cfbba"
+      },
+      {
+        "id": "qwen38-text-00029",
+        "bytes": 1725375264,
+        "sha256": "2b266e2d2a7f610d0a3de55a626e2f9029594c383074240d29c383a8f70e1064"
+      },
+      {
+        "id": "qwen38-text-00030",
+        "bytes": 1738770080,
+        "sha256": "36af1ca74bbf2bd4d79ac78b61a9f5d24e5ca9aac33d298bfbed7d9dbbe86c69"
+      },
+      {
+        "id": "qwen38-text-00031",
+        "bytes": 1646472000,
+        "sha256": "2cf675a6d3df1ff2eb018323c7e64ab14cd650eb38f954e948df27501822fdc1"
+      },
+      {
+        "id": "qwen38-text-00032",
+        "bytes": 1725375264,
+        "sha256": "59c5ab585958f86cecbd812a9ae34f1475d98ffff235d27734964fb53d8b4951"
+      },
+      {
+        "id": "qwen38-text-00033",
+        "bytes": 1220605344,
+        "sha256": "0a7311b24f8636f5b7c0f0dca4f6275ec6b45e326a5eb7400410ca4e32c269c2"
+      },
+      {
+        "id": "qwen38-projector-f16",
+        "bytes": 904003840,
+        "sha256": "0e61454a76dd154a10aaa8fb1ada32615f55a13e4171014dacd06913e4aa6889"
+      },
+      {
+        "id": "qwen38-mtp-q8-0",
+        "bytes": 2786568256,
+        "sha256": "5ff54097406a905cf3a724c709124ceb0e3e10235ee862298969e91c96fa96e6"
+      }
+    ],
+    "suite": {
+      "id": "dynamic-mtp-acceptance",
+      "sha256": "7c59b4191a252a629d19f97c61f992f100fce69fa23c915048ee13bb0e6ae13c",
+      "fixtures": [
+        {
+          "path": "benchmarks/fixtures/vision-spatial.png",
+          "sha256": "7f168173a245efd1995a5a9f714a8545d779437fd76db100e6bf88f7a1e44458"
+        }
+      ]
+    }
+  },
+  "runs": [
+    {
+      "id": "calibration-offset",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": true,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 32,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "24259d8b2de83d207707e73ad4b931b99236deaf4e148d7908d35aedc80a3e3d",
+      "draft_acceptance": "10/10",
+      "command": [
+        "curl",
+        "POST",
+        "/completion",
+        "payload-sha256:826c267a3d10ba75c837375eaad7a612e939499661fec2c26967b5c0dcdeb3d5"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 16,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Calibrated the completion endpoint special-token offset; route and draft statistics validated."
+    },
+    {
+      "id": "boundary-32767",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": true,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 32767,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "d964c2ead548cae196bc14c20d1072307304b5a14e1630377aa2fd4c10db24de",
+      "draft_acceptance": "10/10",
+      "command": [
+        "curl",
+        "POST",
+        "/completion",
+        "payload-sha256:d615d43e13e4fc9eb3d02cde380dc219091fb19813edb6286008a58668bfd6d4"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 16,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Exact effective-token boundary 32767; terminal route and draft statistics validated."
+    },
+    {
+      "id": "boundary-32768",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": true,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 32768,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "65634053d55a5d723478c7302ed4ab64de9107295b96526ce34c5fee839281f6",
+      "draft_acceptance": "10/10",
+      "command": [
+        "curl",
+        "POST",
+        "/completion",
+        "payload-sha256:64bbde75e2a7d38e9e467109c32398f4e91d6e95b3a7a783944d716b30c6bb49"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 16,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Exact effective-token boundary 32768; terminal route and draft statistics validated."
+    },
+    {
+      "id": "boundary-32769",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": false,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 32769,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "1137c634694f01bb53ac85657f52bf9a49ab507dcff31bfaf51be6239ab0944e",
+      "draft_acceptance": "0/0",
+      "command": [
+        "curl",
+        "POST",
+        "/completion",
+        "payload-sha256:0f313d76673b68da51587a2e9b01eb95226ee8315e65d7463ae01b52ea5f35ad"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 16,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Exact effective-token boundary 32769; terminal route and draft statistics validated."
+    },
+    {
+      "id": "reuse-short-first",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": true,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 32767,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "25848342037e808465e0cf02150222605f806d9f33941bc7e334204c36af17a9",
+      "draft_acceptance": "10/10",
+      "command": [
+        "curl",
+        "POST",
+        "/completion",
+        "payload-sha256:d615d43e13e4fc9eb3d02cde380dc219091fb19813edb6286008a58668bfd6d4"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 16,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Explicit slot 0 reuse case short-first; route reset and draft statistics validated."
+    },
+    {
+      "id": "reuse-long",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": false,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 32769,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "99e63400d2d382395028d630991acf252f0cec25db8a4b7fa57f03562db669e5",
+      "draft_acceptance": "0/0",
+      "command": [
+        "curl",
+        "POST",
+        "/completion",
+        "payload-sha256:363ac6f771966db7168e2b926002023b6be2ea24269945545f85070a36d72591"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 16,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Explicit slot 0 reuse case long; route reset and draft statistics validated."
+    },
+    {
+      "id": "reuse-short-second",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": true,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 32767,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "02acb67439f352d01f94d61dbd3160ee634fb8fa04cdb6162bf21bef6c34ce72",
+      "draft_acceptance": "10/10",
+      "command": [
+        "curl",
+        "POST",
+        "/completion",
+        "payload-sha256:d615d43e13e4fc9eb3d02cde380dc219091fb19813edb6286008a58668bfd6d4"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 16,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Explicit slot 0 reuse case short-second; route reset and draft statistics validated."
+    },
+    {
+      "id": "concurrent-short",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": true,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 32767,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "8da78c0820283a1e3cd7f027d41d7579468216d4d6921501f0a1e8e24c57f07a",
+      "draft_acceptance": "42/42",
+      "command": [
+        "curl",
+        "POST",
+        "/completion",
+        "payload-sha256:fc47a8880acea6970a0bc66d87360a4ede1b1382dbc8f7e6bef57e4db438945e"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 64,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Concurrent explicit slot 0 request selected the speculative route."
+    },
+    {
+      "id": "concurrent-long",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": false,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 32769,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "e7c92ee990f4d1d0efeb3faabc82214c4b1d9e0f29f7787645c21247c873d43d",
+      "draft_acceptance": "0/0",
+      "command": [
+        "curl",
+        "POST",
+        "/completion",
+        "payload-sha256:ada30b2a40fdeb13dacdf41c8480142f8661efe0d1b6f5b4ba4aea6ea7144cc4"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 64,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Concurrent explicit slot 1 request selected the conventional route."
+    },
+    {
+      "id": "text-short",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": true,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 22,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "aacf7c3c846cac80659b4f068d63b73c3b760667abf76e784a97a7060c9afd91",
+      "draft_acceptance": "4/4",
+      "command": [
+        "curl",
+        "POST",
+        "/v1/chat/completions",
+        "payload-sha256:96ebc1d41e3e39a69b757b52dbfe622258958d2ae9d545920ff15b3e62f84d6a"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 64,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Deterministic text completed on the short route."
+    },
+    {
+      "id": "text-long",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": false,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 33023,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "151b82e908fd7768c6974f6df9e724c0fa3feb6111eb87d6b53a815aaceb7242",
+      "draft_acceptance": "0/0",
+      "command": [
+        "curl",
+        "POST",
+        "/v1/chat/completions",
+        "payload-sha256:1c67f3b200c463f4d7197c36d7cb286b40f27bcd7aaae6034b86bec6e862a22d"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 64,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Deterministic text completed on the long route."
+    },
+    {
+      "id": "json-short",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": true,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 25,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "ec07cfb28928ba2b6aa7682aa698e6a314732b1acf7da51baad4315f7a1622d3",
+      "draft_acceptance": "8/8",
+      "command": [
+        "curl",
+        "POST",
+        "/v1/chat/completions",
+        "payload-sha256:aa8f8aad71779b44d0e6119db79fd135fe2895c5d4730bcf4433d563b8a34365"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 256,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Structured JSON completed and parsed on the short route."
+    },
+    {
+      "id": "json-long",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": false,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 33026,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "d2ee447b004d3f616104a40b9fd53f6ee993112b65530492572845eaffdd1425",
+      "draft_acceptance": "0/0",
+      "command": [
+        "curl",
+        "POST",
+        "/v1/chat/completions",
+        "payload-sha256:90f3d830118e24a165c4d64b2eebac8c36dd20cfc5df74968df925b032fd7ba9"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 256,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Structured JSON completed and parsed on the long route."
+    },
+    {
+      "id": "tool-short",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": true,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 282,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "8f89f89a6cd649a2ab7237faaf914785f8428abf7b698619a8eb29c36008f6e5",
+      "draft_acceptance": "18/18",
+      "command": [
+        "curl",
+        "POST",
+        "/v1/chat/completions",
+        "payload-sha256:3e5a458239b257bea4e8073af5c46237e5936b4598c5528c69be5c78a3c78622"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 128,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Forced tool call completed and parsed on the short route."
+    },
+    {
+      "id": "tool-long",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": false,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 33283,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "2f5ae1b28c37ce8cace9c113285c96111be369dd1290fe91d7126536e8b76bcd",
+      "draft_acceptance": "0/0",
+      "command": [
+        "curl",
+        "POST",
+        "/v1/chat/completions",
+        "payload-sha256:6ae0d62d5acad70bfce0a9ff14367041ffd52b3049854f4ca0e9a15d50c93b04"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 128,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Forced tool call completed and parsed on the long route."
+    },
+    {
+      "id": "vision-short",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": true,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 1106,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "6e4e417879043ede7788afdcfdabc85d982bc75d2c7ac6119146a66a7f53f166",
+      "draft_acceptance": "17/18",
+      "command": [
+        "curl",
+        "POST",
+        "/v1/chat/completions",
+        "payload-sha256:7cc05a64e60ffb52aa1a8a4e279dd6505ef58ff98ff79dc697e1209f2e4e765e"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 128,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Tracked vision fixture completed on the short route."
+    },
+    {
+      "id": "vision-long",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": false,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 34107,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "8dacf614679b4d67ea4445a3af7f6e43b743a006118c511ac03d45394b611f34",
+      "draft_acceptance": "0/0",
+      "command": [
+        "curl",
+        "POST",
+        "/v1/chat/completions",
+        "payload-sha256:d44a81388f64f6711d4d02877d71669dcef233dce8c994e2911621ac6d3bde61"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 128,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "Tracked vision fixture completed on the long route."
+    },
+    {
+      "id": "vision-cross-text-control",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": true,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 31821,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "a1dcaf7f89d932d59d16f86bb9cdef8e3fe6736fa6bb0843f2ea79f00145f9e4",
+      "draft_acceptance": "23/34",
+      "command": [
+        "curl",
+        "POST",
+        "/v1/chat/completions",
+        "payload-sha256:0e6a7d85cc29990de5ae19d38e7028be957d32f6ff79c264fb557992c5e162bd"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 64,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "The same text used by the following image case is below the dynamic threshold."
+    },
+    {
+      "id": "vision-cross-expanded",
+      "experiment": "dynamic-mtp-acceptance",
+      "measurement_kind": "single_run",
+      "timestamp": "2026-09-04T04:07:34Z",
+      "repository_revision": "1e43502d1b780b039f8418125ad48f14d5fded4b",
+      "hardware_id": "apple-m5-max-128gb",
+      "runtime_id": "llama-cpp-qwen38-hybrid",
+      "runtime_revision": "b814e84c45f00fb0d9f3283175acc1a24fa90b95",
+      "profile": null,
+      "profile_id": "auto",
+      "runtime_alias": "tuned",
+      "context": 262144,
+      "vision": true,
+      "mtp_policy": "dynamic",
+      "mtp_selected": false,
+      "mtp_threshold": 32768,
+      "prompt_tokens": null,
+      "effective_prompt_tokens": 32904,
+      "generated_tokens": null,
+      "prompt_tokens_per_second": null,
+      "generation_tokens_per_second": null,
+      "output_sha256": "67f21f2b917edf801be8468859c83f173d1a1c1081958fa6f71ef7241a5b2808",
+      "draft_acceptance": "0/0",
+      "command": [
+        "curl",
+        "POST",
+        "/v1/chat/completions",
+        "payload-sha256:980333d502d4c770115cc2ce33aa9b18ba1091c8f5596fd8688d0d17b9124685"
+      ],
+      "generation_settings": {
+        "temperature": 0,
+        "seed": 1234,
+        "max_tokens": 64,
+        "reasoning": false,
+        "draft_n_max": 2
+      },
+      "notes": "The identical text was below the threshold while multimodal expansion selected the conventional route."
+    }
+  ]
+}

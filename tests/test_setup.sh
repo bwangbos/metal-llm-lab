@@ -245,6 +245,23 @@ assert_contains "$dry_output" 'write build receipt atomically:'
 [[ "$dry_output" != *'secret-token-must-not-leak'* ]] || fail 'dry-run exposed HF_TOKEN'
 [[ ! -e "$fixture_root/.lab" ]] || fail 'dry-run created .lab state'
 
+cp "$source_root/manifests/models/qwen3.8-flash-next.json" "$fixture_root/manifests/models/"
+cp "$source_root/manifests/runtimes/llama-cpp-qwen38-hybrid.json" "$fixture_root/manifests/runtimes/"
+cp "$source_root/manifests/runtimes/llama-cpp-upstream-stable.json" "$fixture_root/manifests/runtimes/"
+real_dry_output=$(SETUP_TEST_BLOCKS=200000000 PATH="$test_path" \
+    "$fixture_root/bin/metal-llm" setup qwen3.8-flash-next --dry-run)
+assert_contains "$real_dry_output" 'default profile: auto'
+assert_count "$real_dry_output" 'runtime-sync llama-cpp-qwen38-hybrid --dry-run' 1
+assert_count "$real_dry_output" 'runtime-sync llama-cpp-upstream-stable --dry-run' 1
+assert_count "$real_dry_output" 'configure runtime:' 2
+assert_count "$real_dry_output" 'download artifact:' 35
+assert_count "$real_dry_output" 'verify bytes:' 35
+assert_count "$real_dry_output" 'verify sha256:' 35
+assert_count "$real_dry_output" 'publish artifact atomically:' 35
+[[ "$real_dry_output" != *'recommended_profile'* ]] ||
+  fail 'v2 dry-run mentioned removed hardware profile selection'
+[[ ! -e "$fixture_root/.lab" ]] || fail 'v2 dry-run created .lab state'
+
 if smoke_output=$(SETUP_TEST_SMOKE_FAIL=llama-server METAL_LLM_BUILD_RESERVE_BYTES=1000 \
     SETUP_TEST_BLOCKS=2 PATH="$test_path" "$fixture_root/bin/metal-llm" setup fixture-model --yes 2>&1); then
     fail 'setup accepted a failing runtime smoke test'

@@ -2,7 +2,6 @@
   "schema_version": 1,
   "id": "qwen3.8-smoke",
   "default_mode": "local",
-  "default_profile": "fast",
   "cases": [
     {
       "id": "prompt-512",
@@ -30,7 +29,7 @@
       "max_tokens": 32,
       "temperature": 0,
       "seed": 1234,
-      "notes": "Deterministic OpenAI-compatible API check against an already running endpoint"
+      "notes": "Deterministic OpenAI-compatible API check against an already running managed auto endpoint"
     },
     {
       "id": "vision-spatial-smoke",
@@ -42,7 +41,8 @@
       "max_tokens": 64,
       "temperature": 0,
       "seed": 1234,
-      "notes": "Optional vision fixture; requires an installed fixture and a vision endpoint"
+      "stream": true,
+      "notes": "Optional streaming vision fixture against a managed auto endpoint; requires an installed fixture"
     }
   ]
 }

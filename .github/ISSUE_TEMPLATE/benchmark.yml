@@ -32,8 +32,15 @@ body:
   - type: textarea
     id: command
     attributes:
-      label: Exact command and profile
-      description: Include the command, profile, context, prompt/fixture identity, and generation settings.
+      label: Exact command and resolved policy
+      description: Include the command, profile, runtime alias, context, vision state, MTP policy/threshold, prompt or fixture identity, and generation settings.
+    validations:
+      required: true
+  - type: textarea
+    id: route
+    attributes:
+      label: Per-request route evidence
+      description: For endpoint runs, include effective prompt tokens, selected speculative route, policy, threshold, streaming state, and draft accepted/attempted counts. State when fields do not apply.
     validations:
       required: true
   - type: textarea
@@ -58,4 +65,6 @@ body:
         - label: I removed credentials, tokens, usernames, and private absolute paths.
           required: true
         - label: I recorded the provenance needed to reproduce this result.
+          required: true
+        - label: I did not infer hardware acceptance, output equivalence, or recommendation status from route metadata alone.
           required: true

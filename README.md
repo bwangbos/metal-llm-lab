@@ -23,10 +23,13 @@ The Qwen artifact download requires approximately **100 GB** of available
 storage, in addition to space for source checkouts and build outputs. Confirm
 the artifact source, license, destination, size, and checksum before download.
 
-Experimental runtime patches will be maintained as versioned patches against
-pinned upstream revisions and labeled experimental in benchmarks and
-comparisons. Dynamic per-request MTP selection is future work. It is not part
-of this foundation milestone and has no implemented or tested patch here.
+Experimental runtime patches are maintained as versioned patches against pinned
+upstream revisions and labeled experimental in benchmarks and comparisons. The
+tuned runtime implements dynamic per-request MTP routing. Its complete
+262,144-token `auto` configuration passed allocation, correctness, isolation,
+and the predeclared performance gate on the recorded M5 Max 128 GiB system, so
+`auto` is the recommended preset for that exact tested configuration. This is a
+machine-specific acceptance result, not a performance promise for other hosts.
 
 ## Quick start
 
@@ -36,15 +39,15 @@ cd metal-llm-lab
 ./scripts/bootstrap-macos.sh
 ./bin/metal-llm doctor
 ./bin/metal-llm setup qwen3.8-flash-next
-./bin/metal-llm serve qwen3.8-flash-next --profile auto
+./bin/metal-llm serve qwen3.8-flash-next
 ./bin/metal-llm bench qwen3.8-flash-next --suite qwen3.8-smoke --mode local --dry-run
 ./bin/metal-llm report --check
 ```
 
 Setup downloads approximately **100 GB**, checks every artifact checksum, and
 builds every unique pinned runtime required by the model's profiles, including
-the stable fallback. Its duration depends on network speed, machine load, and
-compiler performance; no fixed completion time is guaranteed.
+the upstream reference runtime. Its duration depends on network speed, machine
+load, and compiler performance; no fixed completion time is guaranteed.
 The server listens only on `127.0.0.1:8080` by default. Once it is ready, test
 its OpenAI-compatible API from another terminal:
 
@@ -54,20 +57,77 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   -d '{"model":"qwen3.8-flash-next","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-Choose a profile explicitly or use `auto`, which selects the detected hardware
-manifest's recommendation:
+`serve` defaults to the model's `auto` preset. Vision is an independent switch
+and defaults to `on` for every preset. All context sizes below are binary token
+counts (32K = 32,768 and 256K = 262,144):
 
-| Profile | Context | Vision | MTP | Runtime |
-| --- | ---: | --- | --- | --- |
-| `fast` | 32,768 | No | Yes | Experimental hybrid |
-| `vision` | 32,768 | Yes | Yes | Experimental hybrid |
-| `long` | 131,072 | No | No | Experimental hybrid |
-| `stable` | 32,768 | No | No | Pinned upstream stable |
+| Profile | Runtime | Context | MTP policy | Vision default | Status | Exact custom equivalent |
+| --- | --- | ---: | --- | --- | --- | --- |
+| `fast` | `tuned` | 32,768 | `on` | `on` | Supported short-request preset | `--profile custom --runtime tuned --mtp on --context 32768 --vision on` |
+| `long` | `tuned` | 262,144 | `off` | `on` | Supported 256K preset; allocation accepted on the tested M5 Max 128 GiB host | `--profile custom --runtime tuned --mtp off --context 262144 --vision on` |
+| `auto` | `tuned` | 262,144 | `dynamic` | `on` | Recommended on the accepted M5 Max 128 GiB configuration | `--profile custom --runtime tuned --mtp dynamic --context 262144 --vision on` |
+| `stable` | `upstream` | 32,768 | `off` | `on` | Upstream reference only; not recommended | `--profile custom --runtime upstream --mtp off --context 32768 --vision on` |
 
-`METAL_LLM_HOST`, `METAL_LLM_PORT`, `METAL_LLM_PARALLEL`, and
-`METAL_LLM_CONTEXT` override the bind address, port, request slots, and context
-size. Set `METAL_LLM_API_KEY` to require an API key; its value is passed to the
-server and forwarded by endpoint benchmarks to health and completion requests.
+For example, disable the projector without changing the selected runtime,
+context, or MTP policy:
+
+```sh
+./bin/metal-llm serve qwen3.8-flash-next --profile fast --vision off
+./bin/metal-llm serve qwen3.8-flash-next --profile long --vision on
+```
+
+Named presets reject `--runtime`, `--mtp`, and `--context` overrides. A custom
+profile requires all three controls; `upstream` supports only `--mtp off`, and
+context must be a positive integer no larger than 262,144. Use `--vision on` or
+`--vision off` independently. The removed standalone vision preset and context
+environment override fail with migration guidance.
+
+Both `tuned` and `upstream` are llama.cpp builds configured for full Metal
+offload, Metal Flash Attention, and Accelerate on Apple Silicon. The performance
+distinction comes from the tuned patch series versus the pinned upstream tree,
+plus whether MTP is loaded and selected—not from one runtime using Metal and the
+other using a different compute backend. `stable` exists only for upstream
+reference comparisons and is not recommended for normal operation.
+
+With dynamic MTP, the server chooses one route only after chat templating and
+multimodal expansion. Effective prompts of 32,768 tokens or fewer use
+speculative MTP; larger prompts do not. That decision is fixed for the response,
+reset when a slot is reused, and independent across concurrent slots. Final
+non-streaming responses and terminal streaming events report the route in their
+`timings` object:
+
+```json
+{
+  "speculative": true,
+  "speculative_policy": "dynamic",
+  "effective_prompt_tokens": 24172,
+  "speculative_threshold": 32768
+}
+```
+
+These fields are route evidence, not proof that the two decoding routes produce
+identical output. The opt-in acceptance harness checks boundary,
+vision-expansion, streaming, slot-reuse, concurrency, structured-output,
+tool-calling, and one-process behavior. It skips unless explicitly enabled and
+never downloads artifacts or builds runtimes. On the exact Apple M5 Max 128 GiB
+host, after setup and receipt verification, run it explicitly with:
+
+```sh
+METAL_LLM_INTEGRATION=1 zsh tests/integration/test_dynamic_mtp.sh
+METAL_LLM_PERFORMANCE=1 zsh tests/integration/test_dynamic_mtp_performance.sh
+```
+
+The accepted run retained all 105 samples from the 3-policy by 7-length matrix.
+Every dynamic generation-throughput mean was within 5% of its corresponding
+fixed route. The narrowest margin was at 32,769 effective tokens: +4.90937%
+relative to fixed-off, only 0.09063 percentage points inside the gate. See the
+[acceptance record](docs/experiments/2026-09-03-dynamic-mtp-acceptance.md) and
+[generated summary](results/summaries/qwen3.8-flash-next-dynamic-mtp.md).
+
+`METAL_LLM_HOST`, `METAL_LLM_PORT`, and `METAL_LLM_PARALLEL` override the bind
+address, port, and request slots. Set `METAL_LLM_API_KEY` to require an API key;
+its value is passed to the server and forwarded by endpoint benchmarks to health
+and completion requests.
 It is omitted from dry-run output, process records, recorded commands, and
 results; recorded HTTP argument arrays use a `<redacted>` placeholder. Extra
 llama-server arguments may follow `--`, but are deliberately limited to positive
@@ -135,5 +195,6 @@ The initial case-study record is available as
 the [model notes](docs/models/qwen3.8-flash-next.md),
 [tested hardware](docs/hardware/apple-m5-max-128gb.md),
 [runtime experiment](docs/experiments/2026-09-03-runtime-comparison.md),
-[MTP crossover study](docs/experiments/2026-09-03-mtp-context-crossover.md), and
-[dynamic-MTP direction](docs/decisions/0002-dynamic-mtp-direction.md).
+[MTP crossover study](docs/experiments/2026-09-03-mtp-context-crossover.md),
+[dynamic-MTP acceptance](docs/experiments/2026-09-03-dynamic-mtp-acceptance.md),
+and [dynamic-MTP decision](docs/decisions/0002-dynamic-mtp-direction.md).

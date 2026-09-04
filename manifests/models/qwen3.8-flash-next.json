@@ -1,7 +1,13 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "qwen3.8-flash-next",
   "name": "Qwen3.8-Flash-Next",
+  "default_profile": "auto",
+  "max_context": 262144,
+  "runtime_aliases": {
+    "tuned": "llama-cpp-qwen38-hybrid",
+    "upstream": "llama-cpp-upstream-stable"
+  },
   "artifacts": [
     {
       "id": "qwen38-text-00001",
@@ -320,6 +326,7 @@
     }
   ],
   "text_model": {
+    "entry_artifact_id": "qwen38-text-00001",
     "artifact_ids": [
       "qwen38-text-00001", "qwen38-text-00002", "qwen38-text-00003", "qwen38-text-00004",
       "qwen38-text-00005", "qwen38-text-00006", "qwen38-text-00007", "qwen38-text-00008",
@@ -333,42 +340,55 @@
     ],
     "total_bytes": 94525394976
   },
+  "capabilities": {
+    "vision": {
+      "default_enabled": true,
+      "projector_artifact_id": "qwen38-projector-f16",
+      "image_min_tokens": 1024
+    },
+    "mtp": {
+      "artifact_id": "qwen38-mtp-q8-0",
+      "spec_type": "draft-mtp",
+      "draft_n_max": 2,
+      "gpu_layers": "all",
+      "dynamic_threshold": 32768
+    }
+  },
+  "metal": {
+    "gpu_layers": "all",
+    "fit": false,
+    "flash_attention": true,
+    "load_mode": "mmap",
+    "lazy_mmap": true
+  },
   "profiles": [
     {
       "id": "fast",
-      "runtime_id": "llama-cpp-qwen38-hybrid",
-      "model_artifact_id": "qwen38-text-00001",
+      "runtime": "tuned",
       "context": 32768,
-      "vision": { "enabled": false, "projector_artifact_id": null, "image_min_tokens": null },
-      "mtp": { "enabled": true, "artifact_id": "qwen38-mtp-q8-0", "spec_type": "draft-mtp", "draft_n_max": 2, "gpu_layers": "all" },
-      "metal": { "gpu_layers": "all", "fit": false, "flash_attention": true, "load_mode": "mmap", "lazy_mmap": true }
-    },
-    {
-      "id": "vision",
-      "runtime_id": "llama-cpp-qwen38-hybrid",
-      "model_artifact_id": "qwen38-text-00001",
-      "context": 32768,
-      "vision": { "enabled": true, "projector_artifact_id": "qwen38-projector-f16", "image_min_tokens": 1024 },
-      "mtp": { "enabled": true, "artifact_id": "qwen38-mtp-q8-0", "spec_type": "draft-mtp", "draft_n_max": 2, "gpu_layers": "all" },
-      "metal": { "gpu_layers": "all", "fit": false, "flash_attention": true, "load_mode": "mmap", "lazy_mmap": true }
+      "mtp_policy": "on",
+      "status": "supported"
     },
     {
       "id": "long",
-      "runtime_id": "llama-cpp-qwen38-hybrid",
-      "model_artifact_id": "qwen38-text-00001",
-      "context": 131072,
-      "vision": { "enabled": false, "projector_artifact_id": null, "image_min_tokens": null },
-      "mtp": { "enabled": false, "artifact_id": null, "spec_type": null, "draft_n_max": null, "gpu_layers": null },
-      "metal": { "gpu_layers": "all", "fit": false, "flash_attention": true, "load_mode": "mmap", "lazy_mmap": true }
+      "runtime": "tuned",
+      "context": 262144,
+      "mtp_policy": "off",
+      "status": "supported"
+    },
+    {
+      "id": "auto",
+      "runtime": "tuned",
+      "context": 262144,
+      "mtp_policy": "dynamic",
+      "status": "recommended"
     },
     {
       "id": "stable",
-      "runtime_id": "llama-cpp-upstream-stable",
-      "model_artifact_id": "qwen38-text-00001",
+      "runtime": "upstream",
       "context": 32768,
-      "vision": { "enabled": false, "projector_artifact_id": null, "image_min_tokens": null },
-      "mtp": { "enabled": false, "artifact_id": null, "spec_type": null, "draft_n_max": null, "gpu_layers": null },
-      "metal": { "gpu_layers": "all", "fit": false, "flash_attention": true, "load_mode": "mmap", "lazy_mmap": true }
+      "mtp_policy": "off",
+      "status": "reference"
     }
   ]
 }

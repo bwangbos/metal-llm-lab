@@ -1,15 +1,7 @@
 metal_llm_serve_usage() {
-    metal_llm_error 'usage: metal-llm serve MODEL --profile PROFILE [--dry-run] [-- EXTRA_LLAMA_ARGS]'
+    metal_llm_error 'usage: metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
+    metal_llm_error '       metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
     return 2
-}
-
-metal_llm_detect_recommended_profile() {
-    metal_llm_detect_hardware_manifest || return 1
-    jq -er '.recommended_profile | select(type == "string" and length > 0)' \
-        "$METAL_LLM_DETECTED_HARDWARE_MANIFEST" || {
-        metal_llm_die 'detected hardware manifest has no recommended profile'
-        return 1
-    }
 }
 
 metal_llm_print_serve_command() {
@@ -68,7 +60,9 @@ metal_llm_validate_serve_extra_arguments() {
 }
 
 metal_llm_serve() {
-    local model_id='' profile_id='' dry_run=0 passthrough=0 argument
+    local model_id='' requested_profile='' requested_vision='' requested_runtime=''
+    local requested_mtp='' requested_context='' dry_run=0 passthrough=0 argument
+    local profile_seen=0 vision_seen=0 runtime_seen=0 mtp_seen=0 context_seen=0
     typeset -a extra_arguments
     extra_arguments=()
 
@@ -89,8 +83,42 @@ metal_llm_serve() {
                 ;;
             --profile)
                 (( $# > 0 )) || { metal_llm_serve_usage; return $?; }
-                [[ -z "$profile_id" ]] || { metal_llm_serve_usage; return $?; }
-                profile_id=$1
+                (( profile_seen == 0 )) || { metal_llm_serve_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_serve_usage; return $?; }
+                profile_seen=1
+                requested_profile=$1
+                shift
+                ;;
+            --vision)
+                (( $# > 0 )) || { metal_llm_serve_usage; return $?; }
+                (( vision_seen == 0 )) || { metal_llm_serve_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_serve_usage; return $?; }
+                vision_seen=1
+                requested_vision=$1
+                shift
+                ;;
+            --runtime)
+                (( $# > 0 )) || { metal_llm_serve_usage; return $?; }
+                (( runtime_seen == 0 )) || { metal_llm_serve_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_serve_usage; return $?; }
+                runtime_seen=1
+                requested_runtime=$1
+                shift
+                ;;
+            --mtp)
+                (( $# > 0 )) || { metal_llm_serve_usage; return $?; }
+                (( mtp_seen == 0 )) || { metal_llm_serve_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_serve_usage; return $?; }
+                mtp_seen=1
+                requested_mtp=$1
+                shift
+                ;;
+            --context)
+                (( $# > 0 )) || { metal_llm_serve_usage; return $?; }
+                (( context_seen == 0 )) || { metal_llm_serve_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_serve_usage; return $?; }
+                context_seen=1
+                requested_context=$1
                 shift
                 ;;
             -*) metal_llm_serve_usage; return $? ;;
@@ -101,7 +129,7 @@ metal_llm_serve() {
         esac
     done
 
-    [[ -n "$model_id" && -n "$profile_id" ]] || { metal_llm_serve_usage; return $?; }
+    [[ -n "$model_id" ]] || { metal_llm_serve_usage; return $?; }
     metal_llm_validate_serve_extra_arguments "${extra_arguments[@]}" || return 1
     metal_llm_valid_id "$model_id" || { metal_llm_die "invalid model id: $model_id"; return 1; }
     metal_llm_require_supported_host || return 1
@@ -114,35 +142,33 @@ metal_llm_serve() {
         return 1
     }
 
-    if [[ "$profile_id" == auto ]]; then
-        profile_id=$(metal_llm_detect_recommended_profile) || return 1
-    fi
+    metal_llm_resolve_profile "$model_manifest" "$requested_profile" "$requested_vision" \
+        "$requested_runtime" "$requested_mtp" "$requested_context" || return 1
+    local effective_profile=$METAL_LLM_EFFECTIVE_PROFILE
 
     local profile_record
-    profile_record=$(jq -er --arg id "$profile_id" '
-        first(.profiles[] | select(.id == $id)) |
+    profile_record=$(jq -er '
         [
-          .runtime_id, .model_artifact_id, (.context | tostring),
+          .profile_id, .runtime_alias, .runtime_id, .model_artifact_id, (.context | tostring),
           (.vision.enabled | tostring), (.vision.projector_artifact_id // "__null__"),
           (if .vision.image_min_tokens == null then "__null__" else (.vision.image_min_tokens | tostring) end),
-          (.mtp.enabled | tostring), (.mtp.artifact_id // "__null__"), (.mtp.spec_type // "__null__"),
+          .mtp.policy, (.mtp.artifact_id // "__null__"), (.mtp.spec_type // "__null__"),
           (if .mtp.draft_n_max == null then "__null__" else (.mtp.draft_n_max | tostring) end),
           (if .mtp.gpu_layers == null then "__null__" else (.mtp.gpu_layers | tostring) end),
+          (if .mtp.threshold == null then "__null__" else (.mtp.threshold | tostring) end),
           (.metal.gpu_layers | tostring), (.metal.fit | tostring),
           (.metal.flash_attention | tostring), (.metal.load_mode | tostring),
           (.metal.lazy_mmap | tostring)
         ] | @tsv
-    ' "$model_manifest" 2>/dev/null) || {
-        metal_llm_die "profile not found: $profile_id"
-        return 1
-    }
+    ' <<< "$effective_profile") || return 1
 
-    local runtime_id model_artifact_id profile_context vision_enabled projector_artifact_id image_min_tokens
-    local mtp_enabled mtp_artifact_id spec_type draft_n_max draft_gpu_layers
+    local profile_id runtime_alias runtime_id model_artifact_id context
+    local vision_enabled projector_artifact_id image_min_tokens
+    local mtp_policy mtp_artifact_id spec_type draft_n_max draft_gpu_layers mtp_threshold
     local gpu_layers fit flash_attention load_mode lazy_mmap
-    IFS=$'\t' read -r runtime_id model_artifact_id profile_context \
+    IFS=$'\t' read -r profile_id runtime_alias runtime_id model_artifact_id context \
         vision_enabled projector_artifact_id image_min_tokens \
-        mtp_enabled mtp_artifact_id spec_type draft_n_max draft_gpu_layers \
+        mtp_policy mtp_artifact_id spec_type draft_n_max draft_gpu_layers mtp_threshold \
         gpu_layers fit flash_attention load_mode lazy_mmap <<< "$profile_record"
 
     local runtime_manifest="$METAL_LLM_ROOT/manifests/runtimes/$runtime_id.json"
@@ -155,22 +181,21 @@ metal_llm_serve() {
     local server_executable=$METAL_LLM_VERIFIED_EXECUTABLE
 
     local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
-    metal_llm_profile_artifact_identities "$model_manifest" "$artifact_dir" "$profile_id" || return 1
+    metal_llm_profile_artifact_identities "$model_manifest" "$artifact_dir" \
+        "$effective_profile" || return 1
 
     local model_path projector_path='' mtp_path=''
     model_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$model_artifact_id") || return 1
     if [[ "$vision_enabled" == true ]]; then
         projector_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$projector_artifact_id") || return 1
     fi
-    if [[ "$mtp_enabled" == true ]]; then
+    if [[ "$mtp_policy" == on || "$mtp_policy" == dynamic ]]; then
         mtp_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$mtp_artifact_id") || return 1
     fi
 
-    local context=${METAL_LLM_CONTEXT:-$profile_context}
     local host=${METAL_LLM_HOST:-127.0.0.1}
     local port=${METAL_LLM_PORT:-8080}
     local parallel=${METAL_LLM_PARALLEL:-1}
-    [[ "$context" == <-> && "$context" -gt 0 ]] || { metal_llm_die 'METAL_LLM_CONTEXT must be a positive integer'; return 1; }
     [[ -n "$host" ]] || { metal_llm_die 'METAL_LLM_HOST must not be empty'; return 1; }
     [[ "$port" == <-> && "$port" -ge 1 && "$port" -le 65535 ]] || { metal_llm_die 'METAL_LLM_PORT must be an integer from 1 to 65535'; return 1; }
     [[ "$parallel" == <-> && "$parallel" -gt 0 ]] || { metal_llm_die 'METAL_LLM_PARALLEL must be a positive integer'; return 1; }
@@ -190,11 +215,14 @@ metal_llm_serve() {
     if [[ "$vision_enabled" == true ]]; then
         command_arguments+=(-mm "$projector_path" --image-min-tokens "$image_min_tokens")
     fi
-    if [[ "$mtp_enabled" == true ]]; then
+    if [[ "$mtp_policy" == on || "$mtp_policy" == dynamic ]]; then
         command_arguments+=(
             --spec-draft-model "$mtp_path" --spec-type "$spec_type"
             --spec-draft-n-max "$draft_n_max" --spec-draft-ngl "$draft_gpu_layers"
         )
+        if [[ "$mtp_policy" == dynamic ]]; then
+            command_arguments+=(--spec-draft-max-prompt-tokens "$mtp_threshold")
+        fi
     fi
     local api_key=${METAL_LLM_API_KEY:-}
     [[ -z "$api_key" ]] || command_arguments+=(--api-key "$api_key")
@@ -208,7 +236,9 @@ metal_llm_serve() {
     model_manifest_sha=$(metal_llm_sha256 "$model_manifest") || return 1
     identity_json=$(jq -cn \
         --arg owner_kind serve --arg model "$model_id" --arg profile "$profile_id" \
-        --argjson vision "$vision_enabled" --arg runtime "$runtime_id" \
+        --arg runtime_alias "$runtime_alias" --argjson context "$context" \
+        --argjson vision "$vision_enabled" --arg mtp_policy "$mtp_policy" \
+        --argjson mtp_threshold "${mtp_threshold/__null__/null}" --arg runtime "$runtime_id" \
         --arg runtime_revision "$METAL_LLM_VERIFIED_RUNTIME_REVISION" \
         --arg runtime_tree "$METAL_LLM_VERIFIED_RUNTIME_TREE" \
         --arg runtime_manifest_sha "$METAL_LLM_VERIFIED_RUNTIME_MANIFEST_SHA256" \
@@ -218,7 +248,9 @@ metal_llm_serve() {
         --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
         --arg host "$host" --argjson port "$port" '
       {
-        owner_kind: $owner_kind, model_id: $model, profile_id: $profile, vision: $vision,
+        owner_kind: $owner_kind, model_id: $model, profile_id: $profile,
+        runtime_alias: $runtime_alias, context: $context, vision: $vision,
+        mtp_policy: $mtp_policy, mtp_threshold: $mtp_threshold,
         runtime_id: $runtime, runtime_revision: $runtime_revision, runtime_tree_sha: $runtime_tree,
         runtime_manifest_sha256: $runtime_manifest_sha, build_receipt_sha256: $receipt_sha,
         executable_name: $executable_name, executable_sha256: $executable_sha,

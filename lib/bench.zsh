@@ -1,5 +1,7 @@
 metal_llm_bench_usage() {
-    metal_llm_error 'usage: metal-llm bench MODEL --suite SUITE [--mode MODE] [--dry-run]'
+    metal_llm_error 'usage: metal-llm bench MODEL --suite SUITE [--mode local] [--runtime tuned|upstream] [--dry-run]'
+    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint [--profile auto|fast|long|stable] [--vision on|off] [--dry-run]'
+    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--dry-run]'
     return 2
 }
 
@@ -9,13 +11,14 @@ metal_llm_validate_benchmark_suite() {
     jq -e --arg expected_id "$expected_id" '
       .schema_version == 1 and .id == $expected_id and
       (.default_mode == "local" or .default_mode == "endpoint") and
-      (.default_profile | type == "string" and test("^[a-z0-9]+([.-][a-z0-9]+)*$")) and
+      (has("default_profile") | not) and
       (.cases | type == "array" and length > 0 and all(.[];
         (.id | type == "string" and test("^[a-z0-9]+([.-][a-z0-9]+)*$")) and
         (.mode == "local" or .mode == "endpoint") and
         (.kind == "llama-bench" or .kind == "api" or .kind == "vision") and
         (if .mode == "local" then .kind == "llama-bench" else (.kind == "api" or .kind == "vision") end) and
         (.notes | type == "string" and length > 0) and
+        (if has("stream") then .mode == "endpoint" and (.stream | type == "boolean") else true end) and
         (if .kind == "llama-bench" then
           (.prompt_tokens | type == "number" and . >= 0 and floor == .) and
           (.generated_tokens | type == "number" and . >= 0 and floor == .) and
@@ -151,8 +154,112 @@ metal_llm_bench_port_is_owned() {
     curl "${health_arguments[@]}" >/dev/null 2>&1
 }
 
+metal_llm_parse_endpoint_response() {
+    local response=$1
+    local streaming=$2
+    local parsed_response timing_signatures
+
+    unset METAL_LLM_BENCH_RESPONSE_CONTENT METAL_LLM_BENCH_RESPONSE_USAGE METAL_LLM_BENCH_RESPONSE_TIMING
+    if [[ "$streaming" == true ]]; then
+        parsed_response=$(jq -Rsce '
+          [splits("\n") |
+            rtrimstr("\r") |
+            select(startswith("data:")) |
+            sub("^data:[ ]?"; "") |
+            select(length > 0 and . != "[DONE]") |
+            fromjson] |
+          select(length > 0)
+        ' <<< "$response" 2>/dev/null) || {
+            metal_llm_die 'invalid streaming API response'
+            return 1
+        }
+        jq -e 'last | .timings | type == "object"' <<< "$parsed_response" >/dev/null 2>&1 || {
+            metal_llm_die 'missing final endpoint timing metadata'
+            return 1
+        }
+        timing_signatures=$(jq -c '[.[] | select(.timings? != null) | .timings | {
+          speculative, speculative_policy, effective_prompt_tokens, speculative_threshold
+        }]' <<< "$parsed_response") || return 1
+        jq -e 'length > 0 and (unique | length) == 1' <<< "$timing_signatures" >/dev/null 2>&1 || {
+            metal_llm_die 'endpoint stream changed MTP route metadata'
+            return 1
+        }
+        METAL_LLM_BENCH_RESPONSE_CONTENT=$(jq -er '
+          [.[] | .choices[]?.delta.content? | select(type == "string")] | join("")
+        ' <<< "$parsed_response") || return 1
+        METAL_LLM_BENCH_RESPONSE_USAGE=$(jq -c '
+          ([.[] | select(.usage? != null) | .usage] | last) // {}
+        ' <<< "$parsed_response") || return 1
+        METAL_LLM_BENCH_RESPONSE_TIMING=$(jq -c 'last.timings' <<< "$parsed_response") || return 1
+    else
+        parsed_response=$(jq -ce 'select(type == "object")' <<< "$response" 2>/dev/null) || {
+            metal_llm_die 'invalid API response'
+            return 1
+        }
+        jq -e '.timings | type == "object"' <<< "$parsed_response" >/dev/null 2>&1 || {
+            metal_llm_die 'missing final endpoint timing metadata'
+            return 1
+        }
+        METAL_LLM_BENCH_RESPONSE_CONTENT=$(jq -er '
+          .choices[0].message.content | select(type == "string")
+        ' <<< "$parsed_response") || return 1
+        METAL_LLM_BENCH_RESPONSE_USAGE=$(jq -c '.usage // {}' <<< "$parsed_response") || return 1
+        METAL_LLM_BENCH_RESPONSE_TIMING=$(jq -c '.timings' <<< "$parsed_response") || return 1
+    fi
+}
+
+metal_llm_validate_endpoint_timing() {
+    local timing=$1
+    local configured_policy=$2
+    local configured_threshold=$3
+    local case_kind=$4
+    local image_min_tokens=$5
+    local usage_prompt_tokens=${6:-null}
+    local threshold_json=${configured_threshold/__null__/null}
+
+    jq -e --arg policy "$configured_policy" --argjson threshold "$threshold_json" '
+      (.speculative | type == "boolean") and
+      (.speculative_policy == $policy) and
+      (.effective_prompt_tokens | type == "number" and floor == . and . >= 0) and
+      (if $policy == "dynamic" then
+        .speculative_threshold == $threshold and
+        .speculative == (.effective_prompt_tokens <= $threshold)
+      elif $policy == "on" then
+        .speculative == true and .speculative_threshold == null
+      else
+        .speculative == false and .speculative_threshold == null
+      end)
+    ' <<< "$timing" >/dev/null 2>&1 || {
+        metal_llm_die 'endpoint timing metadata does not match managed MTP policy'
+        return 1
+    }
+    if [[ "$case_kind" == vision ]]; then
+        jq -e --argjson image_min_tokens "${image_min_tokens/__null__/null}" '
+          ($image_min_tokens | type == "number" and floor == . and . > 0) and
+          .effective_prompt_tokens >= $image_min_tokens
+        ' <<< "$timing" >/dev/null 2>&1 || {
+            metal_llm_die 'endpoint effective prompt count is below resolved vision expansion minimum'
+            return 1
+        }
+        jq -e --argjson usage_prompt_tokens "$usage_prompt_tokens" '
+          ($usage_prompt_tokens | type == "number" and floor == . and . >= 0) and
+          .effective_prompt_tokens == $usage_prompt_tokens
+        ' <<< "$timing" >/dev/null 2>&1 || {
+            metal_llm_die 'endpoint vision prompt-token usage does not match effective prompt timing'
+            return 1
+        }
+    fi
+    typeset -g METAL_LLM_BENCH_MTP_SELECTED
+    typeset -g METAL_LLM_BENCH_EFFECTIVE_PROMPT_TOKENS
+    METAL_LLM_BENCH_MTP_SELECTED=$(jq -r '.speculative' <<< "$timing") || return 1
+    METAL_LLM_BENCH_EFFECTIVE_PROMPT_TOKENS=$(jq -r '.effective_prompt_tokens' <<< "$timing") || return 1
+}
+
 metal_llm_bench() {
     local model_id='' suite_id='' mode='' dry_run=0 argument
+    local requested_profile='' requested_vision='' requested_runtime=''
+    local requested_mtp='' requested_context=''
+    local profile_seen=0 vision_seen=0 runtime_seen=0 mtp_seen=0 context_seen=0
     while (( $# > 0 )); do
         argument=$1
         shift
@@ -171,6 +278,41 @@ metal_llm_bench() {
                 (( $# > 0 )) || { metal_llm_bench_usage; return $?; }
                 [[ -z "$mode" ]] || { metal_llm_bench_usage; return $?; }
                 mode=$1
+                shift
+                ;;
+            --profile)
+                (( $# > 0 && profile_seen == 0 )) || { metal_llm_bench_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_bench_usage; return $?; }
+                profile_seen=1
+                requested_profile=$1
+                shift
+                ;;
+            --vision)
+                (( $# > 0 && vision_seen == 0 )) || { metal_llm_bench_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_bench_usage; return $?; }
+                vision_seen=1
+                requested_vision=$1
+                shift
+                ;;
+            --runtime)
+                (( $# > 0 && runtime_seen == 0 )) || { metal_llm_bench_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_bench_usage; return $?; }
+                runtime_seen=1
+                requested_runtime=$1
+                shift
+                ;;
+            --mtp)
+                (( $# > 0 && mtp_seen == 0 )) || { metal_llm_bench_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_bench_usage; return $?; }
+                mtp_seen=1
+                requested_mtp=$1
+                shift
+                ;;
+            --context)
+                (( $# > 0 && context_seen == 0 )) || { metal_llm_bench_usage; return $?; }
+                [[ -n "$1" ]] || { metal_llm_bench_usage; return $?; }
+                context_seen=1
+                requested_context=$1
                 shift
                 ;;
             -*) metal_llm_bench_usage; return $? ;;
@@ -204,46 +346,94 @@ metal_llm_bench() {
         return 1
     fi
 
-    local requested_profile=${METAL_LLM_PROFILE:-}
-    local profile_id=$requested_profile
-    local managed_identity_record=''
-    if [[ "$mode" == endpoint && "$dry_run" == 0 ]]; then
-        metal_llm_read_live_managed_identity || return 1
-        managed_identity_record=$METAL_LLM_MANAGED_IDENTITY_RECORD
-        jq -e --arg model "$model_id" '
-          .owner_kind == "serve" and .model_id == $model
-        ' "$managed_identity_record" >/dev/null || {
-            metal_llm_die "managed endpoint identity does not match model: $model_id"
+    local profile_id='__null__' runtime_alias runtime_id model_artifact_id context='__null__'
+    local vision_enabled='__null__' vision_image_min_tokens='__null__'
+    local mtp_policy='__null__' mtp_threshold='__null__'
+    local gpu_layers fit flash_attention load_mode lazy_mmap
+    local effective_profile='' managed_identity_record='' artifact_configuration
+    local mtp_artifact_id='__null__' spec_type='__null__' draft_n_max='__null__'
+    local draft_gpu_layers='__null__'
+    if [[ "$mode" == local ]]; then
+        (( profile_seen == 0 && vision_seen == 0 && mtp_seen == 0 && context_seen == 0 )) || {
+            metal_llm_die 'local benchmark accepts only --runtime tuned|upstream'
             return 1
         }
-        local active_profile
-        active_profile=$(jq -er '.profile_id' "$managed_identity_record") || return 1
-        if [[ -n "$requested_profile" && "$requested_profile" != "$active_profile" ]]; then
-            metal_llm_die "managed endpoint profile mismatch: requested $requested_profile, active $active_profile"
+        [[ -n "$requested_runtime" ]] || requested_runtime=tuned
+        [[ "$requested_runtime" == tuned || "$requested_runtime" == upstream ]] || {
+            metal_llm_die 'runtime must be tuned or upstream'
             return 1
+        }
+        runtime_alias=$requested_runtime
+        runtime_id=$(jq -er --arg alias "$runtime_alias" '.runtime_aliases[$alias]' "$model_manifest") || {
+            metal_llm_die "model manifest has no valid runtime alias: $runtime_alias"
+            return 1
+        }
+        local local_record
+        local_record=$(jq -er '
+          [.text_model.entry_artifact_id, (.metal.gpu_layers | tostring), (.metal.fit | tostring),
+           (.metal.flash_attention | tostring), (.metal.load_mode | tostring),
+           (.metal.lazy_mmap | tostring)] | @tsv
+        ' "$model_manifest") || return 1
+        IFS=$'\t' read -r model_artifact_id gpu_layers fit flash_attention load_mode lazy_mmap \
+          <<< "$local_record"
+        artifact_configuration=$(jq -cn --arg runtime_alias "$runtime_alias" --arg runtime_id "$runtime_id" \
+          --arg model_artifact_id "$model_artifact_id" --argjson metal "$(jq -c '.metal' "$model_manifest")" '
+          {
+            profile_id: null, runtime_alias: $runtime_alias, runtime_id: $runtime_id, context: null,
+            vision: {enabled: false, projector_artifact_id: null, image_min_tokens: null},
+            mtp: {policy: "off", artifact_id: null, spec_type: null, draft_n_max: null,
+              gpu_layers: null, threshold: null},
+            model_artifact_id: $model_artifact_id, metal: $metal
+          }
+        ') || return 1
+    else
+        if (( dry_run == 0 )); then
+            metal_llm_read_live_managed_identity || return 1
+            managed_identity_record=$METAL_LLM_MANAGED_IDENTITY_RECORD
+            jq -e --arg model "$model_id" '
+              .owner_kind == "serve" and .model_id == $model
+            ' "$managed_identity_record" >/dev/null || {
+                metal_llm_die "managed endpoint identity does not match model: $model_id"
+                return 1
+            }
+            if (( profile_seen == 0 )); then
+                requested_profile=$(jq -er '.profile_id' "$managed_identity_record") || return 1
+            fi
+            if (( vision_seen == 0 )); then
+                requested_vision=$(jq -er 'if .vision then "on" else "off" end' \
+                  "$managed_identity_record") || return 1
+            fi
+            if (( profile_seen == 0 )) && [[ "$requested_profile" == custom ]]; then
+                (( runtime_seen == 1 )) || requested_runtime=$(jq -er '.runtime_alias' "$managed_identity_record") || return 1
+                (( mtp_seen == 1 )) || requested_mtp=$(jq -er '.mtp_policy' "$managed_identity_record") || return 1
+                (( context_seen == 1 )) || requested_context=$(jq -er '.context | tostring' "$managed_identity_record") || return 1
+            fi
         fi
-        profile_id=$active_profile
+        metal_llm_resolve_profile "$model_manifest" "$requested_profile" "$requested_vision" \
+          "$requested_runtime" "$requested_mtp" "$requested_context" || return 1
+        effective_profile=$METAL_LLM_EFFECTIVE_PROFILE
+        local profile_record
+        profile_record=$(jq -er '
+          [
+            .profile_id, .runtime_alias, .runtime_id, .model_artifact_id, (.context | tostring),
+            (.vision.enabled | tostring),
+            (if .vision.image_min_tokens == null then "__null__"
+             else (.vision.image_min_tokens | tostring) end),
+            .mtp.policy, (.mtp.artifact_id // "__null__"),
+            (.mtp.spec_type // "__null__"),
+            (if .mtp.draft_n_max == null then "__null__" else (.mtp.draft_n_max | tostring) end),
+            (if .mtp.gpu_layers == null then "__null__" else (.mtp.gpu_layers | tostring) end),
+            (if .mtp.threshold == null then "__null__" else (.mtp.threshold | tostring) end),
+            (.metal.gpu_layers | tostring), (.metal.fit | tostring),
+            (.metal.flash_attention | tostring), (.metal.load_mode | tostring),
+            (.metal.lazy_mmap | tostring)
+          ] | @tsv
+        ' <<< "$effective_profile") || return 1
+        IFS=$'\t' read -r profile_id runtime_alias runtime_id model_artifact_id context \
+          vision_enabled vision_image_min_tokens mtp_policy mtp_artifact_id spec_type draft_n_max draft_gpu_layers \
+          mtp_threshold gpu_layers fit flash_attention load_mode lazy_mmap <<< "$profile_record"
+        artifact_configuration=$effective_profile
     fi
-    [[ -n "$profile_id" ]] || profile_id=$(jq -er '.default_profile' "$suite_file") || return 1
-    local profile_record
-    profile_record=$(jq -er --arg id "$profile_id" '
-      first(.profiles[] | select(.id == $id)) |
-      [
-        .runtime_id, .model_artifact_id, (.metal.gpu_layers | tostring),
-        (.metal.flash_attention | tostring), (.metal.load_mode | tostring),
-        (.metal.lazy_mmap | tostring), (.mtp.enabled | tostring),
-        (.mtp.artifact_id // "__null__"), (.mtp.spec_type // "__null__"),
-        (if .mtp.draft_n_max == null then "__null__" else (.mtp.draft_n_max | tostring) end),
-        (.mtp.gpu_layers // "__null__")
-      ] | @tsv
-    ' "$model_manifest" 2>/dev/null) || {
-        metal_llm_die "profile not found: $profile_id"
-        return 1
-    }
-    local runtime_id model_artifact_id gpu_layers flash_attention load_mode lazy_mmap
-    local mtp_enabled mtp_artifact_id spec_type draft_n_max draft_gpu_layers
-    IFS=$'\t' read -r runtime_id model_artifact_id gpu_layers flash_attention load_mode lazy_mmap \
-      mtp_enabled mtp_artifact_id spec_type draft_n_max draft_gpu_layers <<< "$profile_record"
 
     local runtime_manifest="$METAL_LLM_ROOT/manifests/runtimes/$runtime_id.json"
     [[ -f "$runtime_manifest" ]] || { metal_llm_die "runtime manifest not found: $runtime_id"; return 1; }
@@ -251,20 +441,19 @@ metal_llm_bench() {
         metal_llm_die "invalid runtime manifest: $runtime_manifest"
         return 1
     }
-    local bench_executable='' model_path='' mtp_path=''
+    local bench_executable='' model_path=''
     if [[ "$mode" == local ]]; then
         metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-bench || return 1
         bench_executable=$METAL_LLM_VERIFIED_EXECUTABLE
         local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
-        metal_llm_profile_artifact_identities "$model_manifest" "$artifact_dir" "$profile_id" || return 1
+        metal_llm_profile_artifact_identities "$model_manifest" "$artifact_dir" \
+          "$artifact_configuration" || return 1
         model_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$model_artifact_id") || return 1
-        if [[ "$mtp_enabled" == true ]]; then
-            mtp_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$mtp_artifact_id") || return 1
-        fi
     elif (( dry_run == 0 )); then
         metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-server || return 1
         local endpoint_artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
-        metal_llm_profile_artifact_identities "$model_manifest" "$endpoint_artifact_dir" "$profile_id" || return 1
+        metal_llm_profile_artifact_identities "$model_manifest" "$endpoint_artifact_dir" \
+          "$artifact_configuration" || return 1
     fi
 
     [[ -z "${METAL_LLM_HARDWARE_ID:-}" ]] || {
@@ -283,7 +472,12 @@ metal_llm_bench() {
     if [[ "$mode" == endpoint && "$dry_run" == 0 ]]; then
         local current_model_manifest_sha
         current_model_manifest_sha=$(metal_llm_sha256 "$model_manifest") || return 1
-        jq -e --arg host "$host" --argjson port "$port" --arg runtime "$runtime_id" \
+        jq -e --arg host "$host" --argjson port "$port" \
+          --arg profile "$profile_id" --arg runtime_alias "$runtime_alias" \
+          --argjson context "$context" --argjson vision "$vision_enabled" \
+          --arg mtp_policy "$mtp_policy" \
+          --argjson mtp_threshold "${mtp_threshold/__null__/null}" \
+          --arg runtime "$runtime_id" \
           --arg revision "$METAL_LLM_VERIFIED_RUNTIME_REVISION" \
           --arg tree "$METAL_LLM_VERIFIED_RUNTIME_TREE" \
           --arg manifest_sha "$METAL_LLM_VERIFIED_RUNTIME_MANIFEST_SHA256" \
@@ -291,13 +485,17 @@ metal_llm_bench() {
           --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
           --arg model_manifest_sha "$current_model_manifest_sha" \
           --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" '
-          .host == $host and .port == $port and .runtime_id == $runtime and
+          .host == $host and .port == $port and
+          .profile_id == $profile and .runtime_alias == $runtime_alias and
+          .context == $context and .vision == $vision and
+          .mtp_policy == $mtp_policy and .mtp_threshold == $mtp_threshold and
+          .runtime_id == $runtime and
           .runtime_revision == $revision and .runtime_tree_sha == $tree and
           .runtime_manifest_sha256 == $manifest_sha and .build_receipt_sha256 == $receipt_sha and
           .executable_name == "llama-server" and .executable_sha256 == $executable_sha and
           .model_manifest_sha256 == $model_manifest_sha and .artifacts == $artifacts
         ' "$managed_identity_record" >/dev/null || {
-            metal_llm_die "managed endpoint identity does not match verified profile/build/artifacts at $host:$port"
+            metal_llm_die "managed endpoint identity does not match resolved configuration at $host:$port"
             return 1
         }
     fi
@@ -393,7 +591,9 @@ metal_llm_bench() {
           --arg repository_revision "$repository_revision" --arg repository_tree "$repository_tree" \
           --arg hardware "$hardware_id" --arg chip "$METAL_LLM_DETECTED_CHIP" \
           --argjson memory "$METAL_LLM_DETECTED_MEMORY_BYTES" --argjson system "$system_provenance" \
-          --arg profile "$profile_id" \
+          --arg profile "$profile_id" --arg runtime_alias "$runtime_alias" \
+          --arg context "$context" --arg vision "$vision_enabled" --arg mtp_policy "$mtp_policy" \
+          --arg mtp_threshold "$mtp_threshold" \
           --arg runtime "$runtime_id" --arg runtime_revision "$runtime_revision" \
           --arg runtime_tree "$METAL_LLM_VERIFIED_RUNTIME_TREE" \
           --arg runtime_manifest_sha "$METAL_LLM_VERIFIED_RUNTIME_MANIFEST_SHA256" \
@@ -407,7 +607,12 @@ metal_llm_bench() {
             repository: {revision: $repository_revision, tree_sha: $repository_tree, clean: true},
             hardware: {id: $hardware, chip: $chip, unified_memory_bytes: $memory},
             system: $system,
-            profile_id: $profile,
+            profile_id: (if $profile == "__null__" then null else $profile end),
+            runtime_alias: $runtime_alias,
+            context: (if $context == "__null__" then null else ($context | tonumber) end),
+            vision: (if $vision == "__null__" then null else ($vision == "true") end),
+            mtp_policy: (if $mtp_policy == "__null__" then null else $mtp_policy end),
+            mtp_threshold: (if $mtp_threshold == "__null__" then null else ($mtp_threshold | tonumber) end),
             runtime: {
               id: $runtime, tested_revision: $runtime_revision, tested_tree_sha: $runtime_tree,
               manifest_sha256: $runtime_manifest_sha, build_receipt_sha256: $receipt_sha,
@@ -422,8 +627,8 @@ metal_llm_bench() {
     if [[ "$mode" == local && "$dry_run" == 0 ]]; then
         local identity_json
         identity_json=$(jq -cn \
-          --arg owner_kind local-bench --arg model "$model_id" --arg profile "$profile_id" \
-          --argjson vision false --arg runtime "$runtime_id" \
+          --arg owner_kind local-bench --arg model "$model_id" --arg runtime_alias "$runtime_alias" \
+          --arg runtime "$runtime_id" \
           --arg runtime_revision "$METAL_LLM_VERIFIED_RUNTIME_REVISION" \
           --arg runtime_tree "$METAL_LLM_VERIFIED_RUNTIME_TREE" \
           --arg runtime_manifest_sha "$METAL_LLM_VERIFIED_RUNTIME_MANIFEST_SHA256" \
@@ -433,7 +638,9 @@ metal_llm_bench() {
           --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
           --arg host "$host" --argjson port "$port" '
           {
-            owner_kind: $owner_kind, model_id: $model, profile_id: $profile, vision: $vision,
+            owner_kind: $owner_kind, model_id: $model, profile_id: null,
+            runtime_alias: $runtime_alias, context: null, vision: null,
+            mtp_policy: null, mtp_threshold: null,
             runtime_id: $runtime, runtime_revision: $runtime_revision, runtime_tree_sha: $runtime_tree,
             runtime_manifest_sha256: $runtime_manifest_sha, build_receipt_sha256: $receipt_sha,
             executable_name: $executable_name, executable_sha256: $executable_sha,
@@ -449,7 +656,7 @@ metal_llm_bench() {
     run_buffer=$(mktemp "${TMPDIR:-/tmp}/metal-llm-bench-runs.XXXXXX") || return 1
     : > "$run_buffer"
 
-    local case_record case_id case_kind optional prompt_tokens generated_tokens repetitions notes
+    local case_record case_id case_kind request_kind optional streaming prompt_tokens generated_tokens repetitions notes
     local max_tokens temperature seed prompt fixture bench_output throughput
     local command_json payload response content output_sha image_data image_mime expected_fixture_sha
     local flash_value=off lazy_value=off
@@ -459,6 +666,7 @@ metal_llm_bench() {
     while IFS= read -r case_record; do
         case_id=$(jq -r '.id' <<< "$case_record")
         case_kind=$(jq -r '.kind' <<< "$case_record")
+        [[ "$case_kind" == vision ]] && request_kind=vision || request_kind=text
         optional=$(jq -r '.optional // false' <<< "$case_record")
         [[ "$optional" == false || "$include_optional" == 1 ]] || continue
         notes=$(jq -r '.notes' <<< "$case_record")
@@ -473,23 +681,11 @@ metal_llm_bench() {
               -p "$prompt_tokens" -n "$generated_tokens" -b 512 -ub 512
               -r "$repetitions" -fa "$flash_value" -lm "$load_mode" -lzm "$lazy_value" -o json
             )
-            if [[ "$mtp_enabled" == true ]]; then
-                bench_arguments+=(
-                  -md "$mtp_path" --spec-type "$spec_type"
-                  --spec-draft-n-max "$draft_n_max" -ngld "$draft_gpu_layers"
-                )
-            fi
             recorded_bench_arguments=(
               llama-bench -m "artifact:$model_artifact_id" -ngl "$gpu_layers"
               -p "$prompt_tokens" -n "$generated_tokens" -b 512 -ub 512
               -r "$repetitions" -fa "$flash_value" -lm "$load_mode" -lzm "$lazy_value" -o json
             )
-            if [[ "$mtp_enabled" == true ]]; then
-                recorded_bench_arguments+=(
-                  -md "artifact:$mtp_artifact_id" --spec-type "$spec_type"
-                  --spec-draft-n-max "$draft_n_max" -ngld "$draft_gpu_layers"
-                )
-            fi
             if (( dry_run == 1 )); then
                 metal_llm_print_command "${bench_arguments[@]}"
                 continue
@@ -508,18 +704,20 @@ metal_llm_bench() {
             jq -n \
               --arg id "$case_id" --arg timestamp "$now" --arg repo "$repository_revision" \
               --arg hardware "$hardware_id" --arg runtime "$runtime_id" --arg runtime_revision "$runtime_revision" \
-              --arg profile "$profile_id" --arg notes "$notes" --arg kind "$measurement_kind" \
+              --arg runtime_alias "$runtime_alias" --arg notes "$notes" --arg kind "$measurement_kind" \
               --argjson prompt "$prompt_tokens" --argjson generated "$generated_tokens" --argjson throughput "$throughput" \
-              --argjson repetitions "$repetitions" --argjson mtp "$mtp_enabled" \
+              --argjson repetitions "$repetitions" \
               --argjson command "$command_json" '
               {
                 id: $id, experiment: "suite-run", measurement_kind: $kind,
                 timestamp: $timestamp, repository_revision: $repo,
                 hardware_id: $hardware, runtime_id: $runtime, runtime_revision: $runtime_revision,
-                profile: $profile, effective_prompt_tokens: $prompt, generated_tokens: $generated,
+                profile: null, profile_id: null, runtime_alias: $runtime_alias,
+                context: null, vision: null, mtp_policy: null, mtp_selected: null,
+                mtp_threshold: null, prompt_tokens: $prompt, effective_prompt_tokens: null,
+                generated_tokens: $generated,
                 prompt_tokens_per_second: (if $prompt > 0 then $throughput else null end),
                 generation_tokens_per_second: (if $generated > 0 then $throughput else null end),
-                mtp: $mtp,
                 command: $command,
                 generation_settings: {temperature: 0, seed: 1234, max_tokens: $generated, reasoning: false, repetitions: $repetitions},
                 notes: $notes
@@ -531,8 +729,9 @@ metal_llm_bench() {
             temperature=$(jq -r '.temperature' <<< "$case_record")
             seed=$(jq -r '.seed' <<< "$case_record")
             fixture=$(jq -r '.fixture // empty' <<< "$case_record")
+            streaming=$(jq -r '.stream // false' <<< "$case_record")
             if (( dry_run == 1 )); then
-                print -- "HTTP POST http://$host:$port/v1/chat/completions case=$case_id max_tokens=$max_tokens temperature=$temperature seed=$seed"
+                print -- "HTTP POST http://$host:$port/v1/chat/completions case=$case_id max_tokens=$max_tokens temperature=$temperature seed=$seed stream=$streaming"
                 continue
             fi
             if [[ "$case_kind" == vision && ! -f "$METAL_LLM_ROOT/$fixture" ]]; then
@@ -566,16 +765,20 @@ metal_llm_bench() {
                 }
                 payload=$(jq -cn --arg model "$model_id" --arg prompt "$prompt" \
                   --arg image_url "data:$image_mime;base64,$image_data" \
-                  --argjson max_tokens "$max_tokens" --argjson temperature "$temperature" --argjson seed "$seed" '
+                  --argjson max_tokens "$max_tokens" --argjson temperature "$temperature" \
+                  --argjson seed "$seed" --argjson stream "$streaming" '
                   {model: $model, messages: [{role: "user", content: [
                     {type: "text", text: $prompt}, {type: "image_url", image_url: {url: $image_url}}
-                  ]}], max_tokens: $max_tokens, temperature: $temperature, seed: $seed}
+                  ]}], max_tokens: $max_tokens, temperature: $temperature, seed: $seed} +
+                  (if $stream then {stream: true, stream_options: {include_usage: true}} else {} end)
                 ') || { rm -f -- "$run_buffer"; return 1; }
             else
                 payload=$(jq -cn --arg model "$model_id" --arg prompt "$prompt" \
-                  --argjson max_tokens "$max_tokens" --argjson temperature "$temperature" --argjson seed "$seed" '
+                  --argjson max_tokens "$max_tokens" --argjson temperature "$temperature" \
+                  --argjson seed "$seed" --argjson stream "$streaming" '
                   {model: $model, messages: [{role: "user", content: $prompt}], max_tokens: $max_tokens,
-                   temperature: $temperature, seed: $seed}
+                   temperature: $temperature, seed: $seed} +
+                  (if $stream then {stream: true, stream_options: {include_usage: true}} else {} end)
                 ') || { rm -f -- "$run_buffer"; return 1; }
             fi
             curl_arguments=(-fsS "http://$host:$port/v1/chat/completions" -H 'Content-Type: application/json')
@@ -589,35 +792,52 @@ metal_llm_bench() {
                 metal_llm_die "API benchmark failed for case: $case_id"
                 return 1
             }
-            content=$(jq -er '.choices[0].message.content' <<< "$response") || {
+            metal_llm_parse_endpoint_response "$response" "$streaming" || {
                 rm -f -- "$run_buffer"
-                metal_llm_die "invalid API response for case: $case_id"
                 return 1
             }
+            content=$METAL_LLM_BENCH_RESPONSE_CONTENT
             output_sha=$(print -rn -- "$content" | shasum -a 256 | awk '{print $1}') || {
                 rm -f -- "$run_buffer"
                 return 1
             }
-            prompt_tokens=$(jq -er '.usage.prompt_tokens' <<< "$response") || prompt_tokens=null
-            generated_tokens=$(jq -er '.usage.completion_tokens' <<< "$response") || generated_tokens=null
+            prompt_tokens=$(jq -er '.prompt_tokens' <<< "$METAL_LLM_BENCH_RESPONSE_USAGE") || prompt_tokens=null
+            generated_tokens=$(jq -er '.completion_tokens' <<< "$METAL_LLM_BENCH_RESPONSE_USAGE") || generated_tokens=null
+            metal_llm_validate_endpoint_timing "$METAL_LLM_BENCH_RESPONSE_TIMING" \
+              "$mtp_policy" "$mtp_threshold" "$case_kind" "$vision_image_min_tokens" \
+              "$prompt_tokens" || {
+                rm -f -- "$run_buffer"
+                return 1
+            }
             command_json=$(metal_llm_command_json "${recorded_curl_arguments[@]}") || {
                 rm -f -- "$run_buffer"
                 return 1
             }
             jq -n \
-              --arg id "$case_id" --arg timestamp "$now" --arg repo "$repository_revision" \
+              --arg id "$case_id" --arg request_kind "$request_kind" \
+              --arg timestamp "$now" --arg repo "$repository_revision" \
               --arg hardware "$hardware_id" --arg runtime "$runtime_id" --arg runtime_revision "$runtime_revision" \
-              --arg profile "$profile_id" --arg notes "$notes; API response did not expose phase throughput" \
+              --arg profile_id "$profile_id" --arg runtime_alias "$runtime_alias" \
+              --argjson context "$context" --argjson vision "$vision_enabled" \
+              --arg mtp_policy "$mtp_policy" --argjson mtp_selected "$METAL_LLM_BENCH_MTP_SELECTED" \
+              --argjson effective_prompt_tokens "$METAL_LLM_BENCH_EFFECTIVE_PROMPT_TOKENS" \
+              --argjson mtp_threshold "${mtp_threshold/__null__/null}" \
+              --arg notes "$notes; API response did not expose phase throughput" \
               --arg sha "$output_sha" --argjson prompt "$prompt_tokens" --argjson generated "$generated_tokens" \
               --argjson temperature "$temperature" --argjson seed "$seed" --argjson max_tokens "$max_tokens" \
-              --argjson mtp "$mtp_enabled" --argjson command "$command_json" '
+              --argjson command "$command_json" '
               {
                 id: $id, experiment: "suite-run", measurement_kind: "single_run",
+                request_kind: $request_kind,
                 timestamp: $timestamp, repository_revision: $repo,
                 hardware_id: $hardware, runtime_id: $runtime, runtime_revision: $runtime_revision,
-                profile: $profile, effective_prompt_tokens: $prompt, generated_tokens: $generated,
+                profile: null, profile_id: $profile_id, runtime_alias: $runtime_alias,
+                context: $context, vision: $vision, mtp_policy: $mtp_policy,
+                mtp_selected: $mtp_selected, mtp_threshold: $mtp_threshold,
+                prompt_tokens: $prompt, effective_prompt_tokens: $effective_prompt_tokens,
+                generated_tokens: $generated,
                 prompt_tokens_per_second: null, generation_tokens_per_second: null,
-                mtp: $mtp, output_sha256: $sha,
+                output_sha256: $sha,
                 command: $command,
                 generation_settings: {temperature: $temperature, seed: $seed, max_tokens: $max_tokens, reasoning: false},
                 notes: $notes

@@ -1,0 +1,793 @@
+From b814e84c45f00fb0d9f3283175acc1a24fa90b95 Mon Sep 17 00:00:00 2001
+From: Metal LLM Lab Runtime <runtime-patch@localhost>
+Date: Thu, 3 Sep 2026 19:48:36 -0400
+Subject: [PATCH] server: gate MTP by effective prompt length
+
+---
+ common/arg.cpp                    |  16 +++
+ common/common.h                   |   8 ++
+ tests/CMakeLists.txt              |   3 +
+ tests/test-server-speculative.cpp | 173 ++++++++++++++++++++++++++++++
+ tools/server/server-common.cpp    |   8 ++
+ tools/server/server-common.h      |   5 +
+ tools/server/server-context.cpp   | 115 +++++++++++++++-----
+ tools/server/server-context.h     |   4 +
+ tools/server/server-task.cpp      |  53 +++++++--
+ tools/server/server-task.h        |  18 +++-
+ 10 files changed, 367 insertions(+), 36 deletions(-)
+ create mode 100644 tests/test-server-speculative.cpp
+
+diff --git a/common/arg.cpp b/common/arg.cpp
+index 79405b5..477f36f 100644
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -888,6 +888,12 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
+     // parse all CLI args now, so that -hf is available below for remote preset resolution
+     parse_cli_args();
+ 
++    if (params.speculative.max_prompt_tokens >= 0 &&
++            !params.speculative.has_dft() && !params.speculative.has_mtp()) {
++        throw std::invalid_argument(
++            "error: --spec-draft-max-prompt-tokens requires --spec-draft-model or --spec-type draft-mtp\n");
++    }
++
+     postprocess_cpu_params(params.cpuparams,       nullptr);
+     postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);
+ 
+@@ -4146,6 +4152,16 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
+             params.speculative.draft.n_max = value;
+         }
+     ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_N_MAX"));
++    add_opt(common_arg(
++        {"--spec-draft-max-prompt-tokens"}, "N",
++        "use the draft model only when the effective prompt is at most N tokens",
++        [](common_params & params, int value) {
++            if (value <= 0) {
++                throw std::invalid_argument("invalid value");
++            }
++            params.speculative.max_prompt_tokens = value;
++        }
++    ).set_spec().set_examples({LLAMA_EXAMPLE_SERVER}));
+     add_opt(common_arg(
+         {"--spec-draft-n-min"}, "N",
+         string_format("minimum number of draft tokens to use for speculative decoding (default: %d)", params.speculative.draft.n_min),
+diff --git a/common/common.h b/common/common.h
+index 4e9448b..acbcaac 100644
+--- a/common/common.h
++++ b/common/common.h
+@@ -370,6 +370,10 @@ struct common_params_speculative_ngram_cache {
+ struct common_params_speculative {
+     std::vector<enum common_speculative_type> types = { COMMON_SPECULATIVE_TYPE_NONE };
+ 
++    // -1 disables prompt-length routing; positive values enable speculative decoding
++    // only when the effective prompt length is at or below the threshold.
++    int32_t max_prompt_tokens = -1;
++
+     double synth_len = -1.0;
+     std::vector<double> synth_rates;
+ 
+@@ -387,6 +391,10 @@ struct common_params_speculative {
+         return !draft.mparams.empty();
+     }
+ 
++    bool has_mtp() const {
++        return std::find(types.begin(), types.end(), COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != types.end();
++    }
++
+     bool has_synth() const {
+         return synth_len != -1.0 || !synth_rates.empty();
+     }
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index c46377c..c155a02 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -289,6 +289,9 @@ llama_build_and_test(test-thread-safety.cpp ARGS -m "${MODEL_DEST}" -ngl 99 -p "
+ set_tests_properties(test-thread-safety PROPERTIES FIXTURES_REQUIRED test-download-model)
+ 
+ llama_build_and_test(test-arg-parser.cpp)
++llama_build_and_test(test-server-speculative.cpp)
++target_include_directories(test-server-speculative PRIVATE ${PROJECT_SOURCE_DIR}/tools/server)
++target_link_libraries(test-server-speculative PRIVATE server-context)
+ llama_build_and_test(test-model-resolution.cpp)
+ # the test serves its repos from an httplib server, and the library links it privately
+ target_link_libraries(test-model-resolution PRIVATE cpp-httplib)
+diff --git a/tests/test-server-speculative.cpp b/tests/test-server-speculative.cpp
+new file mode 100644
+index 0000000..7fbbfa9
+--- /dev/null
++++ b/tests/test-server-speculative.cpp
+@@ -0,0 +1,173 @@
++#include "arg.h"
++#include "common.h"
++#include "server-common.h"
++#include "server-context.h"
++#include "server-task.h"
++
++#include <string>
++#include <vector>
++
++#undef NDEBUG
++#include <cassert>
++
++static bool parse_server(std::vector<std::string> args, common_params & params) {
++    std::vector<char *> argv;
++    argv.reserve(args.size());
++    for (auto & arg : args) {
++        argv.push_back(arg.data());
++    }
++    return common_params_parse((int) argv.size(), argv.data(), params, LLAMA_EXAMPLE_SERVER);
++}
++
++static void test_max_prompt_tokens_option() {
++    {
++        common_params params;
++        assert(params.speculative.max_prompt_tokens == -1);
++    }
++
++    {
++        common_params params;
++        assert(parse_server({
++            "llama-server",
++            "--spec-draft-max-prompt-tokens", "32768",
++            "--spec-draft-model", "draft.gguf",
++        }, params));
++        assert(params.speculative.max_prompt_tokens == 32768);
++    }
++
++    {
++        common_params params;
++        assert(parse_server({
++            "llama-server",
++            "--spec-draft-max-prompt-tokens", "32768",
++            "--spec-type", "draft-mtp",
++        }, params));
++        assert(params.speculative.max_prompt_tokens == 32768);
++        assert(params.speculative.has_mtp());
++    }
++
++    for (const char * value : {"-1", "0"}) {
++        common_params params;
++        assert(!parse_server({
++            "llama-server",
++            "--spec-draft-model", "draft.gguf",
++            "--spec-draft-max-prompt-tokens", value,
++        }, params));
++    }
++
++    {
++        common_params params;
++        assert(!parse_server({
++            "llama-server",
++            "--spec-draft-max-prompt-tokens", "32768",
++        }, params));
++    }
++}
++
++static server_slot_stats stats_for(const server_speculative_route & route, bool speculative_loaded) {
++    server_slot_stats stats;
++    route.apply_to(stats, speculative_loaded);
++    return stats;
++}
++
++static void test_effective_prompt_boundaries() {
++    for (const auto & test : std::vector<std::pair<int32_t, bool>> {
++            {32767, true},
++            {32768, true},
++            {32769, false},
++        }) {
++        server_speculative_route route;
++        route.begin(true, 32768, test.first);
++
++        assert(route.enabled(true) == test.second);
++        assert(route.effective_prompt_tokens == test.first);
++        assert(route.speculative_threshold == 32768);
++
++        const auto timing = stats_for(route, true).to_json();
++        assert(timing.at("speculative") == test.second);
++        assert(timing.at("speculative_policy") == "dynamic");
++        assert(timing.at("effective_prompt_tokens") == test.first);
++        assert(timing.at("speculative_threshold") == 32768);
++    }
++}
++
++static void test_fixed_policies_and_reset() {
++    server_speculative_route fixed_on;
++    fixed_on.begin(true, -1, 12);
++    const auto on_timing = stats_for(fixed_on, true).to_json();
++    assert(fixed_on.enabled(true));
++    assert(on_timing.at("speculative") == true);
++    assert(on_timing.at("speculative_policy") == "on");
++    assert(on_timing.at("effective_prompt_tokens") == 12);
++    assert(on_timing.at("speculative_threshold").is_null());
++
++    server_speculative_route fixed_off;
++    fixed_off.begin(false, 32768, 99);
++    const auto off_timing = stats_for(fixed_off, false).to_json();
++    assert(!fixed_off.enabled(false));
++    assert(off_timing.at("speculative") == false);
++    assert(off_timing.at("speculative_policy") == "off");
++    assert(off_timing.at("effective_prompt_tokens") == 99);
++    assert(off_timing.at("speculative_threshold").is_null());
++
++    fixed_off.reset();
++    assert(fixed_off.speculative_for_task);
++    assert(fixed_off.effective_prompt_tokens == 0);
++    assert(fixed_off.speculative_threshold == -1);
++}
++
++static void test_simultaneous_opposite_decisions_are_independent() {
++    server_speculative_route short_route;
++    server_speculative_route long_route;
++
++    short_route.begin(true, 32768, 32768);
++    long_route.begin(true, 32768, 32769);
++
++    assert(short_route.enabled(true));
++    assert(!long_route.enabled(true));
++    assert(!short_route.can_batch_with(long_route, true));
++
++    long_route.reset();
++    assert(short_route.enabled(true));
++    assert(long_route.speculative_for_task);
++    assert(short_route.can_batch_with(long_route, true));
++}
++
++static void test_prompt_cache_keeps_route_compatible_states_separate() {
++    server_prompt prompt;
++    prompt.speculative = true;
++
++    const auto clone = prompt.clone();
++    assert(clone.speculative);
++
++    server_prompt_cache cache(-1, 0);
++    assert(cache.alloc(prompt, 0, 0) != nullptr);
++
++    prompt.speculative = false;
++    assert(cache.alloc(prompt, 0, 0) != nullptr);
++    assert(cache.states.size() == 2);
++
++    prompt.clear();
++    assert(!prompt.speculative);
++}
++
++static void test_threshold_requires_successful_speculative_initialization() {
++    common_params_speculative params;
++    params.max_prompt_tokens = 32768;
++
++    assert(!server_speculative_init_is_valid(params, false));
++    assert(server_speculative_init_is_valid(params, true));
++
++    params.max_prompt_tokens = -1;
++    assert(server_speculative_init_is_valid(params, false));
++}
++
++int main() {
++    test_max_prompt_tokens_option();
++    test_effective_prompt_boundaries();
++    test_fixed_policies_and_reset();
++    test_simultaneous_opposite_decisions_are_independent();
++    test_prompt_cache_keeps_route_compatible_states_separate();
++    test_threshold_requires_successful_speculative_initialization();
++    return 0;
++}
+diff --git a/tools/server/server-common.cpp b/tools/server/server-common.cpp
+index c30955e..17162b7 100644
+--- a/tools/server/server-common.cpp
++++ b/tools/server/server-common.cpp
+@@ -77,8 +77,16 @@ json server_slot_stats::to_json() const {
+         {"predicted_ms",           t_gen_ms()},
+         {"predicted_per_token_ms", t_gen_per_token_ms()},
+         {"predicted_per_second",   n_gen_tps()},
++
++        {"speculative",             speculative},
++        {"speculative_policy",      speculative_policy},
++        {"effective_prompt_tokens", effective_prompt_tokens},
+     };
+ 
++    base["speculative_threshold"] = speculative_threshold >= 0
++        ? json(speculative_threshold)
++        : json(nullptr);
++
+     if (n_draft_tokens > 0) {
+         base["draft_n"]          = n_draft_tokens;
+         base["draft_n_accepted"] = n_draft_accepted;
+diff --git a/tools/server/server-common.h b/tools/server/server-common.h
+index 6c681a2..1700cbd 100644
+--- a/tools/server/server-common.h
++++ b/tools/server/server-common.h
+@@ -360,6 +360,11 @@ struct server_slot_stats {
+     uint64_t n_draft_accepted    = 0;
+     uint64_t n_draft_verif_steps = 0;
+ 
++    bool speculative = false;
++    std::string speculative_policy = "off";
++    int32_t effective_prompt_tokens = 0;
++    int32_t speculative_threshold = -1;
++
+     // these are absolute timestamps (in us)
+     // note: must be signed - they are subtracted before the later ones are set
+     int64_t t_start       = 0;
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index f547735..6d75d0c 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -250,6 +250,7 @@ struct server_slot {
+ 
+     // speculative decoding
+     common_speculative * spec;
++    server_speculative_route speculative_route;
+ 
+     llama_tokens spec_draft;
+     llama_tokens spec_prompt;
+@@ -302,7 +303,9 @@ struct server_slot {
+         }
+ 
+         const size_t cur_size_tgt =           llama_state_seq_get_size_ext(ctx_tgt, id, LLAMA_STATE_SEQ_FLAGS_NONE);
+-        const size_t cur_size_dft = ctx_dft ? llama_state_seq_get_size_ext(ctx_dft, id, LLAMA_STATE_SEQ_FLAGS_NONE) : 0;
++        const size_t cur_size_dft = prompt.speculative && ctx_dft
++            ? llama_state_seq_get_size_ext(ctx_dft, id, LLAMA_STATE_SEQ_FLAGS_NONE)
++            : 0;
+ 
+         const size_t cur_size = cur_size_tgt + cur_size_dft;
+ 
+@@ -315,15 +318,16 @@ struct server_slot {
+         }
+ 
+         llama_state_seq_get_data_ext(ctx_tgt, cur->data.main.data(), cur_size_tgt, id, LLAMA_STATE_SEQ_FLAGS_NONE);
+-        if (ctx_dft) {
++        if (prompt.speculative && ctx_dft) {
+             llama_state_seq_get_data_ext(ctx_dft, cur->data.drft.data(), cur_size_dft, id, LLAMA_STATE_SEQ_FLAGS_NONE);
+         }
+ 
+         return true;
+     }
+ 
+-    bool prompt_load(server_prompt_cache & prompt_cache, const server_tokens & tokens) {
+-        bool res = prompt_cache.load(prompt, tokens, ctx_tgt, ctx_dft, id);
++    bool prompt_load(server_prompt_cache & prompt_cache, const server_tokens & tokens, bool require_speculative) {
++        bool res = prompt_cache.load(
++            prompt, tokens, ctx_tgt, require_speculative ? ctx_dft : nullptr, id, require_speculative);
+         if (!res) {
+             SLT_WRN(*this, "%s", "failed to load prompt from cache\n");
+         }
+@@ -379,11 +383,10 @@ struct server_slot {
+         stopping_word  = "";
+         n_sent_text    = 0;
+ 
+-        if (can_speculate()) {
+-            spec_draft.clear();
+-            spec_i_batch.clear();
+-            spec_ckpt.clear();
+-        }
++        spec_draft.clear();
++        spec_prompt.clear();
++        spec_i_batch.clear();
++        spec_ckpt.clear();
+         generated_tokens.clear();
+         generated_token_probs.clear();
+         json_schema = json();
+@@ -394,6 +397,7 @@ struct server_slot {
+         // note: callback_on_reset() must have run before this, see release()
+         stats = {};
+         n_accepted_per_pos.clear();
++        speculative_route.reset();
+ 
+         n_predict_max = -1;
+ 
+@@ -451,7 +455,8 @@ struct server_slot {
+ 
+         return task->type == other_slot.task->type
+             && inp_embd.size() == other_slot.inp_embd.size()
+-            && are_lora_equal(lora, other_slot.lora);
++            && are_lora_equal(lora, other_slot.lora)
++            && speculative_route.can_batch_with(other_slot.speculative_route, spec != nullptr);
+     }
+ 
+     // returns -1 if the generation is limitless
+@@ -468,7 +473,7 @@ struct server_slot {
+     }
+ 
+     bool can_speculate() const {
+-        return !!spec;
++        return speculative_route.enabled(spec != nullptr);
+     }
+ 
+     void add_token(const completion_token_output & token) {
+@@ -680,7 +685,9 @@ struct server_slot {
+                     "     acc per pos = (%s)\n", acceptance_rates_per_pos.c_str());
+         }
+ 
+-        common_speculative_print_stats(spec);
++        if (can_speculate()) {
++            common_speculative_print_stats(spec);
++        }
+     }
+ 
+     json to_json(bool only_metrics = false) const {
+@@ -734,6 +741,12 @@ struct server_slot {
+     }
+ };
+ 
++bool server_speculative_init_is_valid(
++        const common_params_speculative & params,
++        bool speculative_initialized) {
++    return params.max_prompt_tokens < 0 || speculative_initialized;
++}
++
+ // returns 0 on success
+ // caller need to update prompt.tokens after a successful call to keep track of the processing progress
+ // note: this is not a member of server_slot because we want to run it inside yield_to_queue
+@@ -750,7 +763,7 @@ static int process_mtmd_chunk(const server_slot & slot, mtmd::batch_ptr & mbatch
+         if (mbatch) {
+             float * embd = mtmd_batch_get_output_embd(mbatch.get(), chunk.get());
+             if (embd) {
+-                void * cb_data = slot.spec;
++                void * cb_data = slot.can_speculate() ? slot.spec : nullptr;
+                 static auto cb = [](llama_batch batch, void * user_data) {
+                     common_speculative * spec = static_cast<common_speculative *>(user_data);
+                     if (!common_speculative_process(spec, batch)) {
+@@ -769,7 +782,7 @@ static int process_mtmd_chunk(const server_slot & slot, mtmd::batch_ptr & mbatch
+                     slot.id,
+                     llama_n_batch(slot.ctx_tgt),
+                     &new_n_past,
+-                    cb,
++                    cb_data ? cb : nullptr,
+                     cb_data
+                 );
+                 if (res != 0) {
+@@ -1017,9 +1030,7 @@ private:
+ 
+         const bool has_mmproj = !params.mmproj.path.empty();
+         const bool has_draft = params.speculative.has_dft();
+-        const bool spec_mtp = std::find(params_base.speculative.types.begin(),
+-                                        params_base.speculative.types.end(),
+-                                        COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params_base.speculative.types.end();
++        const bool spec_mtp = params.speculative.has_mtp();
+         const bool has_spec = has_draft || spec_mtp;
+ 
+         if (callback_state) {
+@@ -1279,6 +1290,11 @@ private:
+             model_dft = nullptr;
+         }
+ 
++        if (!server_speculative_init_is_valid(params_base.speculative, spec != nullptr)) {
++            SRV_ERR("%s", "--spec-draft-max-prompt-tokens requires an initialized draft/MTP speculative context\n");
++            return false;
++        }
++
+         if (!spec && params_base.speculative.has_synth()) {
+             SRV_ERR("%s", "synthetic acceptance requires an initialized speculative decoding context\n");
+             return false;
+@@ -1536,6 +1552,10 @@ private:
+     server_slot * get_available_slot(const server_task & task) {
+         server_slot * ret = nullptr;
+ 
++        server_speculative_route task_route;
++        task_route.begin(spec != nullptr, params_base.speculative.max_prompt_tokens, task.n_tokens());
++        const bool task_can_speculate = task_route.enabled(spec != nullptr);
++
+         bool update_cache = false;
+ 
+         // if a specific slot is requested, use it (still goes through cache update logic below)
+@@ -1569,6 +1589,11 @@ private:
+                     continue;
+                 }
+ 
++                if (task_can_speculate && !slot.prompt.speculative) {
++                    SLT_TRC(slot, "%s", " - skipping, cached prompt has no draft state\n");
++                    continue;
++                }
++
+                 // fraction of the Longest Common Prefix length with respect to the input prompt length
+                 const size_t lcp_len = tokens.get_common_prefix(task.tokens);
+                 const float f_sim_cur = float(lcp_len) / task.tokens.size();
+@@ -1623,6 +1648,8 @@ private:
+         }
+ 
+         if (ret) {
++            ret->mem.init(ctx_tgt, task_can_speculate ? ctx_dft : nullptr);
++
+             update_cache = update_cache && prompt_cache;
+ 
+             // cache prompts only for completion tasks
+@@ -1635,7 +1662,7 @@ private:
+ 
+                 ret->prompt_save(*prompt_cache);
+ 
+-                if (!ret->prompt_load(*prompt_cache, task.tokens)) {
++                if (!ret->prompt_load(*prompt_cache, task.tokens, task_can_speculate)) {
+                     ret->prompt_clear();
+                 }
+ 
+@@ -1764,6 +1791,30 @@ private:
+             return false;
+         }
+ 
++        slot.speculative_route.begin(
++            spec != nullptr,
++            params_base.speculative.max_prompt_tokens,
++            task.n_tokens());
++        slot.mem.init(ctx_tgt, slot.can_speculate() ? ctx_dft : nullptr);
++
++        if (slot.can_speculate()) {
++            if (!slot.prompt.speculative) {
++                slot.prompt_clear();
++            }
++            slot.prompt.speculative = true;
++        } else {
++            slot.prompt.speculative = false;
++            for (auto & checkpoint : slot.prompt.checkpoints) {
++                checkpoint.clear_dft();
++            }
++        }
++
++        slot.speculative_route.apply_to(slot.stats, spec != nullptr);
++        SLT_INF(slot,
++                "speculative routing: policy = %s, enabled = %d, effective_prompt_tokens = %d, threshold = %d\n",
++                slot.stats.speculative_policy.c_str(), slot.stats.speculative,
++                slot.stats.effective_prompt_tokens, slot.stats.speculative_threshold);
++
+         SLT_DBG(slot, "launching slot : %s\n", safe_json_to_str(slot.to_json()).c_str());
+ 
+         // initialize samplers
+@@ -1793,7 +1844,7 @@ private:
+             SLT_TRC(slot, "sampler chain: %s\n", common_sampler_print(slot.smpl.get()).c_str());
+             SLT_TRC(slot, "sampler params: \n%s\n", task.params.sampling.print().c_str());
+ 
+-            if (spec && !common_speculative_get_synth_probs(spec.get()).empty()) {
++            if (slot.can_speculate() && !common_speculative_get_synth_probs(spec.get()).empty()) {
+                 const uint32_t seed = task.params.sampling.seed == LLAMA_DEFAULT_SEED
+                     ? std::random_device{}()
+                     : task.params.sampling.seed;
+@@ -2334,9 +2385,11 @@ private:
+         cur.update_pos(slot.prompt.n_tokens() - n_tokens_cur, pos_min, pos_max);
+ 
+         cur.update_tgt(ctx_tgt, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+-        cur.update_dft(ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+-        // stash the draft's speculative state with the checkpoint
+-        common_speculative_get_state(spec.get(), slot.id, cur.data_spec);
++        if (slot.can_speculate()) {
++            cur.update_dft(ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
++            // stash the draft's speculative state with the checkpoint
++            common_speculative_get_state(spec.get(), slot.id, cur.data_spec);
++        }
+ 
+         SLT_TRC(slot,
+                 "created context checkpoint %d of %d (pos_min = %d, pos_max = %d, n_tokens = %" PRId64 ", size = %.3f MiB)\n",
+@@ -2936,8 +2989,10 @@ private:
+ 
+                     new_tokens.resize(slot.prompt.tokens.size() - n_discard);
+ 
++                    const bool prompt_speculative = slot.prompt.speculative;
+                     slot.prompt.clear();
+                     slot.prompt.tokens.insert(new_tokens);
++                    slot.prompt.speculative = prompt_speculative;
+                 }
+ 
+                 slot.truncated = true;
+@@ -2968,7 +3023,7 @@ private:
+ 
+             generating.push_back(&slot);
+ 
+-            if (spec) {
++            if (slot.can_speculate()) {
+                 common_speculative_get_draft_params(spec.get(), slot.id).drafting = false;
+ 
+                 const bool use_ckpt_tgt = ctx_tgt_seq_rm_type == COMMON_CONTEXT_SEQ_RM_TYPE_FULL;
+@@ -3340,9 +3395,11 @@ private:
+                                     if (!do_reset) {
+                                         // restore the context checkpoint
+                                         it->load_tgt(ctx_tgt, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+-                                        it->load_dft(ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+-                                        // restore the draft's speculative state
+-                                        common_speculative_set_state(spec.get(), slot.id, it->data_spec);
++                                        if (slot.can_speculate()) {
++                                            it->load_dft(ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
++                                            // restore the draft's speculative state
++                                            common_speculative_set_state(spec.get(), slot.id, it->data_spec);
++                                        }
+ 
+                                         pos_next = std::min(pos_next, std::max(it->pos_min + 1, it->pos_max));
+                                         n_past   = std::min(slot.prompt.tokens.size_up_to_pos(pos_next), (size_t) it->n_tokens);
+@@ -3636,7 +3693,9 @@ private:
+ 
+         // TODO @ngxson : dft model may have different n_embd than the tgt model, so we check & reject if that's the case
+         // this case is not currently used by any models, but may need to be supported in the future
+-        if (spec && batch.has_embd) {
++        const bool batch_can_speculate = batch.slot_batched && batch.slot_batched->can_speculate();
++
++        if (batch_can_speculate && batch.has_embd) {
+             if (llama_model_n_embd_inp(model_dft) != llama_model_n_embd_inp(model_tgt)) {
+                 SRV_ERR("%s", "unsupported batch.has_embd + spec case\n");
+                 throw std::runtime_error("unsupported batch.has_embd + spec case");
+@@ -3714,7 +3773,7 @@ private:
+         // TODO: avoid restoring the draft context and re-evaluating the drafted tokens when not needed [TAG_SPEC_AVOID_DRAFT_REEVAL]
+         //       for now, always re-evaluate for simplicity
+         //       ref: https://github.com/ggml-org/llama.cpp/pull/22728#issuecomment-4400925384
+-        if (spec) {
++        if (batch_can_speculate) {
+             bool ok = true;
+             queue_tasks.yield_to_queue([&]() {
+                 ok = common_speculative_process(spec.get(), batch_view);
+diff --git a/tools/server/server-context.h b/tools/server/server-context.h
+index 0acbbff..1c959e4 100644
+--- a/tools/server/server-context.h
++++ b/tools/server/server-context.h
+@@ -81,6 +81,10 @@ static server_state server_state_from_str(const std::string & str) {
+ 
+ using server_state_callback_t = std::function<void(server_state, json /* payload */)>;
+ 
++bool server_speculative_init_is_valid(
++        const common_params_speculative & params,
++        bool speculative_initialized);
++
+ struct server_context {
+     std::unique_ptr<server_context_impl> impl;
+ 
+diff --git a/tools/server/server-task.cpp b/tools/server/server-task.cpp
+index 0d3beb3..6626f84 100644
+--- a/tools/server/server-task.cpp
++++ b/tools/server/server-task.cpp
+@@ -1685,6 +1685,33 @@ json server_task_result_apply_lora::to_json() {
+     return json {{ "success", true }};
+ }
+ 
++void server_speculative_route::begin(bool speculative_loaded, int32_t threshold, int32_t prompt_tokens) {
++    effective_prompt_tokens = prompt_tokens;
++    speculative_threshold = threshold;
++    speculative_for_task = speculative_loaded && (threshold < 0 || prompt_tokens <= threshold);
++}
++
++void server_speculative_route::reset() {
++    speculative_for_task = true;
++    effective_prompt_tokens = 0;
++    speculative_threshold = -1;
++}
++
++bool server_speculative_route::enabled(bool speculative_loaded) const {
++    return speculative_loaded && speculative_for_task;
++}
++
++bool server_speculative_route::can_batch_with(const server_speculative_route & other, bool speculative_loaded) const {
++    return enabled(speculative_loaded) == other.enabled(speculative_loaded);
++}
++
++void server_speculative_route::apply_to(server_slot_stats & stats, bool speculative_loaded) const {
++    stats.speculative = enabled(speculative_loaded);
++    stats.effective_prompt_tokens = effective_prompt_tokens;
++    stats.speculative_threshold = speculative_loaded ? speculative_threshold : -1;
++    stats.speculative_policy = !speculative_loaded ? "off" : speculative_threshold < 0 ? "on" : "dynamic";
++}
++
+ //
+ // server_prompt_cache
+ //
+@@ -1713,7 +1740,7 @@ server_prompt_cache_state * server_prompt_cache::alloc(const server_prompt & pro
+     for (auto it = states.begin(); it != states.end(); ++it) {
+         const int cur_lcp_len = it->prompt.tokens.get_common_prefix(prompt.tokens);
+ 
+-        if (cur_lcp_len == (int) prompt.tokens.size()) {
++        if (it->prompt.speculative == prompt.speculative && cur_lcp_len == (int) prompt.tokens.size()) {
+             SRV_TRC("%s", " - prompt is already in the cache, skipping\n");
+             return nullptr;
+         }
+@@ -1738,7 +1765,7 @@ server_prompt_cache_state * server_prompt_cache::alloc(const server_prompt & pro
+     for (auto it = states.begin(); it != states.end();) {
+         const int len = it->prompt.tokens.get_common_prefix(prompt.tokens);
+ 
+-        if (len == (int) it->prompt.tokens.size()) {
++        if (it->prompt.speculative == prompt.speculative && len == (int) it->prompt.tokens.size()) {
+             SRV_TRC(" - removing obsolete cached prompt with length %d\n", len);
+ 
+             it = states.erase(it);
+@@ -1780,6 +1807,7 @@ server_prompt_cache_state * server_prompt_cache::alloc(const server_prompt & pro
+         /*.prompt =*/ {
+             /*.tokens      =*/ prompt.tokens.clone(),
+             /*.checkpoints =*/ prompt.checkpoints,
++            /*.speculative =*/ prompt.speculative,
+         },
+         /*.data   =*/ {
+             /*.main =*/ std::move(state_data_tgt),
+@@ -1790,8 +1818,10 @@ server_prompt_cache_state * server_prompt_cache::alloc(const server_prompt & pro
+     return &states.back();
+ }
+ 
+-bool server_prompt_cache::load(server_prompt & prompt, const server_tokens & tokens_new, llama_context * ctx_tgt, llama_context * ctx_dft, int32_t id_slot) {
+-    const int lcp_best = prompt.tokens.get_common_prefix(tokens_new);
++bool server_prompt_cache::load(server_prompt & prompt, const server_tokens & tokens_new, llama_context * ctx_tgt, llama_context * ctx_dft, int32_t id_slot, bool require_speculative) {
++    const int lcp_best = !require_speculative || prompt.speculative
++        ? prompt.tokens.get_common_prefix(tokens_new)
++        : 0;
+ 
+     float f_keep_best = prompt.tokens.size() > 0 ? float(lcp_best) / prompt.tokens.size() : -1.0f; // empty slot: any cache entry wins
+     float f_sim_best  = float(lcp_best) / tokens_new.size();
+@@ -1802,6 +1832,10 @@ bool server_prompt_cache::load(server_prompt & prompt, const server_tokens & tok
+ 
+     // find the most similar cached prompt, that would also preserve the most context
+     for (auto it = states.begin(); it != states.end(); ++it) {
++        if (require_speculative && !it->prompt.speculative) {
++            continue;
++        }
++
+         const int lcp_cur = it->prompt.tokens.get_common_prefix(tokens_new);
+ 
+         const float f_keep_cur = float(lcp_cur) / it->prompt.tokens.size();
+@@ -1843,9 +1877,7 @@ bool server_prompt_cache::load(server_prompt & prompt, const server_tokens & tok
+         {
+             auto & data = it_best->data.drft;
+ 
+-            if (!data.empty()) {
+-                GGML_ASSERT(ctx_dft);
+-
++            if (!data.empty() && ctx_dft) {
+                 const size_t size = data.size();
+                 const size_t n = llama_state_seq_set_data_ext(ctx_dft, data.data(), size, id_slot, 0);
+                 if (n != size) {
+@@ -1864,6 +1896,13 @@ bool server_prompt_cache::load(server_prompt & prompt, const server_tokens & tok
+         states.erase(it_best);
+     }
+ 
++    if (!require_speculative) {
++        prompt.speculative = false;
++        for (auto & checkpoint : prompt.checkpoints) {
++            checkpoint.clear_dft();
++        }
++    }
++
+     return true;
+ }
+ 
+diff --git a/tools/server/server-task.h b/tools/server/server-task.h
+index 9c99143..09595a2 100644
+--- a/tools/server/server-task.h
++++ b/tools/server/server-task.h
+@@ -563,14 +563,29 @@ struct server_task_result_apply_lora : server_task_result {
+     virtual json to_json() override;
+ };
+ 
++struct server_speculative_route {
++    bool speculative_for_task = true;
++    int32_t effective_prompt_tokens = 0;
++    int32_t speculative_threshold = -1;
++
++    void begin(bool speculative_loaded, int32_t threshold, int32_t prompt_tokens);
++    void reset();
++
++    bool enabled(bool speculative_loaded) const;
++    bool can_batch_with(const server_speculative_route & other, bool speculative_loaded) const;
++    void apply_to(server_slot_stats & stats, bool speculative_loaded) const;
++};
++
+ struct server_prompt {
+     server_tokens tokens;
+ 
+     std::list<common_prompt_checkpoint> checkpoints;
++    bool speculative = false;
+ 
+     void clear() {
+         tokens.clear();
+         checkpoints.clear();
++        speculative = false;
+     }
+ 
+     int n_tokens() const {
+@@ -581,6 +596,7 @@ struct server_prompt {
+         return server_prompt {
+             tokens.clone(),
+             checkpoints,
++            speculative,
+         };
+     }
+ };
+@@ -629,7 +645,7 @@ struct server_prompt_cache {
+ 
+     server_prompt_cache_state * alloc(const server_prompt & prompt, size_t state_size_main, size_t state_size_drft);
+ 
+-    bool load(server_prompt & prompt, const server_tokens & tokens_new, llama_context * ctx_tgt, llama_context * ctx_dft, int32_t id_slot);
++    bool load(server_prompt & prompt, const server_tokens & tokens_new, llama_context * ctx_tgt, llama_context * ctx_dft, int32_t id_slot, bool require_speculative);
+ 
+     void update();
+ };
+-- 
+2.54.0
+

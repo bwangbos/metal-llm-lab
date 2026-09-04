@@ -9,27 +9,32 @@ Q8 MTP sidecar by source URL, license URL, byte count, and SHA-256. The choices
 are locally tested artifact selections, not claims that one quantization is best
 on every Apple Silicon system.
 
-`stable` uses pinned upstream llama.cpp without the local Qwen/MTP patches.
-`fast`, `vision`, and `long` use the experimental hybrid runtime at revision
-`831e5d6f6e0d7b6c8d5757b1da41480ab33a0528`. The hybrid is an ordered patch
-series rather than a claim of upstream support. Use `stable` when upstream
-provenance matters more than the measured local throughput improvement.
+The `tuned` runtime is the ordered Qwen/MTP patch series at tested revision
+`b814e84c45f00fb0d9f3283175acc1a24fa90b95` and tested tree
+`4f3c051ed7ae4e856cb6d7d95f5c1af6984fc72d`. The `upstream` runtime is pinned
+llama.cpp revision `de8656bd94f1163188125542534e4bcbc9f9fb1f` and tree
+`ef599001012ff8bee837a832decde4c564702cc4` without the local patch series.
+Both are Metal builds; the difference is the runtime source plus MTP policy.
+The `stable` preset is upstream reference-only and not recommended for normal
+operation.
 
 ## Profiles
 
-| Profile | Context | Projector | MTP | Intended use |
-| --- | ---: | --- | --- | --- |
-| `fast` | 32,768 | No | Yes | Short text requests |
-| `vision` | 32,768 | F16, 1,024 minimum image tokens | Yes | Image requests |
-| `long` | 131,072 | No | No | Large-document work and repeatability |
-| `stable` | 32,768 | No | No | Pinned upstream fallback |
+| Profile | Runtime | Context | MTP policy | Status |
+| --- | --- | ---: | --- | --- |
+| `fast` | `tuned` | 32,768 | `on` | Supported short-request preset |
+| `long` | `tuned` | 262,144 | `off` | Supported; allocation accepted on M5 Max 128 GiB |
+| `auto` | `tuned` | 262,144 | `dynamic` | Recommended on the accepted M5 Max 128 GiB configuration |
+| `stable` | `upstream` | 32,768 | `off` | Reference only; not recommended |
 
-All profiles use full Metal offload, `fit` off, Flash Attention on, mmap plus
-lazy loading, and one request slot by default. Inspect the exact resolved command
-without loading the model:
+Vision defaults on independently for every preset and loads the pinned F16
+projector with a 1,024-token image minimum. Append `--vision off` to any preset
+or custom configuration to omit it. All profiles use full Metal offload, `fit`
+off, Flash Attention on, mmap plus lazy loading, and one request slot by default.
+Inspect the default dynamic command without loading the model:
 
 ```sh
-./bin/metal-llm serve qwen3.8-flash-next --profile vision --dry-run
+./bin/metal-llm serve qwen3.8-flash-next --dry-run
 ```
 
 The historical winning MTP server used this command tail (the current launcher
@@ -41,9 +46,16 @@ spells the same manifest choices using the runtime's accepted long options):
 --spec-type draft-mtp --spec-draft-n-max 2 -ngld all
 ```
 
-The 131,072-token allocation succeeded during the recorded local session with
-the hybrid target and MTP loaded. The current `long` profile intentionally omits
-MTP because the later context study favored no-MTP at long context.
+The 262,144-token target, projector, and MTP configuration passed allocation and
+the complete acceptance matrix on the exact M5 Max 128 GiB host. `auto` is
+recommended for that accepted configuration. The `long` preset intentionally
+omits MTP because the context study favored no-MTP at long context.
+
+Dynamic routing uses the fixed threshold of 32,768 effective prompt tokens.
+Effective length includes template and image expansion: counts at or below the
+threshold use MTP, while counts above it do not. The route remains fixed for the
+response and is reported in final timing metadata. See the root README for exact
+custom equivalents and the integration command.
 
 ## Correctness evidence and limits
 

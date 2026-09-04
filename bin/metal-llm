@@ -7,6 +7,7 @@ export METAL_LLM_ROOT
 
 source "$METAL_LLM_ROOT/lib/common.zsh"
 source "$METAL_LLM_ROOT/lib/doctor.zsh"
+source "$METAL_LLM_ROOT/lib/profile.zsh"
 source "$METAL_LLM_ROOT/lib/setup.zsh"
 source "$METAL_LLM_ROOT/lib/runtime-state.zsh"
 source "$METAL_LLM_ROOT/lib/managed-process.zsh"
@@ -20,7 +21,9 @@ metal_llm_help() {
     print -- 'commands:'
     print -- '  metal-llm doctor'
     print -- '  metal-llm setup MODEL [--dry-run] [--yes]'
-    print -- '  metal-llm serve MODEL --profile PROFILE [--dry-run] [-- EXTRA_LLAMA_ARGS]'
+    print -- '  metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
+    print -- '  metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
+    print -- '    serve defaults: --profile auto and model vision default'
     print -- '  metal-llm bench MODEL --suite SUITE [--mode MODE] [--dry-run]'
     print -- '  metal-llm report [--check]'
     print -- '  metal-llm help'
@@ -30,7 +33,6 @@ metal_llm_help() {
     print -- '  METAL_LLM_HOST                 server bind address (default: 127.0.0.1)'
     print -- '  METAL_LLM_PORT                 server port (default: 8080)'
     print -- '  METAL_LLM_PARALLEL             request slots (default: 1)'
-    print -- '  METAL_LLM_CONTEXT              override profile context size'
     print -- '  METAL_LLM_API_KEY              optional server API key (never logged)'
 }
 
