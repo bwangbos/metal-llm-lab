@@ -41,3 +41,11 @@ metal_llm_validate_speculative_draft_statistics() {
       (.draft_n_accepted <= .draft_n)
     ' <<< "$timing" >/dev/null 2>&1
 }
+
+metal_llm_extract_speculative_route() {
+    local timing=$1
+    jq -er '
+      .speculative |
+      if type == "boolean" then tostring else error("speculative route is not boolean") end
+    ' <<< "$timing" 2>/dev/null
+}

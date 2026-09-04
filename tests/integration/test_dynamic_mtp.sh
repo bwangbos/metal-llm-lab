@@ -112,6 +112,8 @@ fi
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-dynamic-mtp.XXXXXX")
 run_buffer="$scratch/runs.jsonl"
 server_log="$scratch/server.log"
+responses_dir="$scratch/responses"
+mkdir -- "$responses_dir"
 : > "$run_buffer"
 
 server_pid=''
@@ -139,6 +141,7 @@ stop_if_same_process() {
 
 cleanup() {
     local exit_status=$?
+    local expected_scratch_root scratch_parent
     trap - EXIT HUP INT TERM
     [[ -z "$second_pid" ]] || stop_if_same_process "$second_pid" "$second_started"
     if [[ -n "$server_pid" && -n "$server_started" && -n "$server_owner_token" ]]; then
@@ -150,7 +153,16 @@ cleanup() {
            ' "$identity_record" >/dev/null 2>&1; then
             stop_if_same_process "$server_pid" "$server_started"
             wait "$server_pid" 2>/dev/null || true
-            metal_llm_release_managed_lease "$server_owner_token" || true
+            if ! metal_llm_release_managed_lease "$server_owner_token"; then
+                print -u2 -- 'dynamic-MTP integration: failed to release the recorded managed lease'
+                exit_status=1
+            elif [[ -e "$identity_record" || -e "$lease_dir" ]]; then
+                print -u2 -- 'dynamic-MTP integration: recorded managed lease remained after release'
+                exit_status=1
+            fi
+        else
+            print -u2 -- 'dynamic-MTP integration: managed identity changed before cleanup; refusing to signal or release it'
+            exit_status=1
         fi
     elif [[ -n "$launcher_pid" && -n "$launcher_started" ]]; then
         # Startup may still be performing read-only verification before the
@@ -158,8 +170,18 @@ cleanup() {
         stop_if_same_process "$launcher_pid" "$launcher_started"
         wait "$launcher_pid" 2>/dev/null || true
     fi
-    [[ ! -d "$scratch" || "$scratch" != "${TMPDIR:-/tmp}"/metal-llm-dynamic-mtp.* ]] || \
+    expected_scratch_root=${TMPDIR:-/tmp}
+    expected_scratch_root=${expected_scratch_root:A}
+    scratch_parent=${scratch:h:A}
+    if (( exit_status != 0 )); then
+        print -u2 -- "dynamic-MTP integration: preserving failure diagnostics: ${scratch:t}"
+    elif [[ -d "$scratch" && "$scratch_parent" == "$expected_scratch_root" && \
+            "${scratch:t}" == metal-llm-dynamic-mtp.* ]]; then
         rm -rf -- "$scratch"
+    else
+        print -u2 -- 'dynamic-MTP integration: refusing to remove an unexpected scratch path'
+        exit_status=1
+    fi
     return "$exit_status"
 }
 trap cleanup EXIT
@@ -255,8 +277,10 @@ append_validated_run() {
     timing=$(extract_timing "$response" "$streaming")
     metal_llm_validate_endpoint_timing "$timing" dynamic "$threshold" "$case_kind" 1024 || \
         fail "$case_id has route metadata inconsistent with the managed policy"
-    speculative=$(jq -er '.speculative' <<< "$timing")
-    effective=$(jq -er '.effective_prompt_tokens' <<< "$timing")
+    speculative=$(metal_llm_extract_speculative_route "$timing") || \
+        fail "$case_id has no boolean speculative route"
+    effective=$(jq -er '.effective_prompt_tokens' <<< "$timing") || \
+        fail "$case_id has no effective prompt-token count"
     if [[ "$expected_count" != any && "$effective" != "$expected_count" ]]; then
         fail "$case_id reported $effective effective tokens, expected $expected_count"
     fi
@@ -267,8 +291,10 @@ append_validated_run() {
     if [[ "$speculative" == true ]]; then
         metal_llm_validate_speculative_draft_statistics "$timing" || \
             fail "$case_id lacks valid speculative draft statistics"
-        draft_n=$(jq -er '.draft_n' <<< "$timing")
-        accepted=$(jq -er '.draft_n_accepted' <<< "$timing")
+        draft_n=$(jq -er '.draft_n' <<< "$timing") || \
+            fail "$case_id has no speculative draft count"
+        accepted=$(jq -er '.draft_n_accepted' <<< "$timing") || \
+            fail "$case_id has no accepted speculative draft count"
     else
         jq -e '
           ((.draft_n // 0) == 0) and ((.draft_n_accepted // 0) == 0)
@@ -276,7 +302,8 @@ append_validated_run() {
         draft_n=0
         accepted=0
     fi
-    output_sha=$(print -rn -- "$response" | shasum -a 256 | awk '{print $1}')
+    output_sha=$(print -rn -- "$response" | shasum -a 256 | awk '{print $1}') || \
+        fail "$case_id response could not be hashed"
     jq -cn \
       --arg id "$case_id" --arg timestamp "$integration_timestamp" \
       --arg repository "$repository_revision" --arg hardware "$hardware_id" \
@@ -300,19 +327,25 @@ append_validated_run() {
         generation_settings: {temperature: 0, seed: 1234, max_tokens: $max_tokens, reasoning: false, draft_n_max: 2},
         notes: $notes
       }
-    ' >> "$run_buffer"
+    ' >> "$run_buffer" || fail "$case_id validated run could not be recorded"
     typeset -g LAST_EFFECTIVE=$effective
     typeset -g LAST_SPECULATIVE=$speculative
 }
 
 post_case() {
     local case_id=$1 endpoint=$2 payload=$3 streaming=$4 case_kind=$5 expected_count=$6
-    local expected_route=$7 max_tokens=$8 notes=$9 response payload_sha
+    local expected_route=$7 max_tokens=$8 notes=$9 response payload_sha response_path response_sha
     response=$(curl "${post_arguments[@]}" -d "$payload" "http://$host:$port$endpoint") || \
         fail "$case_id request failed"
+    response_path="$responses_dir/$case_id.response"
+    print -rn -- "$response" > "$response_path" || fail "$case_id raw response could not be preserved"
+    response_sha=$(metal_llm_sha256 "$response_path") || fail "$case_id raw response could not be hashed"
     payload_sha=$(print -rn -- "$payload" | shasum -a 256 | awk '{print $1}')
     append_validated_run "$case_id" "$response" "$streaming" "$case_kind" \
-      "$expected_count" "$expected_route" "$max_tokens" "$notes" "$endpoint" "$payload_sha"
+      "$expected_count" "$expected_route" "$max_tokens" "$notes" "$endpoint" "$payload_sha" || {
+        fail "$case_id response validation failed; response-sha256=$response_sha"
+        return 1
+    }
     typeset -g LAST_RESPONSE="$response"
 }
 

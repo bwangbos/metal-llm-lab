@@ -17,6 +17,16 @@ typeset -f metal_llm_wait_for_process_diagnostic >/dev/null || \
     fail 'missing diagnostic-driven process wait helper'
 typeset -f metal_llm_validate_speculative_draft_statistics >/dev/null || \
     fail 'missing speculative draft-statistics validator'
+typeset -f metal_llm_extract_speculative_route >/dev/null || \
+    fail 'missing boolean-safe speculative route extractor'
+
+[[ "$(metal_llm_extract_speculative_route '{"speculative":true}')" == true ]] || \
+    fail 'speculative route extractor rejected true'
+[[ "$(metal_llm_extract_speculative_route '{"speculative":false}')" == false ]] || \
+    fail 'speculative route extractor rejected false'
+if metal_llm_extract_speculative_route '{"speculative":null}' >/dev/null 2>&1; then
+    fail 'speculative route extractor accepted null'
+fi
 
 metal_llm_validate_speculative_draft_statistics \
   '{"draft_n":10,"draft_n_accepted":10}' || \
@@ -116,5 +126,11 @@ grep -Fxq 'METAL_LLM_ROOT=$root' "$harness" || \
     fail 'integration harness does not initialize the repository root for sourced helpers'
 grep -Fxq 'export METAL_LLM_ROOT' "$harness" || \
     fail 'integration harness does not export the repository root for sourced helpers'
+grep -Fq 'response_path="$responses_dir/$case_id.response"' "$harness" || \
+    fail 'integration harness does not preserve each raw response before parsing'
+grep -Fq 'response_sha=$(metal_llm_sha256 "$response_path")' "$harness" || \
+    fail 'integration harness does not hash each preserved raw response'
+grep -Fq 'preserving failure diagnostics' "$harness" || \
+    fail 'integration harness does not surface preserved failure diagnostics'
 
 print -- 'dynamic-MTP diagnostic wait checks: PASS'
