@@ -241,6 +241,7 @@ dry_manifest="$fixture_root/manifests/models/dry-model.json"
 
 assert_setup_usage_rejected 'missing value' fixture-model --artifact-check
 assert_setup_usage_rejected 'disabled verification' fixture-model --artifact-check off
+assert_setup_usage_rejected 'unknown verification mode' fixture-model --artifact-check unknown
 assert_setup_usage_rejected 'equals form' fixture-model --artifact-check=full
 assert_setup_usage_rejected 'duplicate' fixture-model --artifact-check cached --artifact-check full
 
@@ -293,9 +294,9 @@ assert_contains "$dry_output" 'artifact verification: requested=cached effective
 [[ "$dry_output" != *'secret-token-must-not-leak'* ]] || fail 'dry-run exposed HF_TOKEN'
 [[ ! -e "$fixture_root/.lab" ]] || fail 'dry-run created .lab state'
 
-dry_artifact_dir="$fixture_root/.lab/artifacts/fixture-model"
+dry_artifact_dir="$fixture_root/.lab/artifacts/dry-model"
 dry_final_artifact="$dry_artifact_dir/fixture.gguf"
-dry_receipt_dir="$fixture_root/.lab/verification/artifacts/fixture-model"
+dry_receipt_dir="$fixture_root/.lab/verification/artifacts/dry-model"
 mkdir -p "$dry_artifact_dir" "$dry_receipt_dir"
 cp "$source_artifact" "$dry_final_artifact"
 chmod 700 "$fixture_root/.lab/verification/artifacts" "$dry_receipt_dir"
@@ -305,8 +306,10 @@ dry_inventory_before="$temporary_root/dry-inventory-before"
 dry_inventory_after="$temporary_root/dry-inventory-after"
 inventory_lab > "$dry_inventory_before"
 : > "$SETUP_TEST_ARTIFACT_HASH_LOG"
-dry_existing_output=$(PATH="$test_path" "$fixture_root/bin/metal-llm" setup fixture-model --dry-run)
-assert_contains "$dry_existing_output" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=1 full_hashes=1'
+mixed_dry_output=$(PATH="$test_path" "$fixture_root/bin/metal-llm" setup dry-model --dry-run)
+assert_contains "$mixed_dry_output" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=1 full_hashes=1'
+[[ "$mixed_dry_output" != *'receipt_set_sha256='* ]] ||
+    fail 'mixed dry-run emitted an incomplete receipt-set digest'
 dry_hash_count=$(wc -l < "$SETUP_TEST_ARTIFACT_HASH_LOG" | tr -d ' ')
 (( dry_hash_count == 1 )) || fail 'dry-run did not read exactly one GGUF body'
 [[ "$(/usr/bin/tail -n 1 "$SETUP_TEST_ARTIFACT_HASH_LOG")" == "${dry_final_artifact:A}" ]] ||
