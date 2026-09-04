@@ -15,7 +15,11 @@ cache-depth benchmark also completed while `iogpu.wired_limit_mb` remained
 automatic (`0`), `memory_pressure -Q` reported 40% effective free memory, and
 `vm_stat` showed no throttled pages. The later acceptance run directly proved
 that the `auto` configuration can load the target, projector, MTP sidecar, and a
-262,144-token context together on this exact host. The launcher must still fail
+262,144-token context together on this exact host. A fresh accepted-default
+observation at 2026-09-04T15:56:55Z recorded server RSS of 69892685824 bytes
+and 43% system-wide effective free memory; the validated raw result and generated
+summary retain its managed-process, server-log, and observation hashes. This is a
+point-in-time observation, not a peak-memory claim. The launcher must still fail
 rather than silently reducing context or disabling a capability. This project
 does not change memory-wire limits, macOS power settings, or other system
 settings.

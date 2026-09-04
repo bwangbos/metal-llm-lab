@@ -1070,7 +1070,35 @@
         "tolerance_percent": 5,
         "passed": true
       }
-    ]
+    ],
+    "correctness_harness_sha256": "7c59b4191a252a629d19f97c61f992f100fce69fa23c915048ee13bb0e6ae13c",
+    "accepted_allocation_observation": {
+      "evidence_sha256": "25e70cbdb5d567f259f6bcc8b2d3e8451c7ad5ba8ad1b18551c27f04feb05949",
+      "observation": {
+        "captured_at": "2026-09-04T15:56:55Z",
+        "context": 262144,
+        "identity": {
+          "executable_sha256": "c90e35ad4ac82dbc3bd94742890b25f7a6f9d186d4302101e2adbd2c14641969",
+          "managed_process_sha256": "2a6cc52173a0802e7fb8123bf108c30d1b23b307f309adb7ea3b147fe2b3e257",
+          "server_log_sha256": "b4ee3e60af289807d60d33be2ccfcc0e673ef836d8cdf03cf81ff346133892ab"
+        },
+        "model_id": "qwen3.8-flash-next",
+        "mtp_policy": "dynamic",
+        "mtp_threshold": 32768,
+        "process": {
+          "pid": 60792,
+          "process_started_at": "Fri Sep  4 11:52:06 2026",
+          "rss_bytes": 69892685824
+        },
+        "profile_id": "auto",
+        "runtime_alias": "tuned",
+        "schema_version": 1,
+        "system_memory_pressure": {
+          "free_percent": 43
+        },
+        "vision": true
+      }
+    }
   },
   "interpretation": {
     "performance_gate_passed": true,
@@ -1080,6 +1108,10 @@
     {
       "check": "Dynamic-MTP correctness and isolation",
       "result": "Pass; staged evidence SHA-256 9df71ed12fcca3fba1fcc3a361c62b22d59b3e3c04fde255570ee1cb48955a16"
+    },
+    {
+      "check": "Accepted default 262,144-token allocation memory observation",
+      "result": "Pass; sanitized RSS and system memory pressure captured"
     },
     {
       "check": "Complete 21-cell performance matrix",
@@ -1128,7 +1160,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 8a78aee4202f24be982077e50545e06c5134adf07c802109500e26de26bf6b5c."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 8a78aee4202f24be982077e50545e06c5134adf07c802109500e26de26bf6b5c.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-29000-s2",
@@ -1167,7 +1200,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 08744b6dc48c2271e14e71373a624f82f1c38589d6c9f73eb385c1eaf5a2b557."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 08744b6dc48c2271e14e71373a624f82f1c38589d6c9f73eb385c1eaf5a2b557.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-29000-s3",
@@ -1206,7 +1240,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 5de031f2fba1225671f44828edf1cf0bf8f358b83a6ea0eaea2f963c9b8cb152."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 5de031f2fba1225671f44828edf1cf0bf8f358b83a6ea0eaea2f963c9b8cb152.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-29000-s4",
@@ -1245,7 +1280,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 2fa09746b626cb44a8f6bb45ab3fff9260b15d997887f5fc104bb4f94da31ba6."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 2fa09746b626cb44a8f6bb45ab3fff9260b15d997887f5fc104bb4f94da31ba6.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-29000-s5",
@@ -1284,7 +1320,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 dd90726ab1696a7ea16b498aff68350a65387bc5cead3539ae7b39a7909a41ed."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 dd90726ab1696a7ea16b498aff68350a65387bc5cead3539ae7b39a7909a41ed.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-30000-s1",
@@ -1323,7 +1360,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 1a87bb7de7218c775f9aa3320ea179514da1cb4a9913bae0192202bb1f0f3a5c."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 1a87bb7de7218c775f9aa3320ea179514da1cb4a9913bae0192202bb1f0f3a5c.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-30000-s2",
@@ -1362,7 +1400,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 ea2537bc6a527860e7e3a113e85a18db0c688b9b81006d26d8f5b0809a459dbd."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 ea2537bc6a527860e7e3a113e85a18db0c688b9b81006d26d8f5b0809a459dbd.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-30000-s3",
@@ -1401,7 +1440,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 2243d601bfc91e7d979963eeecd0d75315f0a3fe9d1a964294ad560dc4218dc8."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 2243d601bfc91e7d979963eeecd0d75315f0a3fe9d1a964294ad560dc4218dc8.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-30000-s4",
@@ -1440,7 +1480,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 83fa11679aeda5d849d39e71f9cb0e02cf97cb2c1c8e974b4e8bb4ab7fd0b42a."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 83fa11679aeda5d849d39e71f9cb0e02cf97cb2c1c8e974b4e8bb4ab7fd0b42a.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-30000-s5",
@@ -1479,7 +1520,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 2a4ce942241dbcfa49b3d18b73cd8877ed4f65a8b14fe77c423514d0c00c2a97."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 2a4ce942241dbcfa49b3d18b73cd8877ed4f65a8b14fe77c423514d0c00c2a97.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32767-s1",
@@ -1518,7 +1560,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 f85db7597f9d816cd9dbe7b6c1c3a36665d59ad5689b1ff98d59c5c68d919fa1."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 f85db7597f9d816cd9dbe7b6c1c3a36665d59ad5689b1ff98d59c5c68d919fa1.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32767-s2",
@@ -1557,7 +1600,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 1f2f06bcd4936d0b2c1bbd0e386e0d16d3efc3c7128079a50bad2eba6c275232."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 1f2f06bcd4936d0b2c1bbd0e386e0d16d3efc3c7128079a50bad2eba6c275232.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32767-s3",
@@ -1596,7 +1640,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 9e09f338206c2c0348cd6515197b38ef69b71d9d0907953c2b9f5df291bd5a9c."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 9e09f338206c2c0348cd6515197b38ef69b71d9d0907953c2b9f5df291bd5a9c.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32767-s4",
@@ -1635,7 +1680,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 c77e005de2782ed2601ef74c9756437b6de622b9808064e02310f63c4fa5f5d1."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 c77e005de2782ed2601ef74c9756437b6de622b9808064e02310f63c4fa5f5d1.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32767-s5",
@@ -1674,7 +1720,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 2c6de7360c9be5d35fcc9cc8143f68f38f6f4279d29fa125c2883e3a8e2adbf0."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 2c6de7360c9be5d35fcc9cc8143f68f38f6f4279d29fa125c2883e3a8e2adbf0.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32768-s1",
@@ -1713,7 +1760,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 4618199af643cd3c9834ae456902623f86ffa354f6170a8b129e0a1c9dd6528a."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 4618199af643cd3c9834ae456902623f86ffa354f6170a8b129e0a1c9dd6528a.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32768-s2",
@@ -1752,7 +1800,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 b40a008032a7dba40e9ad519144da2fa1e0dbda19c668fb7809a2fa83073ef55."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 b40a008032a7dba40e9ad519144da2fa1e0dbda19c668fb7809a2fa83073ef55.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32768-s3",
@@ -1791,7 +1840,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 26fe64f553a3a6b8bd1a1b28bf9bd11d9b459ec465dfa74fed8b1af00a821ae7."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 26fe64f553a3a6b8bd1a1b28bf9bd11d9b459ec465dfa74fed8b1af00a821ae7.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32768-s4",
@@ -1830,7 +1880,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 9f9cc99e6e72a384860c132a88b249e609aedddf00c664c8d3394059e9d9774d."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 9f9cc99e6e72a384860c132a88b249e609aedddf00c664c8d3394059e9d9774d.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32768-s5",
@@ -1869,7 +1920,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 0d03b6957c3e38046ed9bd12b7b2fc42c2e126ffe4e119eb83e8dfc6751aa447."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 0d03b6957c3e38046ed9bd12b7b2fc42c2e126ffe4e119eb83e8dfc6751aa447.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32769-s1",
@@ -1908,7 +1960,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 22a16e32c31252b2dd7b1e1970a3b6058f7174b984d1908391612a64c2121b4c."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 22a16e32c31252b2dd7b1e1970a3b6058f7174b984d1908391612a64c2121b4c.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32769-s2",
@@ -1947,7 +2000,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 4a373d0279783891487e73250cd96d50d061390ebba755f70cec40028a3c1069."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 4a373d0279783891487e73250cd96d50d061390ebba755f70cec40028a3c1069.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32769-s3",
@@ -1986,7 +2040,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 fd7acbe8005416aec2357881d39812e28141bfafff66d88ffcfd9b7137953838."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 fd7acbe8005416aec2357881d39812e28141bfafff66d88ffcfd9b7137953838.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32769-s4",
@@ -2025,7 +2080,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 a1f143998e75a3251cdbd3aa3ca9293ac8b42d2d871b19997b33c7e8f8058878."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 a1f143998e75a3251cdbd3aa3ca9293ac8b42d2d871b19997b33c7e8f8058878.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-32769-s5",
@@ -2064,7 +2120,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 026afd93437af737797237d350680662f35c35c683367bd81561dcda47e97a32."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 026afd93437af737797237d350680662f35c35c683367bd81561dcda47e97a32.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-33868-s1",
@@ -2103,7 +2160,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 5a22302e04f36ebcd0a59ce8aa5331eabafdfb440037200cf0d4711dc8bb268d."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 5a22302e04f36ebcd0a59ce8aa5331eabafdfb440037200cf0d4711dc8bb268d.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-33868-s2",
@@ -2142,7 +2200,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 bd9693a8217871b87ed9b76bd9e779dd098bd2aab2258ac66a8d4cfdedc7842c."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 bd9693a8217871b87ed9b76bd9e779dd098bd2aab2258ac66a8d4cfdedc7842c.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-33868-s3",
@@ -2181,7 +2240,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 25b7495a0cf55a9999603debd0b7614206837c9f4f7da0d25a7205ffa18c8739."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 25b7495a0cf55a9999603debd0b7614206837c9f4f7da0d25a7205ffa18c8739.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-33868-s4",
@@ -2220,7 +2280,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 f5b2ccffb945c9d8ede25f6875d74d28ae15d5ed4bc0a8007963681d8e98de5f."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 f5b2ccffb945c9d8ede25f6875d74d28ae15d5ed4bc0a8007963681d8e98de5f.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-33868-s5",
@@ -2259,7 +2320,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 81ed90838bd0970bf7924b7fef58a2c5e9125f9a9df1b5108544c06af6f00034."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 81ed90838bd0970bf7924b7fef58a2c5e9125f9a9df1b5108544c06af6f00034.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-98304-s1",
@@ -2298,7 +2360,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 efa958ab39fb2a05e7f51d56ccafee8ce0268ce54b036908d25cbe2754aea7e5."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 efa958ab39fb2a05e7f51d56ccafee8ce0268ce54b036908d25cbe2754aea7e5.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-98304-s2",
@@ -2337,7 +2400,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 2b1ccd704e70ce5c7fc899e119e796233a9b02b8ec45bfa3afc3bb156853297f."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 2b1ccd704e70ce5c7fc899e119e796233a9b02b8ec45bfa3afc3bb156853297f.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-98304-s3",
@@ -2376,7 +2440,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 0a43168bef9e73cbc62960988866d9b0c1d2f88a7bcbd46fd85eb00c1a302107."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 0a43168bef9e73cbc62960988866d9b0c1d2f88a7bcbd46fd85eb00c1a302107.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-98304-s4",
@@ -2415,7 +2480,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 7267cb310a26e351026e7977f5cfba7f88de34dab2eec74acee52456b3c705f9."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 7267cb310a26e351026e7977f5cfba7f88de34dab2eec74acee52456b3c705f9.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "on-98304-s5",
@@ -2454,7 +2520,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 e7c5d8e1248e92ff8491443804f44910f13524001991e89095985c1b6734164e."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 e7c5d8e1248e92ff8491443804f44910f13524001991e89095985c1b6734164e.",
+      "server_session_id": "on-session-1"
     },
     {
       "id": "off-29000-s1",
@@ -2493,7 +2560,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 95340e937faa74172b7007ed0a67932533bfc23ea2b7442d42bfaf8b6ab5fc31."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 95340e937faa74172b7007ed0a67932533bfc23ea2b7442d42bfaf8b6ab5fc31.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-29000-s2",
@@ -2532,7 +2600,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 64612415d1b73499b799395330099825c54ef99a891c239e57270b9aaab97eaf."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 64612415d1b73499b799395330099825c54ef99a891c239e57270b9aaab97eaf.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-29000-s3",
@@ -2571,7 +2640,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 fb2148c210cbd60619671c5536b75624ee8611c9ecc0fcec51ddfab96d1d7652."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 fb2148c210cbd60619671c5536b75624ee8611c9ecc0fcec51ddfab96d1d7652.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-29000-s4",
@@ -2610,7 +2680,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 156330b0b45815c798ae4e5147534e97235a280e1ebe3b601ae41ec0a86513d3."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 156330b0b45815c798ae4e5147534e97235a280e1ebe3b601ae41ec0a86513d3.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-29000-s5",
@@ -2649,7 +2720,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 91287e1dbcc7d0e46006a682a4569abbd3a4746f47573f138a9f34391225be59."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 91287e1dbcc7d0e46006a682a4569abbd3a4746f47573f138a9f34391225be59.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-30000-s1",
@@ -2688,7 +2760,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 9bd576603c7f3bf2a12922f45e476fced3a807eaa6ded274127fbd184e85deae."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 9bd576603c7f3bf2a12922f45e476fced3a807eaa6ded274127fbd184e85deae.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-30000-s2",
@@ -2727,7 +2800,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 aea39c25821f8169446d0144b6e9f3cfa873c81edcf69e8de431877e964fc9b2."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 aea39c25821f8169446d0144b6e9f3cfa873c81edcf69e8de431877e964fc9b2.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-30000-s3",
@@ -2766,7 +2840,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 287aaac392603c17d5fb6a9d91a038d79ac3837e772e087e8761cab410af7041."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 287aaac392603c17d5fb6a9d91a038d79ac3837e772e087e8761cab410af7041.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-30000-s4",
@@ -2805,7 +2880,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 30a64bfa384d0efc0869a4ab21ffd9f1887fd9a9fd692d029c2cf5481955e14b."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 30a64bfa384d0efc0869a4ab21ffd9f1887fd9a9fd692d029c2cf5481955e14b.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-30000-s5",
@@ -2844,7 +2920,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 cc2dc078104bbfa56db7c28c7e0478d8f040d20295bd748b191703b6fc11d0b1."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 cc2dc078104bbfa56db7c28c7e0478d8f040d20295bd748b191703b6fc11d0b1.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32767-s1",
@@ -2883,7 +2960,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 29cc99783d4191c6251f1440d2686d40c22c4974036c4ec14ba39bb89ffe3f32."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 29cc99783d4191c6251f1440d2686d40c22c4974036c4ec14ba39bb89ffe3f32.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32767-s2",
@@ -2922,7 +3000,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 a18d4c740b1a051f68a08025dddf69107d79b5284edc890688d00bee9b7d6513."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 a18d4c740b1a051f68a08025dddf69107d79b5284edc890688d00bee9b7d6513.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32767-s3",
@@ -2961,7 +3040,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 0358904784805c2dc9775830ad3dfaba9cf005a97bbbb2c9d3de34f7d8e82690."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 0358904784805c2dc9775830ad3dfaba9cf005a97bbbb2c9d3de34f7d8e82690.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32767-s4",
@@ -3000,7 +3080,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 766b4a083ca4c9d7a03032b9dae3ee875403b1fc23c2b1f940d6b5df6c097e70."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 766b4a083ca4c9d7a03032b9dae3ee875403b1fc23c2b1f940d6b5df6c097e70.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32767-s5",
@@ -3039,7 +3120,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 342bbc801daaf4ed85788ba1862c110d5165b4decfaf267c7d2349680a3f9a81."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 342bbc801daaf4ed85788ba1862c110d5165b4decfaf267c7d2349680a3f9a81.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32768-s1",
@@ -3078,7 +3160,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 79146d717c50c98446e884a05520fed6c21a85ff490e42c14bd905b53d6c4004."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 79146d717c50c98446e884a05520fed6c21a85ff490e42c14bd905b53d6c4004.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32768-s2",
@@ -3117,7 +3200,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 4851df1c37f4de7fd5cfaf109de4309852c6d87129891316fc15d0f11fab4c89."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 4851df1c37f4de7fd5cfaf109de4309852c6d87129891316fc15d0f11fab4c89.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32768-s3",
@@ -3156,7 +3240,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 e67f5d5be11f52135c99e6f06ef0e1eef309de8cfd64c35c31917fee829d1736."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 e67f5d5be11f52135c99e6f06ef0e1eef309de8cfd64c35c31917fee829d1736.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32768-s4",
@@ -3195,7 +3280,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 266b1e58a1e96fa92be35feb309e824bda0622c9cb631586db66b69dd4657789."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 266b1e58a1e96fa92be35feb309e824bda0622c9cb631586db66b69dd4657789.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32768-s5",
@@ -3234,7 +3320,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 c7c88427f92ab01a65e007535a803a26d313b2c92df5c91312426a41b71e1281."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 c7c88427f92ab01a65e007535a803a26d313b2c92df5c91312426a41b71e1281.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32769-s1",
@@ -3273,7 +3360,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 3d9947fb582dc2a07023df19b2f234fc833bf72cc23c9e725b67687846b4326d."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 3d9947fb582dc2a07023df19b2f234fc833bf72cc23c9e725b67687846b4326d.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32769-s2",
@@ -3312,7 +3400,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 f8f0c75079c5f42874e30bc9492b4f1fa67fd5c51c76665df2bbb29af2523f22."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 f8f0c75079c5f42874e30bc9492b4f1fa67fd5c51c76665df2bbb29af2523f22.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32769-s3",
@@ -3351,7 +3440,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 b7ecf9611d6e63140663b55884a912b6114a8da8e29d8a8545081272357def87."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 b7ecf9611d6e63140663b55884a912b6114a8da8e29d8a8545081272357def87.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32769-s4",
@@ -3390,7 +3480,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 f825bd4ee0793def0b45ab2626850465c79e7b66073554c609610fdb18fbfea4."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 f825bd4ee0793def0b45ab2626850465c79e7b66073554c609610fdb18fbfea4.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-32769-s5",
@@ -3429,7 +3520,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 362f7f7173cde41dffb4b474e3e6ee5db50b5e017e403ae4e72b54c33af62ce1."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 362f7f7173cde41dffb4b474e3e6ee5db50b5e017e403ae4e72b54c33af62ce1.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-33868-s1",
@@ -3468,7 +3560,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 9c094c20a77f4d99bce95b43385114d32703c4afbbca2eeb2b4412b40da9e621."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 9c094c20a77f4d99bce95b43385114d32703c4afbbca2eeb2b4412b40da9e621.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-33868-s2",
@@ -3507,7 +3600,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 b4ddb29064e57e69378a4b10edad731beb7ae92fad8500f898292a2cc1722a71."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 b4ddb29064e57e69378a4b10edad731beb7ae92fad8500f898292a2cc1722a71.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-33868-s3",
@@ -3546,7 +3640,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 42a48de5e3fb7572081186621a884ed57a00fd2986fac45c5bbfb18be6a95cef."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 42a48de5e3fb7572081186621a884ed57a00fd2986fac45c5bbfb18be6a95cef.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-33868-s4",
@@ -3585,7 +3680,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 0ff8d65519c3d8f92464774529f27e2ba67525631648aff0200808d5cad86f86."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 0ff8d65519c3d8f92464774529f27e2ba67525631648aff0200808d5cad86f86.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-33868-s5",
@@ -3624,7 +3720,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 db9e324cd6b31b4fb041691cbe15baa2e98054fc19b822b57416fd90ae6ee11d."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 db9e324cd6b31b4fb041691cbe15baa2e98054fc19b822b57416fd90ae6ee11d.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-98304-s1",
@@ -3663,7 +3760,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 97c738addeb2a7727aba658ac51bba1068649962c36df7fbc3e4d28604a486f7."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 97c738addeb2a7727aba658ac51bba1068649962c36df7fbc3e4d28604a486f7.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-98304-s2",
@@ -3702,7 +3800,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 7f066c3ea0768bc371f70abea4368563f6d0d493a1e2e93423824d02d85ff4b2."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 7f066c3ea0768bc371f70abea4368563f6d0d493a1e2e93423824d02d85ff4b2.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-98304-s3",
@@ -3741,7 +3840,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 d13b5df271b51220d99e15a7dfc0896b2062a23c5ad8da26b1234d3eb469e58c."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 d13b5df271b51220d99e15a7dfc0896b2062a23c5ad8da26b1234d3eb469e58c.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-98304-s4",
@@ -3780,7 +3880,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 a7eadbcc038d87118553b1a0f4549c597afd0a5992cc03ec6f8a874b88552cce."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 a7eadbcc038d87118553b1a0f4549c597afd0a5992cc03ec6f8a874b88552cce.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "off-98304-s5",
@@ -3819,7 +3920,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 2f4d35f85866404709703ebdf059362f2df54efdcd9adfdffcf907e56088039c."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 2f4d35f85866404709703ebdf059362f2df54efdcd9adfdffcf907e56088039c.",
+      "server_session_id": "off-session-1"
     },
     {
       "id": "dynamic-29000-s1",
@@ -3858,7 +3960,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 3b2de5161189002c659bf2b67f2a1cf97310ac9250d5536e8d85a7795e356f30."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 3b2de5161189002c659bf2b67f2a1cf97310ac9250d5536e8d85a7795e356f30.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-29000-s2",
@@ -3897,7 +4000,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 8988117e239b7f930f0f8617c5419447d06269a4a1b6d5ba0387126c794ffe80."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 8988117e239b7f930f0f8617c5419447d06269a4a1b6d5ba0387126c794ffe80.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-29000-s3",
@@ -3936,7 +4040,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 50db2dbfd65ac122f15fd49f8fd7cdd46347bbabec4ab055bd9087a94ffbdeb1."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 50db2dbfd65ac122f15fd49f8fd7cdd46347bbabec4ab055bd9087a94ffbdeb1.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-29000-s4",
@@ -3975,7 +4080,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 657618ab2401df0c3e7ebf742853561dca2e7b7989c6baa13ef7f4552802e55f."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 657618ab2401df0c3e7ebf742853561dca2e7b7989c6baa13ef7f4552802e55f.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-29000-s5",
@@ -4014,7 +4120,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 28c43ae7e44214d1b9a4e375395b3c788959da8318284a101bedb4b1f8dd9f85."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 28c43ae7e44214d1b9a4e375395b3c788959da8318284a101bedb4b1f8dd9f85.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-30000-s1",
@@ -4053,7 +4160,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 2d349e0bb015b4b4aa083a210b5c3f7c70a850d92d6c67f9beb906b2e86e63d1."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 2d349e0bb015b4b4aa083a210b5c3f7c70a850d92d6c67f9beb906b2e86e63d1.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-30000-s2",
@@ -4092,7 +4200,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 6482dc1885e6de4372c6166b61ed50058d4202337be2ba0a24a81f9290201a20."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 6482dc1885e6de4372c6166b61ed50058d4202337be2ba0a24a81f9290201a20.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-30000-s3",
@@ -4131,7 +4240,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 c5c69105ecf452ea720fd069cde25221191c836eb9bd3f118d605d50275ab3ab."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 c5c69105ecf452ea720fd069cde25221191c836eb9bd3f118d605d50275ab3ab.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-30000-s4",
@@ -4170,7 +4280,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 e521fc3e25b8e9a086f4dd0f7642d128d9b26fd0083a398f166340e98c471c5f."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 e521fc3e25b8e9a086f4dd0f7642d128d9b26fd0083a398f166340e98c471c5f.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-30000-s5",
@@ -4209,7 +4320,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 107b51ab3f9bbffef25f4038122ae20748e9dd5dd1f246766b38896ac087f0aa."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 107b51ab3f9bbffef25f4038122ae20748e9dd5dd1f246766b38896ac087f0aa.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32767-s1",
@@ -4248,7 +4360,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 9ddaa535394e4139e8466cc2ff2f1a352bc2c53c7d6e4e353b38613530a2a165."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 9ddaa535394e4139e8466cc2ff2f1a352bc2c53c7d6e4e353b38613530a2a165.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32767-s2",
@@ -4287,7 +4400,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 398144f82cfb91c9686ef0f0f96a80bf43141fd0951604bc7ca25b4c1c691150."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 398144f82cfb91c9686ef0f0f96a80bf43141fd0951604bc7ca25b4c1c691150.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32767-s3",
@@ -4326,7 +4440,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 23e238caf7ceb7cbc6894862b535296ee3c54dac3e6702567cb541a77e400c47."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 23e238caf7ceb7cbc6894862b535296ee3c54dac3e6702567cb541a77e400c47.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32767-s4",
@@ -4365,7 +4480,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 699420bd5fd16459920ad77d13b95f113c58acccecd62cd09110108680201869."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 699420bd5fd16459920ad77d13b95f113c58acccecd62cd09110108680201869.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32767-s5",
@@ -4404,7 +4520,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 4a49fe757a7ab5de0de3f432f752548dcb0303cc4dc0b2f0a9655be8b5f87f0e."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 4a49fe757a7ab5de0de3f432f752548dcb0303cc4dc0b2f0a9655be8b5f87f0e.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32768-s1",
@@ -4443,7 +4560,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 3f1dc706f86dd4fa49bb7e9f93eb81a7f7f7c8b16d31254b547a025c7a2b30f8."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 3f1dc706f86dd4fa49bb7e9f93eb81a7f7f7c8b16d31254b547a025c7a2b30f8.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32768-s2",
@@ -4482,7 +4600,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 06c5a357026210bcab275c3b0fb9bc27f0df475b2f420c2890cd968fc37617f4."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 06c5a357026210bcab275c3b0fb9bc27f0df475b2f420c2890cd968fc37617f4.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32768-s3",
@@ -4521,7 +4640,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 b35215b4ae2d2e8a0fd3ec16abb72d11aae47efc3ab91d234cb31f846b680371."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 b35215b4ae2d2e8a0fd3ec16abb72d11aae47efc3ab91d234cb31f846b680371.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32768-s4",
@@ -4560,7 +4680,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 3d603f6ff19b68bb8ccef465102cbc3e7e9568c323c7f9a357a36fd71adc565f."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 3d603f6ff19b68bb8ccef465102cbc3e7e9568c323c7f9a357a36fd71adc565f.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32768-s5",
@@ -4599,7 +4720,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 b9ff5a94320ba51674f96dfc8889626137a73aca33fc4733137eb38bf79106b6."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 b9ff5a94320ba51674f96dfc8889626137a73aca33fc4733137eb38bf79106b6.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32769-s1",
@@ -4638,7 +4760,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 3c05358d59e0867dfe14d65439ddd44a286865f47cc88b9723906cf0e280a047."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 3c05358d59e0867dfe14d65439ddd44a286865f47cc88b9723906cf0e280a047.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32769-s2",
@@ -4677,7 +4800,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 7fce6134436eefd509156cf6f32ac5add4e7e4219296000739c38dde989b8565."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 7fce6134436eefd509156cf6f32ac5add4e7e4219296000739c38dde989b8565.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32769-s3",
@@ -4716,7 +4840,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 0ddcd551ac2aaaa9ed522bf87960c1ab590a9993084ad1bb1fd939f1a93b1039."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 0ddcd551ac2aaaa9ed522bf87960c1ab590a9993084ad1bb1fd939f1a93b1039.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32769-s4",
@@ -4755,7 +4880,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 ff118e53a9e4631bab8d58805bd5549d3992efb4b6f94da2fae76a446acf91de."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 ff118e53a9e4631bab8d58805bd5549d3992efb4b6f94da2fae76a446acf91de.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-32769-s5",
@@ -4794,7 +4920,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 b7d386278df7392a3b8824ea09121cd17a1a06ac8e77469a4c48ead349483cd5."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 b7d386278df7392a3b8824ea09121cd17a1a06ac8e77469a4c48ead349483cd5.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-33868-s1",
@@ -4833,7 +4960,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 58620ea8db7bd18cf6d262f4ae340759e60099ee56eb4b05a50b567564709736."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 58620ea8db7bd18cf6d262f4ae340759e60099ee56eb4b05a50b567564709736.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-33868-s2",
@@ -4872,7 +5000,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 905991160de2506ab19695adbe2af597f7730e0add5f75eb80881e5b7e2ddc82."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 905991160de2506ab19695adbe2af597f7730e0add5f75eb80881e5b7e2ddc82.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-33868-s3",
@@ -4911,7 +5040,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 6d7823e86c8dfd6c47648df674e31fb4af5ab459bef54e565f4ac24051f80331."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 6d7823e86c8dfd6c47648df674e31fb4af5ab459bef54e565f4ac24051f80331.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-33868-s4",
@@ -4950,7 +5080,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 51745c17065b93ec2673115b20953fc0be71358efeab0c1d8f1f0ead288d9d3f."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 51745c17065b93ec2673115b20953fc0be71358efeab0c1d8f1f0ead288d9d3f.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-33868-s5",
@@ -4989,7 +5120,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 2509457d607f97106bb3bf9803f8e7ead10d3ced724894e9c503b93c7a75c078."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 2509457d607f97106bb3bf9803f8e7ead10d3ced724894e9c503b93c7a75c078.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-98304-s1",
@@ -5028,7 +5160,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 3257bfcf341df37c6898c95bb8d16e5321ef865f39a6a3e6c165433f18bd0709."
+      "notes": "Measured sample 1 of 5 after 1 warm-up; response SHA-256 3257bfcf341df37c6898c95bb8d16e5321ef865f39a6a3e6c165433f18bd0709.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-98304-s2",
@@ -5067,7 +5200,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 75d2d5060f62b1f2cd97ed8bf5d83295316f1c992dd1c695dd11bb43979123ce."
+      "notes": "Measured sample 2 of 5 after 1 warm-up; response SHA-256 75d2d5060f62b1f2cd97ed8bf5d83295316f1c992dd1c695dd11bb43979123ce.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-98304-s3",
@@ -5106,7 +5240,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 8d29cf45a60aaed96f571bd1d57c2d54c8974319be65634dbba7e6ae36168530."
+      "notes": "Measured sample 3 of 5 after 1 warm-up; response SHA-256 8d29cf45a60aaed96f571bd1d57c2d54c8974319be65634dbba7e6ae36168530.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-98304-s4",
@@ -5145,7 +5280,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 d95d75f3c9d32cd3879372bb953842fe598570adad31fe6859ed56c210e10add."
+      "notes": "Measured sample 4 of 5 after 1 warm-up; response SHA-256 d95d75f3c9d32cd3879372bb953842fe598570adad31fe6859ed56c210e10add.",
+      "server_session_id": "dynamic-session-1"
     },
     {
       "id": "dynamic-98304-s5",
@@ -5184,7 +5320,8 @@
         "reasoning": false,
         "draft_n_max": 2
       },
-      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 fad8281e8034a424c82a6661f3fed7cc7fff491c49df4f948e92ae93207d9983."
+      "notes": "Measured sample 5 of 5 after 1 warm-up; response SHA-256 fad8281e8034a424c82a6661f3fed7cc7fff491c49df4f948e92ae93207d9983.",
+      "server_session_id": "dynamic-session-1"
     }
   ]
 }

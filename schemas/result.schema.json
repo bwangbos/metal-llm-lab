@@ -195,6 +195,7 @@
         "hardware_id": { "$ref": "#/$defs/id" },
         "runtime_id": { "$ref": "#/$defs/id" },
         "runtime_revision": { "$ref": "#/$defs/git_sha" },
+        "server_session_id": { "type": "string", "pattern": "^(on|off|dynamic)-session-[0-9]+$" },
         "profile": {
           "type": ["string", "null"],
           "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"

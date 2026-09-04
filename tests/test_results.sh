@@ -8,6 +8,7 @@ raw_result="$source_root/results/raw/2026-09-03-qwen38-m5-max.json"
 summary="$source_root/results/summaries/qwen3.8-flash-next-m5-max.md"
 dynamic_raw_result="$source_root/results/raw/2026-09-03-qwen38-dynamic-mtp.json"
 dynamic_summary="$source_root/results/summaries/qwen3.8-flash-next-dynamic-mtp.md"
+correctness_harness="$source_root/tests/integration/test_dynamic_mtp.sh"
 
 fail() {
     print -u2 -- "$1"
@@ -38,6 +39,13 @@ jq -e '
   .configuration.warmups_per_cell == 1 and
   .configuration.samples_per_cell == 5 and
   .configuration.throughput_tolerance_percent == 5 and
+  (.configuration.accepted_allocation_observation.evidence_sha256 |
+    test("^[0-9a-f]{64}$")) and
+  .configuration.accepted_allocation_observation.observation.context == 262144 and
+  .configuration.accepted_allocation_observation.observation.profile_id == "auto" and
+  .configuration.accepted_allocation_observation.observation.mtp_policy == "dynamic" and
+  (.configuration.accepted_allocation_observation.observation.process.rss_bytes > 0) and
+  (.configuration.accepted_allocation_observation.observation.system_memory_pressure.free_percent >= 0) and
   (.runs | length) == 105 and
   (.configuration.statistics | length) == 21 and
   (.configuration.dynamic_fixed_comparisons | length) == 7 and
@@ -48,6 +56,25 @@ jq -e '
   ([.runs[] | select(.mtp_policy == "dynamic" and .mtp_selected == false)] | length) == 15 and
   .interpretation.performance_gate_passed == true
 ' "$dynamic_raw_result" >/dev/null || fail 'dynamic-MTP raw acceptance evidence is incomplete'
+correctness_harness_sha=$(shasum -a 256 "$correctness_harness" | awk '{print $1}')
+[[ "$(jq -r '.configuration.correctness_harness_sha256' "$dynamic_raw_result")" == \
+   "$correctness_harness_sha" ]] || fail 'dynamic-MTP result is not bound to the current correctness harness'
+
+allocation_timestamp=$(jq -r '.configuration.accepted_allocation_observation.observation.captured_at' \
+  "$dynamic_raw_result")
+allocation_rss=$(jq -r '.configuration.accepted_allocation_observation.observation.process.rss_bytes' \
+  "$dynamic_raw_result")
+allocation_free=$(jq -r \
+  '.configuration.accepted_allocation_observation.observation.system_memory_pressure.free_percent' \
+  "$dynamic_raw_result")
+for allocation_doc in \
+  "$source_root/docs/hardware/apple-m5-max-128gb.md" \
+  "$source_root/docs/experiments/2026-09-03-dynamic-mtp-acceptance.md"; do
+    grep -Fq "$allocation_timestamp" "$allocation_doc" && \
+    grep -Fq "$allocation_rss bytes" "$allocation_doc" && \
+    grep -Fq "$allocation_free% system-wide effective free memory" "$allocation_doc" || \
+        fail "memory observation in ${allocation_doc#$source_root/} differs from validated raw evidence"
+done
 
 jq -e '
   (.configuration.dynamic_fixed_comparisons[] | select(.effective_prompt_tokens == 32767) |
@@ -253,7 +280,7 @@ assert_route_invalid '.benchmark_mode = "local" | .runs[0].profile_id = null | .
 multi_policy_result="$temporary_root/multi-policy-result.json"
 jq '
   .experiment_id = "dynamic-mtp-performance" |
-  .suite_id = "dynamic-mtp-performance" |
+  .suite_id = "multi-policy-route-fixture" |
   .configuration = {
     acceptance_variant: "multi-policy-endpoint",
     mtp_policies: ["on", "off", "dynamic"],
@@ -267,7 +294,7 @@ jq '
     unified_memory_bytes: 137438953472
   } |
   .provenance.runtime.id = "llama-cpp-qwen38-hybrid" |
-  .provenance.suite.id = "dynamic-mtp-performance" |
+  .provenance.suite.id = "multi-policy-route-fixture" |
   .runs = [
     (.runs[0] | .id = "fixed-on-29000-s1" | .profile_id = "custom" |
       .runtime_id = "llama-cpp-qwen38-hybrid" |
@@ -315,12 +342,33 @@ assert_multi_policy_invalid '.runs[0].mtp_threshold = 32768' 'fixed row carries 
 cp "$dynamic_raw_result" "$fixture_root/results/raw/result.json"
 $fixture_cli report >/dev/null
 $fixture_cli report --check >/dev/null
-jq '.configuration.dynamic_fixed_comparisons[2].percent_delta = 99' \
+jq '.runs[0].generation_tokens_per_second += 1' \
     "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
 if dynamic_drift_output=$($fixture_cli report --check 2>&1); then
-    fail 'report --check accepted dynamic-MTP summary drift'
+    fail 'report --check accepted a changed retained throughput sample with stale aggregates'
 fi
-assert_contains "$dynamic_drift_output" 'summary differs from generated output'
+assert_contains "$dynamic_drift_output" 'invalid dynamic-MTP derived data'
+
+jq '.runs[0].output_sha256 = ("f" * 64)' \
+    "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
+if dynamic_output_drift=$($fixture_cli report --check 2>&1); then
+    fail 'report --check accepted a changed retained output hash with stale aggregates'
+fi
+assert_contains "$dynamic_output_drift" 'invalid dynamic-MTP derived data'
+
+jq '.configuration.accepted_allocation_observation.observation.process.rss_bytes = 0' \
+    "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
+if invalid_allocation_output=$($fixture_cli report --check 2>&1); then
+    fail 'report --check accepted a zero-RSS allocation observation'
+fi
+assert_contains "$invalid_allocation_output" 'invalid dynamic-MTP derived data'
+
+jq '.configuration.accepted_allocation_observation.evidence_sha256 = ("f" * 64)' \
+    "$dynamic_raw_result" > "$fixture_root/results/raw/result.json"
+if invalid_allocation_hash_output=$($fixture_cli report --check 2>&1); then
+    fail 'report --check accepted an allocation observation with a mismatched evidence hash'
+fi
+assert_contains "$invalid_allocation_hash_output" 'invalid dynamic-MTP derived data'
 
 jq '.runs[0].hardware_id = "unknown-hardware"' "$raw_result" > "$fixture_root/results/raw/result.json"
 if invalid_output=$($fixture_cli report --check 2>&1); then

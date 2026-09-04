@@ -29,6 +29,11 @@ for required_text in \
   'generated_tokens=128' \
   'source "$root/lib/setup.zsh"' \
   'source "$root/lib/performance-checkpoint.zsh"' \
+  'metal_llm_validate_dynamic_mtp_correctness_evidence' \
+  'correctness_harness_sha256' \
+  'metal_llm_performance_checkpoint_matches_published_runs' \
+  'metal_llm_validate_dynamic_mtp_derived_data' \
+  'metal_llm_performance_checkpoint_validate_path "$root" "$checkpoint_path"' \
   'cache_prompt: false' \
   'temperature: 0' \
   'seed: 1234' \

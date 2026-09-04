@@ -3,6 +3,26 @@ metal_llm_performance_checkpoint_error() {
     return 1
 }
 
+metal_llm_performance_checkpoint_validate_path() {
+    local repository_root=$1 checkpoint=$2 relative component current
+    local -a components
+    [[ "$repository_root" == /* && "$checkpoint" == /* && \
+       -d "$repository_root" && ! -L "$repository_root" && \
+       "${repository_root:A}" == "$repository_root" && \
+       "$checkpoint" == "$repository_root"/* ]] || return 1
+    relative=${checkpoint#$repository_root/}
+    components=("${(@s:/:)relative}")
+    (( ${#components[@]} > 0 )) || return 1
+    current=$repository_root
+    for component in "${components[@]}"; do
+        [[ -n "$component" && "$component" != . && "$component" != .. ]] || return 1
+        current="$current/$component"
+        if [[ -e "$current" || -L "$current" ]]; then
+            [[ -d "$current" && ! -L "$current" ]] || return 1
+        fi
+    done
+}
+
 metal_llm_performance_checkpoint_validate_identity() {
     local identity=$1
     jq -e '
@@ -14,7 +34,8 @@ metal_llm_performance_checkpoint_validate_identity() {
         (try ((fromdateiso8601 | strftime("%Y-%m-%dT%H:%M:%SZ")) == .) catch false);
       type == "object" and exact_keys([
         "schema_version", "collection_started", "repository", "collector", "manifests",
-        "correctness_evidence_sha256", "hardware", "system", "runtime",
+        "correctness_evidence_sha256", "correctness_harness_sha256",
+        "accepted_allocation_evidence_sha256", "hardware", "system", "runtime",
         "model_manifest_sha256", "artifacts", "matrix", "generation", "comparison"
       ]) and
       .schema_version == 1 and (.collection_started | timestamp) and
@@ -29,6 +50,8 @@ metal_llm_performance_checkpoint_validate_identity() {
         exact_keys(["hardware_sha256", "model_sha256", "runtime_sha256"]) and
         all(.[]; sha256)) and
       (.correctness_evidence_sha256 | sha256) and
+      (.correctness_harness_sha256 | sha256) and
+      (.accepted_allocation_evidence_sha256 | sha256) and
       (.hardware | type == "object" and exact_keys(["id", "chip", "unified_memory_bytes"]) and
         .id == "apple-m5-max-128gb" and .chip == "Apple M5 Max" and
         .unified_memory_bytes == 137438953472) and
@@ -192,11 +215,11 @@ metal_llm_performance_checkpoint_validate_files() {
 
 metal_llm_performance_checkpoint_open() {
     setopt localoptions nullglob
-    local checkpoint=$1 expected_identity=$2 identity_file="$checkpoint/identity.json"
+    local checkpoint=$1 expected_identity=$2 repository_root=$3 identity_file="$checkpoint/identity.json"
     local identity_part canonical_expected canonical_existing
     local -a run_files
-    [[ "$checkpoint" == /* && ! -L "$checkpoint" ]] || {
-        metal_llm_performance_checkpoint_error 'path must be an absolute non-symlink'
+    metal_llm_performance_checkpoint_validate_path "$repository_root" "$checkpoint" || {
+        metal_llm_performance_checkpoint_error 'path and every repository-local ancestor must be real directories'
         return 1
     }
     metal_llm_performance_checkpoint_validate_identity "$expected_identity" || {
@@ -240,9 +263,10 @@ metal_llm_performance_checkpoint_open() {
 
 metal_llm_performance_checkpoint_publish_run() {
     setopt localoptions nullglob
-    local checkpoint=$1 envelope=$2 identity_file="$checkpoint/identity.json"
+    local checkpoint=$1 envelope=$2 repository_root=$3 identity_file="$checkpoint/identity.json"
     local run_id destination part
     local -a run_files
+    metal_llm_performance_checkpoint_validate_path "$repository_root" "$checkpoint" || return 1
     [[ -d "$checkpoint" && ! -L "$checkpoint" && -f "$identity_file" && ! -L "$identity_file" ]] || \
         return 1
     run_id=$(jq -er '.run.id | select(type == "string")' <<< "$envelope") || return 1
@@ -266,14 +290,25 @@ metal_llm_performance_checkpoint_publish_run() {
 }
 
 metal_llm_performance_checkpoint_runs() {
-    local checkpoint=$1 policy effective sample row_file
+    local checkpoint=$1 repository_root=$2 policy effective sample row_file
+    metal_llm_performance_checkpoint_validate_path "$repository_root" "$checkpoint" || return 1
     metal_llm_performance_checkpoint_validate_files "$checkpoint" || return 1
     for policy in on off dynamic; do
         for effective in 29000 30000 32767 32768 32769 33868 98304; do
             for sample in 1 2 3 4 5; do
                 row_file="$checkpoint/runs/$policy-$effective-s$sample.json"
-                [[ ! -e "$row_file" ]] || jq -c '.run' "$row_file" || return 1
+                [[ ! -e "$row_file" ]] || \
+                    jq -c '.run + {server_session_id: .server_session_id}' "$row_file" || return 1
             done
         done
     done
+}
+
+metal_llm_performance_checkpoint_matches_published_runs() {
+    local checkpoint=$1 repository_root=$2 result_file=$3
+    local retained published
+    [[ -f "$result_file" && ! -L "$result_file" ]] || return 1
+    retained=$(metal_llm_performance_checkpoint_runs "$checkpoint" "$repository_root" | jq -csS .) || return 1
+    published=$(jq -cS '.runs' "$result_file") || return 1
+    [[ "$retained" == "$published" ]]
 }

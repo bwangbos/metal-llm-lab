@@ -3,6 +3,143 @@ metal_llm_report_usage() {
     return 2
 }
 
+metal_llm_dynamic_mtp_derived_data() {
+    local result_file=$1
+    jq '
+      def mean: add / length;
+      def sample_sd:
+        . as $values | ($values | mean) as $mean |
+        (($values | map((. - $mean) * (. - $mean)) | add) / ($values | length - 1)) | sqrt;
+      .configuration.dynamic_threshold as $threshold |
+      .configuration.throughput_tolerance_percent as $tolerance |
+      (.runs | sort_by(.mtp_policy, .effective_prompt_tokens) |
+        group_by([.mtp_policy, .effective_prompt_tokens]) |
+        map(
+          . as $runs |
+          ($runs | map(.prompt_tokens_per_second)) as $prompt_samples |
+          ($runs | map(.generation_tokens_per_second)) as $generation_samples |
+          {
+            policy: $runs[0].mtp_policy,
+            effective_prompt_tokens: $runs[0].effective_prompt_tokens,
+            selected_route: $runs[0].mtp_selected,
+            sample_count: ($runs | length),
+            prompt_tokens_per_second_samples: $prompt_samples,
+            prompt_tokens_per_second_mean: ($prompt_samples | mean),
+            prompt_tokens_per_second_sample_sd: ($prompt_samples | sample_sd),
+            generation_tokens_per_second_samples: $generation_samples,
+            generation_tokens_per_second_mean: ($generation_samples | mean),
+            generation_tokens_per_second_sample_sd: ($generation_samples | sample_sd),
+            draft_accepted: ($runs | map(.draft_acceptance | split("/")[0] | tonumber) | add),
+            draft_generated: ($runs | map(.draft_acceptance | split("/")[1] | tonumber) | add),
+            output_sha256: ($runs | map(.output_sha256)),
+            distinct_output_count: ($runs | map(.output_sha256) | unique | length)
+          }
+        )) as $statistics |
+      ([$statistics[] | select(.policy == "dynamic") as $dynamic |
+        (if $dynamic.effective_prompt_tokens <= $threshold then "on" else "off" end) as $fixed_policy |
+        ($statistics[] | select(.policy == $fixed_policy and
+          .effective_prompt_tokens == $dynamic.effective_prompt_tokens)) as $fixed |
+        (((($dynamic.generation_tokens_per_second_mean /
+             $fixed.generation_tokens_per_second_mean) - 1) * 100)) as $delta |
+        {
+          effective_prompt_tokens: $dynamic.effective_prompt_tokens,
+          dynamic_selected_route: $dynamic.selected_route,
+          fixed_policy: $fixed_policy,
+          dynamic_generation_tokens_per_second_mean: $dynamic.generation_tokens_per_second_mean,
+          fixed_generation_tokens_per_second_mean: $fixed.generation_tokens_per_second_mean,
+          percent_delta: $delta,
+          tolerance_percent: $tolerance,
+          passed: (($delta | fabs) <= $tolerance)
+        }]) as $comparisons |
+      {
+        statistics: $statistics,
+        dynamic_fixed_comparisons: $comparisons,
+        performance_gate_passed: ($comparisons | all(.[]; .passed))
+      }
+    ' "$result_file"
+}
+
+metal_llm_validate_accepted_allocation_observation() {
+    local observation=$1
+    jq -e '
+      (keys | sort) == ([
+        "schema_version", "captured_at", "model_id", "profile_id", "runtime_alias",
+        "context", "vision", "mtp_policy", "mtp_threshold", "process",
+        "system_memory_pressure", "identity"
+      ] | sort) and
+      .schema_version == 1 and
+      (.captured_at | type == "string" and
+        (try ((fromdateiso8601 | strftime("%Y-%m-%dT%H:%M:%SZ")) == .) catch false)) and
+      .model_id == "qwen3.8-flash-next" and .profile_id == "auto" and
+      .runtime_alias == "tuned" and .context == 262144 and
+      .vision == true and .mtp_policy == "dynamic" and .mtp_threshold == 32768 and
+      (.process | keys | sort) == (["pid", "process_started_at", "rss_bytes"] | sort) and
+      (.process.pid | type == "number" and floor == . and . > 1) and
+      (.process.process_started_at | type == "string" and length > 0) and
+      (.process.rss_bytes | type == "number" and floor == . and . > 0) and
+      (.system_memory_pressure | keys) == ["free_percent"] and
+      (.system_memory_pressure.free_percent | type == "number" and
+        floor == . and . >= 0 and . <= 100) and
+      (.identity | keys | sort) == ([
+        "managed_process_sha256", "server_log_sha256", "executable_sha256"
+      ] | sort) and
+      all(.identity[]; type == "string" and test("^[0-9a-f]{64}$"))
+    ' <<< "$observation" >/dev/null 2>&1
+}
+
+metal_llm_validate_dynamic_mtp_derived_data() {
+    local result_file=$1 derived allocation_observation allocation_sha expected_allocation_sha
+    derived=$(metal_llm_dynamic_mtp_derived_data "$result_file") || return 1
+    allocation_observation=$(jq -c '.configuration.accepted_allocation_observation.observation' \
+      "$result_file") || return 1
+    metal_llm_validate_accepted_allocation_observation "$allocation_observation" || return 1
+    allocation_sha=$(print -r -- "$(jq -cS . <<< "$allocation_observation")" | \
+      shasum -a 256 | awk '{print $1}') || return 1
+    expected_allocation_sha=$(jq -er \
+      '.configuration.accepted_allocation_observation.evidence_sha256' "$result_file") || return 1
+    [[ "$allocation_sha" == "$expected_allocation_sha" ]] || return 1
+    jq -e --argjson derived "$derived" '
+      . as $result |
+      ([.configuration.mtp_policies[] as $policy |
+        .configuration.effective_prompt_lengths[] as $effective |
+        range(1; .configuration.samples_per_cell + 1) as $sample |
+        ($policy + "-" + ($effective | tostring) + "-s" + ($sample | tostring))] | sort) as $expected_ids |
+      .configuration.mtp_policies == ["on", "off", "dynamic"] and
+      .configuration.dynamic_threshold == 32768 and
+      .configuration.context_allocation == 262144 and .configuration.vision == true and
+      .configuration.effective_prompt_lengths == [29000, 30000, 32767, 32768, 32769, 33868, 98304] and
+      .configuration.warmups_per_cell == 1 and .configuration.samples_per_cell == 5 and
+      .configuration.throughput_tolerance_percent == 5 and
+      .configuration.comparison_metric == "generation_tokens_per_second" and
+      (.configuration.correctness_harness_sha256 | type == "string" and
+        test("^[0-9a-f]{64}$")) and
+      ([.runs[].id] | sort) == $expected_ids and
+      ([.runs[].id] | unique | length) == (.runs | length) and
+      ($derived.statistics | length) == 21 and
+      all($derived.statistics[]; .sample_count == $result.configuration.samples_per_cell) and
+      ($derived.dynamic_fixed_comparisons | length) == 7 and
+      .configuration.statistics == $derived.statistics and
+      .configuration.dynamic_fixed_comparisons == $derived.dynamic_fixed_comparisons and
+      .interpretation.performance_gate_passed == $derived.performance_gate_passed and
+      (.configuration.accepted_allocation_observation as $allocation |
+        ($allocation | keys | sort) == (["evidence_sha256", "observation"] | sort) and
+        ($allocation.evidence_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+        ($allocation.observation | type == "object")) and
+      .configuration.accepted_allocation_observation.observation.identity.executable_sha256 ==
+        .provenance.runtime.executable.sha256 and
+      ([.validations[] | select(.check == "Dynamic-to-corresponding-fixed 5% generation-throughput tolerance") | .result] ==
+        [(if $derived.performance_gate_passed then "Pass" else "Fail" end)]) and
+      ([.validations[] | select(.check == "Accepted default 262,144-token allocation memory observation") | .result] ==
+        ["Pass; sanitized RSS and system memory pressure captured"]) and
+      all(.runs[]; . as $run |
+        ($run.server_session_id | type == "string") and
+        ($run.server_session_id | test("^(on|off|dynamic)-session-[0-9]+$") and
+          startswith($run.mtp_policy + "-session-")) and
+        any($result.configuration.server_log_sha256[];
+          .policy == $run.mtp_policy and .session_id == $run.server_session_id))
+    ' "$result_file" >/dev/null 2>&1
+}
+
 metal_llm_validate_result() {
     local result_file=$1
     local result_label=${2:-${result_file#$METAL_LLM_ROOT/}}
@@ -108,7 +245,7 @@ metal_llm_validate_result() {
         matches_common_provenance($provenance) and
         .mtp_policy == $provenance.mtp_policy and .mtp_threshold == $provenance.mtp_threshold;
       def multi_policy_endpoint_acceptance:
-        .model_id == "qwen3.8-flash-next" and .suite_id == "dynamic-mtp-performance" and
+        .model_id == "qwen3.8-flash-next" and
         .configuration.acceptance_variant == "multi-policy-endpoint" and
         .configuration.mtp_policies == ["on", "off", "dynamic"] and
         .configuration.dynamic_threshold == 32768 and
@@ -172,6 +309,13 @@ metal_llm_validate_result() {
         metal_llm_die "invalid benchmark route provenance: $result_label"
         return 1
     }
+
+    if [[ "$(jq -r '.suite_id // empty' "$result_file")" == dynamic-mtp-performance ]]; then
+        metal_llm_validate_dynamic_mtp_derived_data "$result_file" || {
+            metal_llm_die "invalid dynamic-MTP derived data: $result_label"
+            return 1
+        }
+    fi
 
     local unsafe_path secret_key
     unsafe_path=$(jq -r '[.. | strings | select(test("/" + "Users" + "/[^/[:space:]]+/"))][0] // empty' \
@@ -349,7 +493,9 @@ metal_llm_generate_summary() {
 metal_llm_generate_dynamic_mtp_summary() {
     local result_file=$1
     local raw_name=${result_file:t}
-    jq -r --arg raw_name "$raw_name" '
+    local derived
+    derived=$(metal_llm_dynamic_mtp_derived_data "$result_file") || return 1
+    jq -r --arg raw_name "$raw_name" --argjson derived "$derived" '
       def comma:
         tostring | if length <= 3 then . else
           (length % 3) as $first |
@@ -362,7 +508,7 @@ metal_llm_generate_dynamic_mtp_summary() {
         (if . > 0 then "+" else "" end) + (tostring) + "%";
       def absolute: if . < 0 then -. else . end;
       def table($rows): $rows | join("\n");
-      (.configuration.dynamic_fixed_comparisons |
+      ($derived.dynamic_fixed_comparisons |
         min_by(.tolerance_percent - (.percent_delta | absolute))) as $narrowest |
       [
         "# " + .summary.title,
@@ -382,7 +528,7 @@ metal_llm_generate_dynamic_mtp_summary() {
         "| Effective prompt tokens | Dynamic route | Dynamic mean | Fixed mean | Delta | Result |",
         "| ---: | --- | ---: | ---: | ---: | --- |"
       ] +
-      [.configuration.dynamic_fixed_comparisons[] |
+      [$derived.dynamic_fixed_comparisons[] |
         "| " + (.effective_prompt_tokens | comma) + " | " +
         (.dynamic_selected_route | route) + " | " +
         (.dynamic_generation_tokens_per_second_mean | tostring) + " | " +
@@ -396,7 +542,7 @@ metal_llm_generate_dynamic_mtp_summary() {
         "| Policy | Effective prompt tokens | Selected route | Samples | Generation mean | Sample SD | Draft accepted/generated | Distinct outputs |",
         "| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |"
       ] +
-      [.configuration.statistics[] |
+      [$derived.statistics[] |
         "| " + .policy + " | " + (.effective_prompt_tokens | comma) + " | " +
         (.selected_route | route) + " | " + (.sample_count | tostring) + " | " +
         (.generation_tokens_per_second_mean | tostring) + " | " +
@@ -413,6 +559,22 @@ metal_llm_generate_dynamic_mtp_summary() {
       [.validations[] | "| " + .check + " | " + .result + " |"] +
       [
         "",
+        "## Accepted default allocation observation",
+        "",
+        "The exact default `auto` configuration was observed healthy at " +
+          .configuration.accepted_allocation_observation.observation.captured_at +
+          " with server RSS " +
+          (.configuration.accepted_allocation_observation.observation.process.rss_bytes | tostring) +
+          " bytes and system-wide effective free memory " +
+          (.configuration.accepted_allocation_observation.observation.system_memory_pressure.free_percent | tostring) +
+          "%. This is a point-in-time allocation observation, not a peak-memory claim.",
+        "",
+        "- Observation evidence: `" + .configuration.accepted_allocation_observation.evidence_sha256 + "`",
+        "- Managed process identity: `" + .configuration.accepted_allocation_observation.observation.identity.managed_process_sha256 + "`",
+        "- Accepted-run server log: `" + .configuration.accepted_allocation_observation.observation.identity.server_log_sha256 + "`"
+      ] +
+      [
+        "",
         "## Reproducibility identities",
         "",
         "- Repository revision: `" + .provenance.repository.revision + "`",
@@ -421,6 +583,7 @@ metal_llm_generate_dynamic_mtp_summary() {
         "- Runtime manifest/build receipt/executable: `" + .provenance.runtime.manifest_sha256 + "` / `" + .provenance.runtime.build_receipt_sha256 + "` / `" + .provenance.runtime.executable.sha256 + "`",
         "- Model manifest: `" + .provenance.model_manifest_sha256 + "`",
         "- Correctness evidence: `" + .configuration.correctness_evidence_sha256 + "`",
+        "- Correctness harness: `" + .configuration.correctness_harness_sha256 + "`",
         "- Checkpoint identity: `" + .configuration.checkpoint_identity_sha256 + "`"
       ] +
       [.configuration.server_log_sha256[] |

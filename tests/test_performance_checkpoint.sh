@@ -14,8 +14,11 @@ fail() {
 source "$checkpoint_library"
 
 temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-checkpoint-test.XXXXXX")
+temporary_root=${temporary_root:A}
 trap '[[ "${METAL_LLM_TEST_KEEP_TEMP:-0}" == 1 ]] || rm -rf -- "$temporary_root"' EXIT
-checkpoint="$temporary_root/checkpoint"
+repository_root="$temporary_root/repository"
+mkdir -- "$repository_root"
+checkpoint="$repository_root/checkpoint"
 fixture_response='fixture response without private data'
 fixture_response_sha=$(print -rn -- "$fixture_response" | shasum -a 256 | awk '{print $1}')
 
@@ -31,7 +34,8 @@ identity=$(jq -cn '
     manifests: {
       hardware_sha256: ("4" * 64), model_sha256: ("5" * 64), runtime_sha256: ("6" * 64)
     },
-    correctness_evidence_sha256: ("7" * 64),
+    correctness_evidence_sha256: ("7" * 64), correctness_harness_sha256: ("d" * 64),
+    accepted_allocation_evidence_sha256: ("e" * 64),
     hardware: {id: "apple-m5-max-128gb", chip: "Apple M5 Max", unified_memory_bytes: 137438953472},
     system: {
       operating_system: "macOS", operating_system_version: "26.0",
@@ -77,7 +81,7 @@ run=$(jq -cn --arg response_sha "$fixture_response_sha" '
 envelope=$(jq -cn --argjson run "$run" \
   '{schema_version: 1, server_session_id: "on-session-1", run: $run}')
 
-metal_llm_performance_checkpoint_open "$checkpoint" "$identity" || \
+metal_llm_performance_checkpoint_open "$checkpoint" "$identity" "$repository_root" || \
     fail 'could not initialize a valid checkpoint'
 [[ "$METAL_LLM_PERFORMANCE_CHECKPOINT_RESUMED" == false && \
    "$METAL_LLM_PERFORMANCE_CHECKPOINT_RUN_COUNT" == 0 ]] || \
@@ -86,19 +90,34 @@ metal_llm_performance_checkpoint_open "$checkpoint" "$identity" || \
 mkdir -- "$checkpoint/logs" "$checkpoint/responses"
 print -- 'fixture server log' > "$checkpoint/logs/on-session-1.log"
 print -rn -- "$fixture_response" > "$checkpoint/responses/on-session-1-on-29000-s1.response"
-metal_llm_performance_checkpoint_publish_run "$checkpoint" "$envelope" || \
+metal_llm_performance_checkpoint_publish_run "$checkpoint" "$envelope" "$repository_root" || \
     fail 'could not publish a valid retained sample'
 original_row_sha=$(shasum -a 256 "$checkpoint/runs/on-29000-s1.json" | awk '{print $1}')
 
-metal_llm_performance_checkpoint_open "$checkpoint" "$identity" || \
+metal_llm_performance_checkpoint_open "$checkpoint" "$identity" "$repository_root" || \
     fail 'valid checkpoint did not resume'
 [[ "$METAL_LLM_PERFORMANCE_CHECKPOINT_RESUMED" == true && \
    "$METAL_LLM_PERFORMANCE_CHECKPOINT_RUN_COUNT" == 1 ]] || \
     fail 'resumed checkpoint did not retain exactly one sample'
-rehydrated=$(metal_llm_performance_checkpoint_runs "$checkpoint")
-[[ "$rehydrated" == "$run" ]] || fail 'resumed sample differs from the atomically published row'
+rehydrated=$(metal_llm_performance_checkpoint_runs "$checkpoint" "$repository_root")
+expected_rehydrated=$(jq -cn --arg session 'on-session-1' --argjson run "$run" \
+  '$run + {server_session_id: $session}')
+[[ "$rehydrated" == "$expected_rehydrated" ]] || \
+    fail 'resumed sample lost its exact server-session provenance'
 
-if metal_llm_performance_checkpoint_publish_run "$checkpoint" "$envelope" 2>/dev/null; then
+published_result="$temporary_root/published-result.json"
+jq -cn --argjson run "$expected_rehydrated" '{runs: [$run]}' > "$published_result"
+metal_llm_performance_checkpoint_matches_published_runs \
+  "$checkpoint" "$repository_root" "$published_result" || \
+    fail 'checkpoint rows did not match identical published runs'
+jq '.runs[0].generation_tokens_per_second += 1' "$published_result" > "$published_result.part"
+mv -- "$published_result.part" "$published_result"
+if metal_llm_performance_checkpoint_matches_published_runs \
+  "$checkpoint" "$repository_root" "$published_result"; then
+    fail 'checkpoint rows matched a published result with different measured values'
+fi
+
+if metal_llm_performance_checkpoint_publish_run "$checkpoint" "$envelope" "$repository_root" 2>/dev/null; then
     fail 'checkpoint overwrote a retained sample with the same identity'
 fi
 [[ "$(shasum -a 256 "$checkpoint/runs/on-29000-s1.json" | awk '{print $1}')" == "$original_row_sha" ]] || \
@@ -107,7 +126,7 @@ fi
 assert_identity_mismatch_rejected() {
     local filter=$1 description=$2 mutated
     mutated=$(jq "$filter" <<< "$identity")
-    if metal_llm_performance_checkpoint_open "$checkpoint" "$mutated" 2>/dev/null; then
+    if metal_llm_performance_checkpoint_open "$checkpoint" "$mutated" "$repository_root" 2>/dev/null; then
         fail "checkpoint accepted mismatched immutable identity: $description"
     fi
 }
@@ -122,53 +141,67 @@ assert_identity_mismatch_rejected '.generation.generated_tokens = 64' 'generatio
 assert_identity_mismatch_rejected '.runtime.executable.sha256 = ("f" * 64)' 'runtime provenance'
 assert_identity_mismatch_rejected '.artifacts[0].sha256 = ("f" * 64)' 'artifact provenance'
 assert_identity_mismatch_rejected '.comparison.tolerance_percent = 10' 'comparison tolerance'
+assert_identity_mismatch_rejected '.correctness_harness_sha256 = ("f" * 64)' 'correctness harness'
+assert_identity_mismatch_rejected '.accepted_allocation_evidence_sha256 = ("f" * 64)' 'allocation evidence'
 
-malformed="$temporary_root/malformed"
+malformed="$repository_root/malformed"
 cp -R "$checkpoint" "$malformed"
 jq '.run.effective_prompt_tokens = 30000' "$malformed/runs/on-29000-s1.json" > \
   "$malformed/runs/on-29000-s1.json.part"
 mv -- "$malformed/runs/on-29000-s1.json.part" "$malformed/runs/on-29000-s1.json"
-if metal_llm_performance_checkpoint_open "$malformed" "$identity" 2>/dev/null; then
+if metal_llm_performance_checkpoint_open "$malformed" "$identity" "$repository_root" 2>/dev/null; then
     fail 'checkpoint accepted a retained row whose ID disagrees with its matrix cell'
 fi
 
-unsafe="$temporary_root/unsafe"
+unsafe="$repository_root/unsafe"
 cp -R "$checkpoint" "$unsafe"
 rm -- "$unsafe/runs/on-29000-s1.json"
 ln -s -- "$checkpoint/runs/on-29000-s1.json" "$unsafe/runs/on-29000-s1.json"
-if metal_llm_performance_checkpoint_open "$unsafe" "$identity" 2>/dev/null; then
+if metal_llm_performance_checkpoint_open "$unsafe" "$identity" "$repository_root" 2>/dev/null; then
     fail 'checkpoint accepted a symlinked retained row'
 fi
 
-orphan="$temporary_root/orphan"
+orphan="$repository_root/orphan"
 cp -R "$checkpoint" "$orphan"
 print -- '{"partial":' > "$orphan/runs/.part.interrupted"
-if metal_llm_performance_checkpoint_open "$orphan" "$identity" 2>/dev/null; then
+if metal_llm_performance_checkpoint_open "$orphan" "$identity" "$repository_root" 2>/dev/null; then
     fail 'checkpoint accepted interrupted unsafe state'
 fi
 
-log_orphan="$temporary_root/log-orphan"
+log_orphan="$repository_root/log-orphan"
 cp -R "$checkpoint" "$log_orphan"
 print -- 'partial log identity' > "$log_orphan/logs/.part.interrupted"
-if metal_llm_performance_checkpoint_open "$log_orphan" "$identity" 2>/dev/null; then
+if metal_llm_performance_checkpoint_open "$log_orphan" "$identity" "$repository_root" 2>/dev/null; then
     fail 'checkpoint accepted an unexpected durable log entry'
 fi
 
-response_unsafe="$temporary_root/response-unsafe"
+response_unsafe="$repository_root/response-unsafe"
 cp -R "$checkpoint" "$response_unsafe"
 rm -- "$response_unsafe/responses/on-session-1-on-29000-s1.response"
 ln -s -- "$checkpoint/logs/on-session-1.log" \
   "$response_unsafe/responses/on-session-1-on-29000-s1.response"
-if metal_llm_performance_checkpoint_open "$response_unsafe" "$identity" 2>/dev/null; then
+if metal_llm_performance_checkpoint_open "$response_unsafe" "$identity" "$repository_root" 2>/dev/null; then
     fail 'checkpoint accepted a symlinked durable response'
 fi
 
-response_tampered="$temporary_root/response-tampered"
+response_tampered="$repository_root/response-tampered"
 cp -R "$checkpoint" "$response_tampered"
 print -rn -- 'different response bytes' > \
   "$response_tampered/responses/on-session-1-on-29000-s1.response"
-if metal_llm_performance_checkpoint_open "$response_tampered" "$identity" 2>/dev/null; then
+if metal_llm_performance_checkpoint_open "$response_tampered" "$identity" "$repository_root" 2>/dev/null; then
     fail 'checkpoint accepted a response that no longer matches its retained row'
 fi
+
+ancestor_repository="$temporary_root/ancestor-repository"
+outside_evidence="$temporary_root/outside-evidence"
+mkdir -- "$ancestor_repository" "$outside_evidence"
+ln -s -- "$outside_evidence" "$ancestor_repository/.lab"
+ancestor_checkpoint="$ancestor_repository/.lab/task6-evidence/dynamic-mtp-performance-checkpoint"
+if metal_llm_performance_checkpoint_open \
+  "$ancestor_checkpoint" "$identity" "$ancestor_repository" 2>/dev/null; then
+    fail 'checkpoint accepted a symlinked ancestor beneath the repository root'
+fi
+[[ ! -e "$outside_evidence/task6-evidence" ]] || \
+    fail 'checkpoint wrote through a symlinked ancestor before rejecting it'
 
 print -- 'performance checkpoint checks: PASS'

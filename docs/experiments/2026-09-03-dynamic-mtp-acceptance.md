@@ -11,7 +11,14 @@ The acceptance target was the pinned Qwen3.8-Flash-Next artifact set on the exac
 Apple M5 Max 128 GiB manifest, using the trusted tuned runtime tree, full Metal
 offload, vision enabled, and a 262,144-token allocation. A default dynamic server
 became healthy with the target, projector, and MTP sidecar loaded, establishing
-that the complete allocation fits without a Metal allocation failure.
+that the complete allocation fits without a Metal allocation failure. The fresh
+accepted-default observation at 2026-09-04T15:56:55Z recorded server RSS of
+69892685824 bytes and 43% system-wide effective free memory. The raw result
+retains that sanitized point-in-time observation together with immutable
+observation (`25e70cbdb5d567f259f6bcc8b2d3e8451c7ad5ba8ad1b18551c27f04feb05949`),
+managed-process (`2a6cc52173a0802e7fb8123bf108c30d1b23b307f309adb7ea3b147fe2b3e257`),
+and final server-log (`b4ee3e60af289807d60d33be2ccfcc0e673ef836d8cdf03cf81ff346133892ab`)
+SHA-256 identities. It does not claim peak memory usage.
 
 Correctness and isolation used the opt-in integration harness. Its 19 retained
 rows covered threshold boundaries, multimodal expansion, streaming, slot reuse,

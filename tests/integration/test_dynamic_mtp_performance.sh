@@ -45,13 +45,41 @@ retire_published_checkpoint() {
     local checkpoint_path=$1
     local expected="$root/.lab/task6-evidence/dynamic-mtp-performance-checkpoint"
     local retired="$root/.lab/task6-evidence/.dynamic-mtp-performance-completed-$$"
+    metal_llm_performance_checkpoint_validate_path "$root" "$checkpoint_path" || \
+        fail 'refusing checkpoint path with an unsafe repository-local ancestor'
+    metal_llm_performance_checkpoint_validate_path "$root" "$retired" || \
+        fail 'refusing retirement path with an unsafe repository-local ancestor'
     [[ "$checkpoint_path" == "$expected" && -d "$checkpoint_path" && ! -L "$checkpoint_path" && \
        ! -e "$retired" && ! -L "$retired" ]] || \
         fail 'refusing to remove an unexpected checkpoint path'
     mv -- "$checkpoint_path" "$retired" || fail 'could not retire the published checkpoint atomically'
     command sync
+    metal_llm_performance_checkpoint_validate_path "$root" "$retired" || \
+        fail 'retired checkpoint path became unsafe before deletion'
     rm -rf -- "$retired"
     command sync
+}
+
+metal_llm_dynamic_mtp_expected_correctness_ids() {
+    jq -cn '[
+      "boundary-32767", "boundary-32768", "boundary-32769", "calibration-offset",
+      "concurrent-long", "concurrent-short", "json-long", "json-short", "reuse-long",
+      "reuse-short-first", "reuse-short-second", "text-long", "text-short", "tool-long",
+      "tool-short", "vision-cross-expanded", "vision-cross-text-control", "vision-long", "vision-short"
+    ]'
+}
+
+metal_llm_validate_dynamic_mtp_correctness_evidence() {
+    local evidence_file=$1 harness_path=$2 harness_sha expected_ids
+    harness_sha=$(metal_llm_sha256 "$harness_path") || return 1
+    expected_ids=$(metal_llm_dynamic_mtp_expected_correctness_ids) || return 1
+    jq -e --arg sha "$harness_sha" --argjson expected "$expected_ids" '
+      .model_id == "qwen3.8-flash-next" and .suite_id == "dynamic-mtp-acceptance" and
+      .benchmark_mode == "endpoint" and .provenance.repository.clean == true and
+      .provenance.suite.sha256 == $sha and
+      ([.runs[].id] | sort) == ($expected | sort) and
+      ([.runs[].id] | unique | length) == (.runs | length)
+    ' "$evidence_file" >/dev/null
 }
 
 policies=(on off dynamic)
@@ -93,7 +121,7 @@ metal_llm_performance_within_tolerance() {
 
 metal_llm_performance_self_test() {
     local statistics selected artifact_fixture on_artifacts off_artifacts dynamic_artifacts
-    local fail_fast_output fail_fast_rc
+    local fail_fast_output fail_fast_rc correctness_fixture correctness_ids correctness_sha
     statistics=$(metal_llm_performance_statistics '[40,42,44,46,48]') || return 1
     jq -e '.mean == 44 and ((.sample_sd - 3.1622776601683795) | fabs) < 0.000000001' \
       <<< "$statistics" >/dev/null || return 1
@@ -111,6 +139,30 @@ metal_llm_performance_self_test() {
       '{"speculative":false,"speculative_policy":"dynamic","effective_prompt_tokens":32769,"speculative_threshold":32768}') || \
         return 1
     [[ "$selected" == false ]] || return 1
+    correctness_fixture=$(mktemp "${TMPDIR:-/tmp}/metal-llm-correctness-evidence.XXXXXX") || return 1
+    correctness_ids=$(metal_llm_dynamic_mtp_expected_correctness_ids) || return 1
+    correctness_sha=$(metal_llm_sha256 "$root/tests/integration/test_dynamic_mtp.sh") || return 1
+    jq -cn --arg sha "$correctness_sha" --argjson ids "$correctness_ids" '
+      {
+        model_id: "qwen3.8-flash-next", suite_id: "dynamic-mtp-acceptance",
+        benchmark_mode: "endpoint", provenance: {repository: {clean: true}, suite: {sha256: $sha}},
+        runs: [$ids[] | {id: .}]
+      }
+    ' > "$correctness_fixture" || return 1
+    metal_llm_validate_dynamic_mtp_correctness_evidence \
+      "$correctness_fixture" "$root/tests/integration/test_dynamic_mtp.sh" || return 1
+    jq 'del(.runs[-1])' "$correctness_fixture" > "$correctness_fixture.part" || return 1
+    if metal_llm_validate_dynamic_mtp_correctness_evidence \
+      "$correctness_fixture.part" "$root/tests/integration/test_dynamic_mtp.sh"; then
+        return 1
+    fi
+    jq '.provenance.suite.sha256 = ("f" * 64)' "$correctness_fixture" > \
+      "$correctness_fixture.part" || return 1
+    if metal_llm_validate_dynamic_mtp_correctness_evidence \
+      "$correctness_fixture.part" "$root/tests/integration/test_dynamic_mtp.sh"; then
+        return 1
+    fi
+    rm -f -- "$correctness_fixture" "$correctness_fixture.part"
     print -- 'dynamic-MTP performance self-test: PASS'
     artifact_fixture='[{"id":"model"},{"id":"mtp"}]'
     on_artifacts=$(metal_llm_performance_policy_artifacts on "$artifact_fixture" mtp) || return 1
@@ -131,6 +183,7 @@ metal_llm_performance_self_test() {
     print -- 'performance fail-fast self-test: PASS'
     whence -w metal_llm_performance_checkpoint_open >/dev/null || return 1
     whence -w metal_llm_performance_checkpoint_publish_run >/dev/null || return 1
+    whence -w metal_llm_performance_checkpoint_matches_published_runs >/dev/null || return 1
     print -- 'performance checkpoint integration self-test: PASS'
 }
 
@@ -173,26 +226,28 @@ hardware_manifest="$root/manifests/hardware/$hardware_id.json"
 collector_path="$root/tests/integration/test_dynamic_mtp_performance.sh"
 checkpoint_library_path="$root/lib/performance-checkpoint.zsh"
 integration_evidence="$root/.lab/task6-evidence/integration-acceptance.json"
+correctness_harness="$root/tests/integration/test_dynamic_mtp.sh"
+allocation_evidence="$root/.lab/task6-evidence/accepted-auto-allocation-observation.json"
+allocation_server_log="$root/.lab/task6-evidence/accepted-auto-allocation-server.log"
 [[ -f "$model_manifest" && -f "$runtime_manifest" && -f "$hardware_manifest" ]] || \
     fail 'required manifests are missing'
 [[ -f "$integration_evidence" && ! -L "$integration_evidence" ]] || \
     fail 'validated correctness evidence is required before performance collection'
+[[ -f "$allocation_evidence" && ! -L "$allocation_evidence" && \
+   -f "$allocation_server_log" && ! -L "$allocation_server_log" ]] || \
+    fail 'validated accepted-allocation evidence and server log are required before performance collection'
 metal_llm_validate_model_manifest "$model_manifest" "$model_id" || fail 'model manifest is invalid'
 metal_llm_validate_runtime_manifest "$runtime_manifest" "$runtime_id" || fail 'runtime manifest is invalid'
 metal_llm_validate_result "$integration_evidence" 'staged dynamic-MTP correctness evidence' || \
     fail 'staged correctness evidence is invalid'
-jq -e '
-  .model_id == "qwen3.8-flash-next" and .suite_id == "dynamic-mtp-acceptance" and
-  .benchmark_mode == "endpoint" and .provenance.repository.clean == true and
-  (.runs | length) == 19 and
-  ([.runs[].id] | index("boundary-32767") != null and index("boundary-32768") != null and
-    index("boundary-32769") != null and index("concurrent-short") != null and
-    index("concurrent-long") != null and index("vision-cross-expanded") != null)
-' "$integration_evidence" >/dev/null || fail 'staged correctness evidence is incomplete'
+metal_llm_validate_dynamic_mtp_correctness_evidence "$integration_evidence" "$correctness_harness" || \
+    fail 'staged correctness evidence has an incomplete case set or stale harness identity'
 
 collector_sha=$(metal_llm_sha256 "$collector_path")
 checkpoint_library_sha=$(metal_llm_sha256 "$checkpoint_library_path")
 integration_evidence_sha=$(metal_llm_sha256 "$integration_evidence")
+correctness_harness_sha=$(metal_llm_sha256 "$correctness_harness")
+allocation_evidence_sha=$(metal_llm_sha256 "$allocation_evidence")
 model_manifest_sha=$(metal_llm_sha256 "$model_manifest")
 runtime_manifest_sha=$(metal_llm_sha256 "$runtime_manifest")
 hardware_manifest_sha=$(metal_llm_sha256 "$hardware_manifest")
@@ -202,6 +257,17 @@ metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-server ||
     fail 'verified tuned build and receipt are required'
 [[ "$METAL_LLM_VERIFIED_RUNTIME_MANIFEST_SHA256" == "$runtime_manifest_sha" ]] || \
     fail 'verified runtime manifest identity changed'
+allocation_observation=$(jq -c . "$allocation_evidence") || \
+    fail 'accepted-allocation evidence is malformed'
+metal_llm_validate_accepted_allocation_observation "$allocation_observation" || \
+    fail 'accepted-allocation evidence is invalid'
+allocation_log_sha=$(metal_llm_sha256 "$allocation_server_log") || \
+    fail 'accepted-allocation server log could not be hashed'
+jq -e --arg log_sha "$allocation_log_sha" \
+  --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" '
+  .identity.server_log_sha256 == $log_sha and .identity.executable_sha256 == $executable_sha
+' "$allocation_evidence" >/dev/null || \
+    fail 'accepted-allocation evidence does not match its server log and runtime executable'
 metal_llm_resolve_profile "$model_manifest" auto on '' '' '' || \
     fail 'auto profile could not be resolved for artifact verification'
 artifact_dir="$root/.lab/artifacts/$model_id"
@@ -236,6 +302,8 @@ checkpoint_identity=$(jq -cn \
   --arg collector_sha "$collector_sha" --arg checkpoint_library_sha "$checkpoint_library_sha" \
   --arg hardware_manifest_sha "$hardware_manifest_sha" --arg model_manifest_sha "$model_manifest_sha" \
   --arg runtime_manifest_sha "$runtime_manifest_sha" --arg correctness_sha "$integration_evidence_sha" \
+  --arg correctness_harness_sha "$correctness_harness_sha" \
+  --arg allocation_evidence_sha "$allocation_evidence_sha" \
   --arg hardware "$hardware_id" --arg chip "$METAL_LLM_DETECTED_CHIP" \
   --argjson memory "$METAL_LLM_DETECTED_MEMORY_BYTES" --argjson system "$system_provenance" \
   --arg runtime "$runtime_id" --arg runtime_revision "$METAL_LLM_VERIFIED_RUNTIME_REVISION" \
@@ -256,6 +324,8 @@ checkpoint_identity=$(jq -cn \
       runtime_sha256: $runtime_manifest_sha
     },
     correctness_evidence_sha256: $correctness_sha,
+    correctness_harness_sha256: $correctness_harness_sha,
+    accepted_allocation_evidence_sha256: $allocation_evidence_sha,
     hardware: {id: $hardware, chip: $chip, unified_memory_bytes: $memory},
     system: $system,
     runtime: {
@@ -278,7 +348,7 @@ checkpoint_identity=$(jq -cn \
     }
   }
 ') || fail 'could not construct immutable performance checkpoint identity'
-metal_llm_performance_checkpoint_open "$checkpoint" "$checkpoint_identity" || \
+metal_llm_performance_checkpoint_open "$checkpoint" "$checkpoint_identity" "$root" || \
     fail 'performance checkpoint is not safely resumable'
 if [[ "$result_already_published" == true ]]; then
     metal_llm_validate_result "$result_path" 'published dynamic-MTP performance result' || \
@@ -293,6 +363,10 @@ if [[ "$result_already_published" == true ]]; then
     ' "$result_path" >/dev/null || fail 'published result does not match its recoverable checkpoint'
     [[ "$METAL_LLM_PERFORMANCE_CHECKPOINT_RUN_COUNT" == 105 ]] || \
         fail 'published result checkpoint does not retain all 105 samples'
+    metal_llm_performance_checkpoint_matches_published_runs "$checkpoint" "$root" "$result_path" || \
+        fail 'published result rows differ from the recoverable checkpoint'
+    metal_llm_validate_dynamic_mtp_derived_data "$result_path" || \
+        fail 'published result gates differ from its retained sample derivation'
     published_performance_passed=$(jq -r '.interpretation.performance_gate_passed' "$result_path")
     retire_published_checkpoint "$checkpoint" || exit 1
     print -- "dynamic-MTP performance: recovered already-published evidence: ${result_path#$root/}"
@@ -305,7 +379,7 @@ mkdir -p -- "$checkpoint/logs" "$checkpoint/responses"
 assembly=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-dynamic-mtp-assembly.XXXXXX")
 run_buffer="$assembly/runs.jsonl"
 log_buffer="$assembly/logs.jsonl"
-metal_llm_performance_checkpoint_runs "$checkpoint" > "$run_buffer" || \
+metal_llm_performance_checkpoint_runs "$checkpoint" "$root" > "$run_buffer" || \
     fail 'could not rehydrate retained performance samples'
 : > "$log_buffer"
 print -- "dynamic-MTP performance: checkpoint resumed=$METAL_LLM_PERFORMANCE_CHECKPOINT_RESUMED retained=$METAL_LLM_PERFORMANCE_CHECKPOINT_RUN_COUNT/105"
@@ -616,9 +690,10 @@ record_request() {
     envelope=$(jq -cn --arg session "$server_session_id" --argjson run "$run_json" \
       '{schema_version: 1, server_session_id: $session, run: $run}') || \
         fail "$case_id checkpoint envelope could not be assembled"
-    metal_llm_performance_checkpoint_publish_run "$checkpoint" "$envelope" || \
+    metal_llm_performance_checkpoint_publish_run "$checkpoint" "$envelope" "$root" || \
         fail "$case_id sample could not be atomically retained"
-    print -r -- "$run_json" >> "$run_buffer" || fail "$case_id assembly buffer could not be updated"
+    jq -c --arg session "$server_session_id" '. + {server_session_id: $session}' \
+      <<< "$run_json" >> "$run_buffer" || fail "$case_id assembly buffer could not be updated"
     print -- "dynamic-MTP performance: sample policy=$policy effective=$effective sample=$sample/$samples_per_cell route=$selected generation=$generation_speed"
 }
 
@@ -689,12 +764,12 @@ for policy in "${policies[@]}"; do
 done
 
 expected_run_count=$(( ${#policies[@]} * ${#effective_lengths[@]} * samples_per_cell ))
-metal_llm_performance_checkpoint_open "$checkpoint" "$checkpoint_identity" || \
+metal_llm_performance_checkpoint_open "$checkpoint" "$checkpoint_identity" "$root" || \
     fail 'completed checkpoint failed final strict validation'
 [[ "$METAL_LLM_PERFORMANCE_CHECKPOINT_RUN_COUNT" == "$expected_run_count" ]] || \
     fail "checkpoint retains $METAL_LLM_PERFORMANCE_CHECKPOINT_RUN_COUNT samples, expected $expected_run_count"
 run_buffer_part=$(mktemp "$assembly/runs.jsonl.part.XXXXXX")
-metal_llm_performance_checkpoint_runs "$checkpoint" > "$run_buffer_part" || \
+metal_llm_performance_checkpoint_runs "$checkpoint" "$root" > "$run_buffer_part" || \
     fail 'could not rehydrate the final retained sample set'
 mv -- "$run_buffer_part" "$run_buffer"
 actual_run_count=$(wc -l < "$run_buffer" | tr -d ' ')
@@ -782,6 +857,9 @@ jq -s \
   --arg receipt_sha "$common_receipt_sha" --arg executable_sha "$common_executable_sha" \
   --arg model_manifest_sha "$model_manifest_sha" --argjson artifacts "$common_artifacts" \
   --arg collector_sha "$collector_sha" --arg integration_sha "$integration_evidence_sha" \
+  --arg correctness_harness_sha "$correctness_harness_sha" \
+  --arg allocation_evidence_sha "$allocation_evidence_sha" \
+  --argjson allocation_observation "$allocation_observation" \
   --arg checkpoint_identity_sha "$checkpoint_identity_sha" \
   --arg collection_started "$collection_started" --arg collection_completed "$collection_completed" \
   --argjson lengths "$(printf '%s\n' "${effective_lengths[@]}" | jq -s 'map(tonumber)')" \
@@ -832,6 +910,11 @@ jq -s \
       collection_completed: $collection_completed,
       checkpoint_identity_sha256: $checkpoint_identity_sha,
       correctness_evidence_sha256: $integration_sha,
+      correctness_harness_sha256: $correctness_harness_sha,
+      accepted_allocation_observation: {
+        evidence_sha256: $allocation_evidence_sha,
+        observation: $allocation_observation
+      },
       server_log_sha256: $server_logs,
       statistics: $statistics,
       dynamic_fixed_comparisons: $comparisons
@@ -842,6 +925,8 @@ jq -s \
     },
     validations: [
       {check: "Dynamic-MTP correctness and isolation", result: ("Pass; staged evidence SHA-256 " + $integration_sha)},
+      {check: "Accepted default 262,144-token allocation memory observation",
+       result: "Pass; sanitized RSS and system memory pressure captured"},
       {check: "Complete 21-cell performance matrix", result: "Pass; one warm-up and five measured samples per cell"},
       {check: "Dynamic-to-corresponding-fixed 5% generation-throughput tolerance",
        result: (if $performance_passed then "Pass" else "Fail" end)}
@@ -857,7 +942,15 @@ metal_llm_validate_result "$result_part" 'pending dynamic-MTP performance result
     rm -f -- "$result_part"
     fail 'combined performance evidence failed schema/privacy/route validation'
 }
+metal_llm_performance_checkpoint_matches_published_runs "$checkpoint" "$root" "$result_part" || {
+    rm -f -- "$result_part"
+    fail 'assembled result rows differ from the completed checkpoint'
+}
 metal_llm_publish_benchmark_result "$result_part" "$result_path" || exit 1
+metal_llm_performance_checkpoint_matches_published_runs "$checkpoint" "$root" "$result_path" || \
+    fail 'published result rows differ from the completed checkpoint; preserving checkpoint'
+metal_llm_validate_dynamic_mtp_derived_data "$result_path" || \
+    fail 'published result gates differ from retained samples; preserving checkpoint'
 retire_published_checkpoint "$checkpoint" || exit 1
 print -- "dynamic-MTP performance: wrote validated evidence: ${result_path#$root/}"
 if [[ "$performance_passed" != true ]]; then
