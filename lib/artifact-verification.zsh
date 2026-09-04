@@ -262,7 +262,8 @@ metal_llm_artifact_receipt_path_status() {
 metal_llm_artifact_receipt_content_valid() {
     local receipt_path=$1 model_id=$2 manifest_sha=$3 artifact_id=$4 artifact_bytes=$5
     local artifact_sha=$6 canonical_path=$7 fingerprint=$8
-    local recorded_binding recomputed_json recomputed_binding
+    local receipt_snapshot recorded_binding recomputed_json recomputed_binding
+    receipt_snapshot=$(<"$receipt_path") || return 1
     jq -e \
       --arg model_id "$model_id" \
       --arg manifest_sha "$manifest_sha" \
@@ -285,9 +286,10 @@ metal_llm_artifact_receipt_content_valid() {
       (.binding_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
       (.full_verified_at | type == "string" and
         test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
-    ' "$receipt_path" >/dev/null 2>&1 || return 1
-    recorded_binding=$(jq -er '.binding_sha256' "$receipt_path") || return 1
-    recomputed_json=$(jq -cS 'del(.binding_sha256, .full_verified_at)' "$receipt_path") || return 1
+    ' <<< "$receipt_snapshot" >/dev/null 2>&1 || return 1
+    recorded_binding=$(jq -er '.binding_sha256' <<< "$receipt_snapshot") || return 1
+    recomputed_json=$(jq -cS 'del(.binding_sha256, .full_verified_at)' \
+      <<< "$receipt_snapshot") || return 1
     recomputed_binding=$(metal_llm_artifact_sha256_text "$recomputed_json") || return 1
     [[ "$recorded_binding" == "$recomputed_binding" ]] || return 1
     print -r -- "$recorded_binding"

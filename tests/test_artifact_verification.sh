@@ -133,6 +133,52 @@ inventory_tree() {
     done < <(/usr/bin/find "$tree_root" -print | /usr/bin/sort)
 }
 
+# An atomic receipt replacement between validator reads must not mix generations.
+receipt_generation_a="$temporary_root/receipt-generation-a.json"
+receipt_generation_b="$temporary_root/receipt-generation-b.json"
+receipt_generation_b_unsigned="$temporary_root/receipt-generation-b-unsigned.json"
+/bin/cp "$receipt_path" "$receipt_generation_a"
+generation_a_binding=$(jq -r '.binding_sha256' "$receipt_generation_a")
+jq '.canonical_path += ".stale-generation"' "$receipt_generation_a" > \
+  "$receipt_generation_b_unsigned"
+generation_b_binding_json=$(jq -cS 'del(.binding_sha256, .full_verified_at)' \
+  "$receipt_generation_b_unsigned")
+generation_b_binding=$(print -rn -- "$generation_b_binding_json" | /usr/bin/shasum -a 256)
+generation_b_binding=${generation_b_binding%% *}
+jq --arg binding "$generation_b_binding" '.binding_sha256 = $binding' \
+  "$receipt_generation_b_unsigned" > "$receipt_generation_b"
+/bin/chmod 600 "$receipt_generation_b"
+
+real_jq=$(command -v jq)
+receipt_open_log="$temporary_root/receipt-open.log"
+receipt_swap_marker="$temporary_root/receipt-swapped"
+: > "$receipt_open_log"
+/bin/cp "$receipt_generation_b" "$receipt_generation_b.swap"
+jq() {
+    local last_argument=${@[-1]} command_result
+    "$real_jq" "$@"
+    command_result=$?
+    if [[ "$last_argument" == "$receipt_path" ]]; then
+        print -r -- "$last_argument" >> "$receipt_open_log"
+        if [[ ! -e "$receipt_swap_marker" ]]; then
+            : > "$receipt_swap_marker"
+            /bin/mv -f "$receipt_generation_b.swap" "$receipt_path"
+        fi
+    fi
+    return "$command_result"
+}
+: > "$artifact_hash_log"
+metal_llm_artifact_verification_begin cached 0
+metal_llm_verify_model_artifact "$manifest" fixture-model "$artifact_dir" model-a
+interleaved_binding=${METAL_LLM_ARTIFACT_BINDINGS[model-a]}
+receipt_open_count=$(wc -l < "$receipt_open_log" | tr -d ' ')
+unfunction jq
+/bin/cp "$receipt_generation_a" "$receipt_path"
+/bin/chmod 600 "$receipt_path"
+[[ "$interleaved_binding" == "$generation_a_binding" ]] ||
+  fail 'receipt validation mixed generation-A fields with generation-B binding'
+(( receipt_open_count <= 1 )) || fail 'receipt validation reopened one logical receipt snapshot'
+
 # Same-size content changes must miss and hash rather than trusting the receipt.
 receipt_before_failure=$(metal_llm_sha256 "$receipt_path")
 print -n -- 'omega' > "$artifact_dir/model-a.gguf"
@@ -336,6 +382,17 @@ second_refresh_pid=$!
 wait "$first_refresh_pid"
 wait "$second_refresh_pid"
 jq empty "$receipt_path" || fail 'concurrent refresh left partial JSON'
+concurrent_binding_json=$(jq -cS 'del(.binding_sha256, .full_verified_at)' "$receipt_path")
+concurrent_binding=$(print -rn -- "$concurrent_binding_json" | /usr/bin/shasum -a 256)
+concurrent_binding=${concurrent_binding%% *}
+jq -e --arg binding "$concurrent_binding" '
+  (keys | sort) == (["schema_version", "model_id", "model_manifest_sha256", "artifact_id",
+    "artifact_bytes", "artifact_sha256", "canonical_path", "file", "binding_sha256",
+    "full_verified_at"] | sort) and
+  (.file | keys | sort) == (["device_id", "inode", "size_bytes", "birth_time",
+    "change_time", "modify_time"] | sort) and
+  .binding_sha256 == $binding
+' "$receipt_path" >/dev/null || fail 'concurrent refresh left an invalid exact receipt'
 [[ ! -e "$receipt_path.part" ]] || fail 'concurrent refresh left fixed .part receipt'
 leftover_receipt_temps=("$model_receipt_root"/.model-a.json.*(N))
 (( ${#leftover_receipt_temps} == 0 )) || fail 'concurrent refresh left unique temporary receipt'
