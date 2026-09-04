@@ -181,16 +181,6 @@ if unsafe_match=$(rg -n "$private_path_pattern|(^|[\"_])(api[_-]?key|token|passw
     fail "committed result or documentation contains a private path or secret-like key:\n$unsafe_match"
 fi
 
-generated=$($cli report)
-assert_contains "$generated" '| 99,405 | 34.4737 | 21.2468 | 160/188 |'
-assert_contains "$generated" '| 28,705 | 40.755 | 0.567 | 41.279 | 3.082 | +1.29% |'
-assert_contains "$generated" '23.80 tok/s'
-assert_contains "$generated" 'approximately 33.6K'
-assert_contains "$(<"$dynamic_summary")" '| 32,767 | on | 44.778118828762345 | 44.2195854504937 | +1.2630904893804473% | Pass |'
-assert_contains "$(<"$dynamic_summary")" '| 32,769 | off | 43.14954799180947 | 41.1303088964011 | +4.909370120449208% | Pass |'
-assert_contains "$(<"$dynamic_summary")" '| 98,304 | off | 40.313009802029555 | 39.461672458980104 | +2.1573777541598282% | Pass |'
-$cli report --check >/dev/null
-
 tracked_schema_one_summaries=()
 for tracked_result in "${tracked_schema_one_results[@]}"; do
     tracked_summary=$(jq -r '.summary.output // empty' "$source_root/$tracked_result")
@@ -204,7 +194,20 @@ for tracked_summary in "${tracked_schema_one_summaries[@]}"; do
         fail "schema-1 summary is not tracked: $tracked_summary"
     schema_one_summary_sha_before[$tracked_summary]=$(shasum -a 256 "$source_root/$tracked_summary" | awk '{print $1}')
 done
-$cli report >/dev/null
+
+generated=$($cli report)
+assert_contains "$generated" '| 99,405 | 34.4737 | 21.2468 | 160/188 |'
+assert_contains "$generated" '| 28,705 | 40.755 | 0.567 | 41.279 | 3.082 | +1.29% |'
+assert_contains "$generated" '23.80 tok/s'
+assert_contains "$generated" 'approximately 33.6K'
+assert_contains "$(<"$dynamic_summary")" '| 32,767 | on | 44.778118828762345 | 44.2195854504937 | +1.2630904893804473% | Pass |'
+assert_contains "$(<"$dynamic_summary")" '| 32,769 | off | 43.14954799180947 | 41.1303088964011 | +4.909370120449208% | Pass |'
+assert_contains "$(<"$dynamic_summary")" '| 98,304 | off | 40.313009802029555 | 39.461672458980104 | +2.1573777541598282% | Pass |'
+for tracked_summary in "${tracked_schema_one_summaries[@]}"; do
+    [[ "$(shasum -a 256 "$source_root/$tracked_summary" | awk '{print $1}')" == \
+       "${schema_one_summary_sha_before[$tracked_summary]}" ]] ||
+        fail "schema-1 summary changed during report generation: $tracked_summary"
+done
 $cli report --check >/dev/null
 for tracked_summary in "${tracked_schema_one_summaries[@]}"; do
     [[ "$(shasum -a 256 "$source_root/$tracked_summary" | awk '{print $1}')" == \
@@ -343,6 +346,26 @@ assert_versioned_schema_invalid "$schema_two_result" \
 assert_versioned_schema_invalid "$schema_two_result" \
   '.provenance.artifact_verification.effective_mode = "full"' \
   'schema 2 with impossible verification counters'
+assert_versioned_schema_invalid "$schema_two_result" \
+  '.provenance.artifact_verification.requested_mode = "full"' \
+  'schema 2 with contradictory requested and effective modes'
+assert_versioned_schema_invalid "$schema_two_result" \
+  '.provenance.artifact_verification.cache_misses = 0' \
+  'schema 2 mixed verification without a cache miss'
+
+assert_report_verification_invalid() {
+    local filter=$1
+    local description=$2
+    jq "$filter" "$schema_two_result" > "$fixture_root/results/raw/result.json"
+    if verification_output=$($fixture_cli report --check 2>&1); then
+        fail "report accepted impossible verification counters: $description"
+    fi
+    assert_contains "$verification_output" 'invalid artifact verification provenance'
+}
+
+assert_report_verification_invalid \
+  '.provenance.artifact_verification.cache_misses = 2' \
+  'fewer full hashes than cache misses'
 
 schema_two_summary_result="$temporary_root/schema-two-summary-result.json"
 jq --slurpfile route "$route_result" '

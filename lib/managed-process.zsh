@@ -62,12 +62,16 @@ metal_llm_validate_managed_identity() {
         ([.cache_hits, .cache_misses, .full_hashes] |
           all(type == "number" and . >= 0 and floor == .)) and
         (.receipt_set_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
-        (if .effective_mode == "cached" then
+        (if .requested_mode == "full" then
+          .effective_mode == "full" and .cache_hits == 0 and .cache_misses == 0 and
+          .full_hashes > 0
+        elif .effective_mode == "cached" then
           .cache_hits > 0 and .cache_misses == 0 and .full_hashes == 0
         elif .effective_mode == "full" then
-          .cache_hits == 0 and .full_hashes > 0
+          .cache_hits == 0 and .cache_misses > 0 and .full_hashes >= .cache_misses
         else
-          .effective_mode == "mixed" and .cache_hits > 0 and .full_hashes > 0
+          .effective_mode == "mixed" and .cache_hits > 0 and .cache_misses > 0 and
+          .full_hashes >= .cache_misses
         end)) and
       (.host | type == "string" and length > 0) and
       (.port | type == "number" and . >= 1 and . <= 65535 and floor == .)

@@ -103,13 +103,18 @@ metal_llm_validate_artifact_verification_provenance() {
         type == "number" and floor == . and . >= 0
       ) and
       ($verification.receipt_set_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
-      (if $verification.effective_mode == "cached" then
+      (if $verification.requested_mode == "full" then
+         $verification.effective_mode == "full" and $verification.cache_hits == 0 and
+         $verification.cache_misses == 0 and $verification.full_hashes >= 1
+       elif $verification.effective_mode == "cached" then
          $verification.cache_hits >= 1 and $verification.cache_misses == 0 and
          $verification.full_hashes == 0
        elif $verification.effective_mode == "full" then
-         $verification.cache_hits == 0 and $verification.full_hashes >= 1
+         $verification.cache_hits == 0 and $verification.cache_misses >= 1 and
+         $verification.full_hashes >= $verification.cache_misses
        else
-         $verification.cache_hits >= 1 and $verification.full_hashes >= 1
+         $verification.cache_hits >= 1 and $verification.cache_misses >= 1 and
+         $verification.full_hashes >= $verification.cache_misses
        end)
     ' "$result_file" >/dev/null 2>&1
 }

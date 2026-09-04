@@ -441,9 +441,12 @@ for identity_mutation in \
     '.artifact_verification.requested_mode = "other"' \
     '.artifact_verification.effective_mode = "other"' \
     '.artifact_verification.receipt_set_sha256 = "BAD"' \
+    '.artifact_verification.requested_mode = "full"' \
     '.artifact_verification.effective_mode = "cached"' \
+    '.artifact_verification.cache_misses = 0' \
     '.artifact_verification.effective_mode = "full" | .artifact_verification.full_hashes = 0' \
-    '.artifact_verification.effective_mode = "mixed" | .artifact_verification.cache_hits = 0'; do
+    '.artifact_verification.effective_mode = "mixed" | .artifact_verification.cache_hits = 0' \
+    '.artifact_verification.full_hashes = 2 | .artifact_verification.cache_misses = 3'; do
     "$real_jq" --argjson pid "$invalid_identity_pid" --arg started "fixture-start-$invalid_identity_pid" \
       "$identity_mutation | .pid = \$pid | .process_started_at = \$started" \
       "$temporary_root/valid-identity.json" > "$lease_record"
