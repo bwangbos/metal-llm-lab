@@ -24,7 +24,21 @@ source "$root/tests/integration/dynamic_mtp_helpers.zsh"
 
 fail() {
     print -u2 -- "dynamic-MTP performance: $1"
-    return 1
+    exit 1
+}
+
+metal_llm_performance_policy_artifacts() {
+    local policy=$1 all_artifacts=$2 mtp_artifact_id=$3
+    jq -ce --arg policy "$policy" --arg mtp "$mtp_artifact_id" '
+      select(type == "array" and length > 0 and
+        all(.[]; type == "object" and (.id | type == "string" and length > 0))) |
+      . as $artifacts |
+      if $policy == "off" then
+        (map(select(.id != $mtp))) as $without_mtp |
+        select(($without_mtp | length) == (($artifacts | length) - 1)) | $without_mtp
+      elif $policy == "on" or $policy == "dynamic" then .
+      else error("invalid performance policy") end
+    ' <<< "$all_artifacts"
 }
 
 retire_published_checkpoint() {
@@ -78,7 +92,8 @@ metal_llm_performance_within_tolerance() {
 }
 
 metal_llm_performance_self_test() {
-    local statistics selected
+    local statistics selected artifact_fixture on_artifacts off_artifacts dynamic_artifacts
+    local fail_fast_output fail_fast_rc
     statistics=$(metal_llm_performance_statistics '[40,42,44,46,48]') || return 1
     jq -e '.mean == 44 and ((.sample_sd - 3.1622776601683795) | fabs) < 0.000000001' \
       <<< "$statistics" >/dev/null || return 1
@@ -97,6 +112,23 @@ metal_llm_performance_self_test() {
         return 1
     [[ "$selected" == false ]] || return 1
     print -- 'dynamic-MTP performance self-test: PASS'
+    artifact_fixture='[{"id":"model"},{"id":"mtp"}]'
+    on_artifacts=$(metal_llm_performance_policy_artifacts on "$artifact_fixture" mtp) || return 1
+    off_artifacts=$(metal_llm_performance_policy_artifacts off "$artifact_fixture" mtp) || return 1
+    dynamic_artifacts=$(metal_llm_performance_policy_artifacts dynamic "$artifact_fixture" mtp) || return 1
+    jq -e 'length == 2 and .[1].id == "mtp"' <<< "$on_artifacts" >/dev/null || return 1
+    jq -e 'length == 1 and .[0].id == "model"' <<< "$off_artifacts" >/dev/null || return 1
+    [[ "$dynamic_artifacts" == "$on_artifacts" ]] || return 1
+    if metal_llm_performance_policy_artifacts invalid "$artifact_fixture" mtp >/dev/null 2>&1; then
+        return 1
+    fi
+    print -- 'performance policy artifact self-test: PASS'
+    set +e
+    fail_fast_output=$( (fail 'fail-fast sentinel'; print -- 'false healthy output') 2>/dev/null)
+    fail_fast_rc=$?
+    set -e
+    [[ "$fail_fast_rc" == 1 && -z "$fail_fast_output" ]] || return 1
+    print -- 'performance fail-fast self-test: PASS'
     whence -w metal_llm_performance_checkpoint_open >/dev/null || return 1
     whence -w metal_llm_performance_checkpoint_publish_run >/dev/null || return 1
     print -- 'performance checkpoint integration self-test: PASS'
@@ -176,6 +208,8 @@ artifact_dir="$root/.lab/artifacts/$model_id"
 metal_llm_profile_artifact_identities "$model_manifest" "$artifact_dir" "$METAL_LLM_EFFECTIVE_PROFILE" || \
     fail 'all acceptance artifacts must already exist and match their manifest checksums'
 verified_artifacts=$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES
+mtp_artifact_id=$(jq -er '.capabilities.mtp.artifact_id' "$model_manifest") || \
+    fail 'model manifest has no MTP artifact identity'
 
 result_dir="$root/results/raw"
 result_path="$result_dir/2026-09-03-qwen38-dynamic-mtp.json"
@@ -387,7 +421,7 @@ server_session_id=''
 
 start_policy_server() {
     local policy=$1 identity_record candidate_pid candidate_started candidate_owner_token session_number
-    local mtp_threshold_json=null
+    local mtp_threshold_json=null expected_server_artifacts
     [[ "$policy" == dynamic ]] && mtp_threshold_json=$threshold
     session_number=1
     while [[ -e "$checkpoint/logs/$policy-session-$session_number.log" || \
@@ -451,10 +485,13 @@ start_policy_server() {
     curl "${health_arguments[@]}" "http://$host:$port/health" >/dev/null 2>&1 || \
         fail "timed out waiting for $policy server health"
 
+    expected_server_artifacts=$(metal_llm_performance_policy_artifacts \
+      "$policy" "$common_artifacts" "$mtp_artifact_id") || \
+        fail "$policy expected artifact identity could not be derived"
     jq -e --arg revision "$common_runtime_revision" --arg tree "$common_runtime_tree" \
       --arg manifest "$common_runtime_manifest_sha" --arg receipt "$common_receipt_sha" \
       --arg executable "$common_executable_sha" --arg model_manifest "$model_manifest_sha" \
-      --argjson artifacts "$common_artifacts" '
+      --argjson artifacts "$expected_server_artifacts" '
       .runtime_revision == $revision and .runtime_tree_sha == $tree and
       .runtime_manifest_sha256 == $manifest and .build_receipt_sha256 == $receipt and
       .executable_sha256 == $executable and .model_manifest_sha256 == $model_manifest and

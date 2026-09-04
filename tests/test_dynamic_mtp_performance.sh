@@ -16,7 +16,7 @@ skip_output=$(zsh "$collector")
     fail 'performance collector does not skip explicitly by default'
 
 self_test_output=$(METAL_LLM_PERFORMANCE=1 zsh "$collector" --self-test)
-[[ "$self_test_output" == $'dynamic-MTP performance self-test: PASS\nperformance checkpoint integration self-test: PASS' ]] || \
+[[ "$self_test_output" == $'dynamic-MTP performance self-test: PASS\nperformance policy artifact self-test: PASS\nperformance fail-fast self-test: PASS\nperformance checkpoint integration self-test: PASS' ]] || \
     fail 'performance collector self-test failed'
 
 for required_text in \
