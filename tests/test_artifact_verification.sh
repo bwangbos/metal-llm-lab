@@ -502,6 +502,22 @@ lexical_expected_sha=$(metal_llm_artifact_sha256_text "$lexical_receipt_set")
 [[ "$(jq -r '.receipt_set_sha256' <<< "$METAL_LLM_ARTIFACT_VERIFICATION_JSON")" == \
    "$lexical_expected_sha" ]] || fail 'receipt-set IDs were not ordered byte-lexically'
 
+# Receipt-set construction must fail closed when its canonical sort fails.
+original_sort_ids=${functions[metal_llm_artifact_sort_ids]-}
+metal_llm_artifact_sort_ids() {
+    return 1
+}
+metal_llm_artifact_verification_begin full 0
+metal_llm_verify_model_artifact "$manifest" fixture-model "$artifact_dir" model-a
+if metal_llm_artifact_verification_finalize 1 >/dev/null 2>&1; then
+    fail 'receipt-set finalization masked a canonical sort failure'
+fi
+[[ -z "${METAL_LLM_ARTIFACT_VERIFICATION_JSON:-}" &&
+   -z "${METAL_LLM_ARTIFACT_RECEIPT_SET_SHA256:-}" ]] ||
+  fail 'failed receipt-set finalization exported provenance'
+unfunction metal_llm_artifact_sort_ids
+[[ -z "$original_sort_ids" ]] || functions[metal_llm_artifact_sort_ids]=$original_sort_ids
+
 # A single cached invocation reports mixed when one exact receipt hits and one stale receipt hashes.
 model_b_receipt="$fixture_root/.lab/verification/artifacts/fixture-model/model-b.json"
 rewrite_model_a_receipt_path=$receipt_path

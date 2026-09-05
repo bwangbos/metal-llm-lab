@@ -724,6 +724,12 @@ metal_llm_artifact_effective_mode() {
     fi
 }
 
+# Keep canonical ordering behind one command boundary whose failure finalization
+# can propagate without accepting partial sort output.
+metal_llm_artifact_sort_ids() {
+    print -rl -- "$@" | LC_ALL=C /usr/bin/sort
+}
+
 metal_llm_artifact_verification_finalize() {
     local complete_set=$1 effective_mode artifact_id receipt_set='[]' receipt_set_sha
     typeset -a sorted_ids
@@ -747,7 +753,7 @@ metal_llm_artifact_verification_finalize() {
         metal_llm_die 'a complete artifact verification set cannot be empty'
         return 1
     }
-    sorted_ids=("${(@f)$(print -rl -- "${METAL_LLM_ARTIFACT_ORDER[@]}" | LC_ALL=C /usr/bin/sort)}")
+    sorted_ids=("${(@f)$(metal_llm_artifact_sort_ids "${METAL_LLM_ARTIFACT_ORDER[@]}")}") || return 1
     for artifact_id in "${sorted_ids[@]}"; do
         receipt_set=$(jq -cn --argjson receipt_set "$receipt_set" \
           --arg artifact_id "$artifact_id" \
