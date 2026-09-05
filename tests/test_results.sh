@@ -409,15 +409,34 @@ assert_schema_two_drift() {
     if schema_two_drift_output=$($fixture_cli report --check 2>&1); then
         fail "report --check accepted schema-2 provenance drift: $description"
     fi
+    assert_contains "$schema_two_drift_output" 'summary differs from generated output'
 }
 
-assert_schema_two_drift '.provenance.artifact_verification.requested_mode = "full"' \
+assert_schema_two_drift '
+  .provenance.artifact_verification |= (
+    .requested_mode = "full" |
+    .effective_mode = "full" |
+    .cache_hits = 0 |
+    .cache_misses = 0 |
+    .full_hashes = 1
+  )
+' \
   'requested verification mode changed'
-assert_schema_two_drift '.provenance.artifact_verification.effective_mode = "cached"' \
+assert_schema_two_drift '
+  .provenance.artifact_verification |= (
+    .effective_mode = "full" |
+    .cache_hits = 0
+  )
+' \
   'effective verification mode changed'
 assert_schema_two_drift '.provenance.artifact_verification.cache_hits = 2' \
   'cache-hit count changed'
-assert_schema_two_drift '.provenance.artifact_verification.cache_misses = 2' \
+assert_schema_two_drift '
+  .provenance.artifact_verification |= (
+    .cache_misses = 2 |
+    .full_hashes = 2
+  )
+' \
   'cache-miss count changed'
 assert_schema_two_drift '.provenance.artifact_verification.full_hashes = 2' \
   'full-hash count changed'

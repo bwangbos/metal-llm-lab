@@ -357,11 +357,13 @@ refresh_alpha_receipt
 # A dry-run miss against an absent verification tree must not create it.
 saved_metal_llm_root=$METAL_LLM_ROOT
 empty_receipt_root="$temporary_root/empty-receipt-root"
-/bin/mkdir "$empty_receipt_root"
+empty_artifact_dir="$empty_receipt_root/artifacts/fixture-model"
+/bin/mkdir -p "$empty_artifact_dir"
+/bin/cp "$artifact_dir/model-a.gguf" "$empty_artifact_dir/model-a.gguf"
 METAL_LLM_ROOT=$empty_receipt_root
 : > "$artifact_hash_log"
 metal_llm_artifact_verification_begin cached 1
-metal_llm_verify_model_artifact "$manifest" fixture-model "$artifact_dir" model-a
+metal_llm_verify_model_artifact "$manifest" fixture-model "$empty_artifact_dir" model-a
 metal_llm_artifact_verification_finalize 1
 [[ ! -e "$empty_receipt_root/.lab" ]] || fail 'dry-run cache miss created receipt tree'
 (( $(artifact_hash_count) == 1 )) || fail 'dry-run cache miss without tree did not hash'
@@ -470,6 +472,36 @@ metal_llm_artifact_verification_finalize 1
 reverse_set=$(jq -r '.receipt_set_sha256' <<< "$METAL_LLM_ARTIFACT_VERIFICATION_JSON")
 [[ "$forward_set" == "$reverse_set" ]] || fail 'reversed traversal changed receipt-set digest'
 
+# Canonical receipt-set ordering is byte-lexical, so model-10 precedes model-2.
+print -n -- 'two' > "$artifact_dir/model-2.gguf"
+print -n -- 'ten' > "$artifact_dir/model-10.gguf"
+model_2_sha=$(metal_llm_sha256 "$artifact_dir/model-2.gguf")
+model_10_sha=$(metal_llm_sha256 "$artifact_dir/model-10.gguf")
+lexical_manifest="$temporary_root/lexical-manifest.json"
+jq --arg model_2_sha "$model_2_sha" --arg model_10_sha "$model_10_sha" '
+  .artifacts += [
+    {id: "model-2", filename: "model-2.gguf", bytes: 3, sha256: $model_2_sha},
+    {id: "model-10", filename: "model-10.gguf", bytes: 3, sha256: $model_10_sha}
+  ]
+' "$manifest" > "$lexical_manifest"
+metal_llm_artifact_verification_begin full 0
+metal_llm_verify_model_artifact "$lexical_manifest" fixture-model "$artifact_dir" model-2
+metal_llm_verify_model_artifact "$lexical_manifest" fixture-model "$artifact_dir" model-10
+model_2_binding=${METAL_LLM_ARTIFACT_BINDINGS[model-2]}
+model_10_binding=${METAL_LLM_ARTIFACT_BINDINGS[model-10]}
+metal_llm_artifact_verification_finalize 1
+lexical_receipt_set=$(jq -cnS \
+  --arg model_10_binding "$model_10_binding" \
+  --arg model_2_binding "$model_2_binding" '
+  [
+    {artifact_id: "model-10", binding_sha256: $model_10_binding},
+    {artifact_id: "model-2", binding_sha256: $model_2_binding}
+  ]
+')
+lexical_expected_sha=$(metal_llm_artifact_sha256_text "$lexical_receipt_set")
+[[ "$(jq -r '.receipt_set_sha256' <<< "$METAL_LLM_ARTIFACT_VERIFICATION_JSON")" == \
+   "$lexical_expected_sha" ]] || fail 'receipt-set IDs were not ordered byte-lexically'
+
 # A single cached invocation reports mixed when one exact receipt hits and one stale receipt hashes.
 model_b_receipt="$fixture_root/.lab/verification/artifacts/fixture-model/model-b.json"
 rewrite_model_a_receipt_path=$receipt_path
@@ -499,8 +531,51 @@ metal_llm_verify_configuration_artifacts "$v2_manifest" fixture-model "$artifact
 jq -e 'map(.id) == ["model-a", "model-b"]' <<< "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" >/dev/null ||
   fail 'schema-v2 configuration selected wrong artifacts'
 
-# A completed partial is fully hashed, moved without overwrite, and bound to its final path.
+# The installer accepts only the manifest-derived partial path inside the artifact directory.
 /bin/rm -f -- "$artifact_dir/model-b.gguf"
+model_b_receipt="$fixture_root/.lab/verification/artifacts/fixture-model/model-b.json"
+/bin/rm -f -- "$model_b_receipt"
+outside_part="$temporary_root/model-b.gguf.part"
+print -n -- 'bravo!' > "$outside_part"
+: > "$artifact_hash_log"
+metal_llm_artifact_verification_begin full 0
+if metal_llm_install_verified_artifact "$manifest" fixture-model "$artifact_dir" model-b \
+  "$outside_part" >/dev/null 2>&1; then
+    fail 'installer accepted a partial path outside the artifact directory'
+fi
+[[ -f "$outside_part" && ! -e "$artifact_dir/model-b.gguf" ]] ||
+  fail 'installer changed an out-of-directory partial'
+(( $(artifact_hash_count) == 0 )) || fail 'installer hashed an out-of-directory partial'
+
+# A same-size mutation after the verified post-hash fingerprint must not earn a final receipt.
+print -n -- 'bravo!' > "$artifact_dir/model-b.gguf.part"
+: > "$temporary_root/install-fingerprint-calls.log"
+original_lstat=${functions[metal_llm_artifact_lstat]}
+metal_llm_artifact_lstat() {
+    local target_path=$1 format=$2 stat_output fingerprint_call_count
+    stat_output=$(/usr/bin/stat -f "$format" -- "$target_path") || return 1
+    if [[ "$target_path" == "$artifact_dir/model-b.gguf.part" &&
+          "$format" == $'%d\t%i\t%z\t%FB\t%Fc\t%Fm' ]]; then
+        print -r -- "$target_path" >> "$temporary_root/install-fingerprint-calls.log"
+        fingerprint_call_count=$(wc -l < "$temporary_root/install-fingerprint-calls.log" | tr -d ' ')
+        if (( fingerprint_call_count == 2 )); then
+            print -n -- 'mutant' > "$target_path"
+        fi
+    fi
+    print -r -- "$stat_output"
+}
+: > "$artifact_hash_log"
+metal_llm_artifact_verification_begin full 0
+if continuity_output=$(metal_llm_install_verified_artifact "$manifest" fixture-model \
+    "$artifact_dir" model-b "$artifact_dir/model-b.gguf.part" 2>&1); then
+    fail 'installer accepted final bytes that differed from the verified partial'
+fi
+functions[metal_llm_artifact_lstat]=$original_lstat
+[[ ! -e "$model_b_receipt" ]] || fail 'continuity failure published an artifact receipt'
+(( $(artifact_hash_count) == 1 )) || fail 'continuity regression did not hash the partial once'
+/bin/rm -f -- "$artifact_dir/model-b.gguf" "$artifact_dir/model-b.gguf.part"
+
+# A completed safe partial is fully hashed, moved without overwrite, and bound to its final path.
 print -n -- 'bravo!' > "$artifact_dir/model-b.gguf.part"
 : > "$artifact_hash_log"
 metal_llm_artifact_verification_begin full 0

@@ -168,6 +168,9 @@ metal_llm_remaining_artifact_bytes() {
         final_path="$artifact_dir/$artifact_filename"
         part_path="$final_path.part"
 
+        metal_llm_artifact_validate_download_paths "$artifact_dir" "$artifact_filename" \
+            "$artifact_id" "$part_path" || return 1
+
         if [[ -e "$final_path" ]]; then
             metal_llm_verify_model_artifact "$model_manifest" "$model_id" "$artifact_dir" "$artifact_id" || return 1
             continue
@@ -420,6 +423,9 @@ metal_llm_setup() {
         final_path="$artifact_dir/$artifact_filename"
         part_path="$final_path.part"
 
+        metal_llm_artifact_validate_download_paths "$artifact_dir" "$artifact_filename" \
+            "$artifact_id" "$part_path" || return 1
+
         if (( dry_run == 1 )); then
             print -- "download artifact: $artifact_id"
         else
@@ -449,6 +455,8 @@ metal_llm_setup() {
         fi
 
         mkdir -p "$artifact_dir"
+        metal_llm_artifact_validate_download_paths "$artifact_dir" "$artifact_filename" \
+            "$artifact_id" "$part_path" || return 1
         download_required=1
         if [[ -e "$part_path" ]]; then
             [[ -f "$part_path" ]] || { metal_llm_die "partial artifact is not a regular file: $part_path"; return 1; }
@@ -467,6 +475,8 @@ metal_llm_setup() {
         fi
 
         if (( download_required == 1 )); then
+            metal_llm_artifact_validate_download_paths "$artifact_dir" "$artifact_filename" \
+                "$artifact_id" "$part_path" || return 1
             command -v curl >/dev/null 2>&1 || { metal_llm_die 'curl is required'; return 1; }
             curl_arguments=(--fail --location --continue-at - --silent --show-error --output "$part_path")
             [[ -n "${HF_TOKEN:-}" ]] && curl_arguments+=(--header "Authorization: Bearer $HF_TOKEN")

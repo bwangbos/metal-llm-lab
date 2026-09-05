@@ -117,9 +117,93 @@ metal_llm_artifact_manifest_record() {
     }
 }
 
+metal_llm_artifact_validate_directory_components() {
+    local artifact_dir=$1
+    local repository_root=${METAL_LLM_ROOT:a}
+    local absolute_dir=${artifact_dir:a}
+    local relative_dir component current_path component_type
+    typeset -a components
+
+    while [[ "$repository_root" == *'//'* ]]; do
+        repository_root=${repository_root//\/\//\/}
+    done
+    while [[ "$absolute_dir" == *'//'* ]]; do
+        absolute_dir=${absolute_dir//\/\//\/}
+    done
+    [[ "$absolute_dir" == "$repository_root"/* ]] || {
+        metal_llm_die "artifact directory escapes the repository: $artifact_dir"
+        return 1
+    }
+    relative_dir=${absolute_dir#$repository_root/}
+    components=("${(@s:/:)relative_dir}")
+    current_path=$repository_root
+    for component in "${components[@]}"; do
+        current_path="$current_path/$component"
+        [[ ! -L "$current_path" ]] || {
+            metal_llm_die "unsafe artifact directory path component is a symlink: $current_path"
+            return 1
+        }
+        [[ -e "$current_path" ]] || return 0
+        component_type=$(metal_llm_artifact_lstat "$current_path" '%HT') || {
+            metal_llm_die "could not inspect artifact directory path component: $current_path"
+            return 1
+        }
+        [[ "$component_type" == 'Directory' ]] || {
+            metal_llm_die "unsafe artifact directory path component is not a directory: $current_path"
+            return 1
+        }
+    done
+}
+
+metal_llm_artifact_validate_download_paths() {
+    local artifact_dir=$1 filename=$2 artifact_id=$3 supplied_part_path=$4
+    local absolute_dir=${artifact_dir:a}
+    local final_path="$absolute_dir/$filename"
+    local expected_part_path="$final_path.part"
+    local absolute_part_path=${supplied_part_path:a}
+    local metadata parsed owner mode type links
+
+    while [[ "$absolute_dir" == *'//'* ]]; do
+        absolute_dir=${absolute_dir//\/\//\/}
+    done
+    while [[ "$absolute_part_path" == *'//'* ]]; do
+        absolute_part_path=${absolute_part_path//\/\//\/}
+    done
+    final_path="$absolute_dir/$filename"
+    expected_part_path="$final_path.part"
+    metal_llm_artifact_validate_directory_components "$artifact_dir" || return 1
+    [[ "$absolute_part_path" == "$expected_part_path" ]] || {
+        metal_llm_die "partial artifact path escapes its artifact directory: $artifact_id ($supplied_part_path)"
+        return 1
+    }
+    [[ ! -L "$final_path" ]] || {
+        metal_llm_die "artifact destination is a symlink: $artifact_id ($final_path)"
+        return 1
+    }
+    [[ ! -L "$expected_part_path" ]] || {
+        metal_llm_die "partial artifact is a symlink: $artifact_id ($expected_part_path)"
+        return 1
+    }
+    [[ -e "$expected_part_path" ]] || return 0
+    metadata=$(metal_llm_artifact_lstat "$expected_part_path" $'%u\t%Lp\t%HT\t%l') || {
+        metal_llm_die "could not inspect partial artifact: $expected_part_path"
+        return 1
+    }
+    parsed=$(metal_llm_artifact_parse_metadata "$metadata") || {
+        metal_llm_die "unsupported partial artifact metadata: $expected_part_path"
+        return 1
+    }
+    IFS=$'\t' read -r owner mode type links <<< "$parsed"
+    [[ "$owner" == "$EUID" && "$type" == 'Regular File' && "$links" == 1 ]] || {
+        metal_llm_die "partial artifact must be an owned regular single-link file: $expected_part_path"
+        return 1
+    }
+}
+
 metal_llm_artifact_resolve_path() {
     local artifact_dir=$1 filename=$2 artifact_id=$3
     local canonical_dir canonical_path candidate="$artifact_dir/$filename"
+    metal_llm_artifact_validate_directory_components "$artifact_dir" || return 1
     [[ -d "$artifact_dir" && ! -L "$artifact_dir" ]] || {
         metal_llm_die "artifact directory is not a regular directory: $artifact_dir"
         return 1
@@ -561,11 +645,13 @@ metal_llm_install_verified_artifact() {
     }
     artifact_record=$(metal_llm_artifact_manifest_record "$manifest" "$model_id" "$artifact_id") || return 1
     IFS=$'\t' read -r filename expected_bytes expected_sha <<< "$artifact_record"
+    final_path="$artifact_dir/$filename"
+    metal_llm_artifact_validate_download_paths "$artifact_dir" "$filename" "$artifact_id" \
+      "$part_path" || return 1
     [[ -f "$part_path" && ! -L "$part_path" ]] || {
         metal_llm_die "partial artifact is not a regular non-symlink file: $part_path"
         return 1
     }
-    final_path="$artifact_dir/$filename"
     [[ ! -e "$final_path" && ! -L "$final_path" ]] || {
         metal_llm_die "refusing to overwrite artifact: $final_path"
         return 1
@@ -597,14 +683,24 @@ metal_llm_install_verified_artifact() {
         }
         break
     done
+    metal_llm_artifact_validate_download_paths "$artifact_dir" "$filename" "$artifact_id" \
+      "$part_path" || return 1
     /bin/mv -n -- "$part_path" "$final_path" || return 1
     [[ -f "$final_path" && ! -L "$final_path" && ! -e "$part_path" ]] || {
         metal_llm_die "could not install verified artifact without overwrite: $final_path"
         return 1
     }
+    metal_llm_artifact_validate_directory_components "$artifact_dir" || return 1
     final_path=${final_path:A}
     final_fingerprint=$(metal_llm_artifact_fingerprint "$final_path") || return 1
     [[ "$(jq -r '.size_bytes' <<< "$final_fingerprint")" == "$expected_bytes" ]] || return 1
+    jq -ne --argjson verified "$post_fingerprint" --argjson installed "$final_fingerprint" '
+      ["device_id", "inode", "size_bytes", "birth_time", "modify_time"] |
+      all(.[]; $verified[.] == $installed[.])
+    ' >/dev/null || {
+        metal_llm_die "installed artifact differs from verified partial: $artifact_id"
+        return 1
+    }
     manifest_sha=$(metal_llm_sha256 "$manifest") || return 1
     binding_json=$(metal_llm_artifact_binding_json "$model_id" "$manifest_sha" "$artifact_id" \
       "$expected_bytes" "$expected_sha" "$final_path" "$final_fingerprint") || return 1
@@ -651,7 +747,7 @@ metal_llm_artifact_verification_finalize() {
         metal_llm_die 'a complete artifact verification set cannot be empty'
         return 1
     }
-    sorted_ids=("${(@on)METAL_LLM_ARTIFACT_ORDER}")
+    sorted_ids=("${(@f)$(print -rl -- "${METAL_LLM_ARTIFACT_ORDER[@]}" | LC_ALL=C /usr/bin/sort)}")
     for artifact_id in "${sorted_ids[@]}"; do
         receipt_set=$(jq -cn --argjson receipt_set "$receipt_set" \
           --arg artifact_id "$artifact_id" \
