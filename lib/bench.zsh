@@ -1,7 +1,7 @@
 metal_llm_bench_usage() {
-    metal_llm_error 'usage: metal-llm bench MODEL --suite SUITE [--mode local] [--runtime tuned|upstream] [--dry-run]'
-    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint [--profile auto|fast|long|stable] [--vision on|off] [--dry-run]'
-    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--dry-run]'
+    metal_llm_error 'usage: metal-llm bench MODEL --suite SUITE [--mode local] [--runtime tuned|upstream] [--artifact-check cached|full] [--dry-run]'
+    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint [--profile auto|fast|long|stable] [--vision on|off] [--artifact-check cached|full] [--dry-run]'
+    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--artifact-check cached|full] [--dry-run]'
     return 2
 }
 
@@ -257,9 +257,10 @@ metal_llm_validate_endpoint_timing() {
 
 metal_llm_bench() {
     local model_id='' suite_id='' mode='' dry_run=0 argument
+    local artifact_check=cached
     local requested_profile='' requested_vision='' requested_runtime=''
     local requested_mtp='' requested_context=''
-    local profile_seen=0 vision_seen=0 runtime_seen=0 mtp_seen=0 context_seen=0
+    local profile_seen=0 vision_seen=0 runtime_seen=0 mtp_seen=0 context_seen=0 artifact_check_seen=0
     while (( $# > 0 )); do
         argument=$1
         shift
@@ -268,6 +269,16 @@ metal_llm_bench() {
                 (( dry_run == 0 )) || { metal_llm_bench_usage; return $?; }
                 dry_run=1
                 ;;
+            --artifact-check)
+                (( $# > 0 && artifact_check_seen == 0 )) || { metal_llm_bench_usage; return $?; }
+                case "$1" in
+                    cached|full) artifact_check=$1 ;;
+                    *) metal_llm_bench_usage; return $? ;;
+                esac
+                artifact_check_seen=1
+                shift
+                ;;
+            --artifact-check=*) metal_llm_bench_usage; return $? ;;
             --suite)
                 (( $# > 0 )) || { metal_llm_bench_usage; return $?; }
                 [[ -z "$suite_id" ]] || { metal_llm_bench_usage; return $?; }
@@ -441,19 +452,18 @@ metal_llm_bench() {
         metal_llm_die "invalid runtime manifest: $runtime_manifest"
         return 1
     }
+    local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
+    metal_llm_artifact_verification_begin "$artifact_check" "$dry_run" || return 1
+    metal_llm_verify_configuration_artifacts "$model_manifest" "$model_id" "$artifact_dir" \
+      "$artifact_configuration" || return 1
+    metal_llm_artifact_verification_finalize 1 || return 1
     local bench_executable='' model_path=''
     if [[ "$mode" == local ]]; then
         metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-bench || return 1
         bench_executable=$METAL_LLM_VERIFIED_EXECUTABLE
-        local artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
-        metal_llm_profile_artifact_identities "$model_manifest" "$artifact_dir" \
-          "$artifact_configuration" || return 1
         model_path=$(metal_llm_artifact_path "$model_manifest" "$artifact_dir" "$model_artifact_id") || return 1
     elif (( dry_run == 0 )); then
         metal_llm_verify_runtime_build "$runtime_id" "$runtime_manifest" llama-server || return 1
-        local endpoint_artifact_dir="$METAL_LLM_ROOT/.lab/artifacts/$model_id"
-        metal_llm_profile_artifact_identities "$model_manifest" "$endpoint_artifact_dir" \
-          "$artifact_configuration" || return 1
     fi
 
     [[ -z "${METAL_LLM_HARDWARE_ID:-}" ]] || {
@@ -484,7 +494,8 @@ metal_llm_bench() {
           --arg receipt_sha "$METAL_LLM_VERIFIED_BUILD_RECEIPT_SHA256" \
           --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
           --arg model_manifest_sha "$current_model_manifest_sha" \
-          --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" '
+          --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
+          --arg verification_receipt_sha "$METAL_LLM_ARTIFACT_RECEIPT_SET_SHA256" '
           .host == $host and .port == $port and
           .profile_id == $profile and .runtime_alias == $runtime_alias and
           .context == $context and .vision == $vision and
@@ -493,7 +504,8 @@ metal_llm_bench() {
           .runtime_revision == $revision and .runtime_tree_sha == $tree and
           .runtime_manifest_sha256 == $manifest_sha and .build_receipt_sha256 == $receipt_sha and
           .executable_name == "llama-server" and .executable_sha256 == $executable_sha and
-          .model_manifest_sha256 == $model_manifest_sha and .artifacts == $artifacts
+          .model_manifest_sha256 == $model_manifest_sha and .artifacts == $artifacts and
+          .artifact_verification.receipt_set_sha256 == $verification_receipt_sha
         ' "$managed_identity_record" >/dev/null || {
             metal_llm_die "managed endpoint identity does not match resolved configuration at $host:$port"
             return 1
@@ -602,7 +614,8 @@ metal_llm_bench() {
           --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
           --arg model_manifest_sha "$model_manifest_sha" \
           --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
-          --arg suite "$suite_id" --arg suite_sha "$suite_sha" --argjson fixtures "$fixtures_json" '
+          --arg suite "$suite_id" --arg suite_sha "$suite_sha" --argjson fixtures "$fixtures_json" \
+          --argjson artifact_verification "$METAL_LLM_ARTIFACT_VERIFICATION_JSON" '
           {
             repository: {revision: $repository_revision, tree_sha: $repository_tree, clean: true},
             hardware: {id: $hardware, chip: $chip, unified_memory_bytes: $memory},
@@ -620,6 +633,7 @@ metal_llm_bench() {
             },
             model_manifest_sha256: $model_manifest_sha,
             artifacts: $artifacts,
+            artifact_verification: $artifact_verification,
             suite: {id: $suite, sha256: $suite_sha, fixtures: $fixtures}
           }
         ') || return 1
@@ -636,6 +650,7 @@ metal_llm_bench() {
           --arg executable_name llama-bench --arg executable_sha "$METAL_LLM_VERIFIED_EXECUTABLE_SHA256" \
           --arg model_manifest_sha "$model_manifest_sha" \
           --argjson artifacts "$METAL_LLM_VERIFIED_ARTIFACT_IDENTITIES" \
+          --argjson artifact_verification "$METAL_LLM_ARTIFACT_VERIFICATION_JSON" \
           --arg host "$host" --argjson port "$port" '
           {
             owner_kind: $owner_kind, model_id: $model, profile_id: null,
@@ -644,7 +659,8 @@ metal_llm_bench() {
             runtime_id: $runtime, runtime_revision: $runtime_revision, runtime_tree_sha: $runtime_tree,
             runtime_manifest_sha256: $runtime_manifest_sha, build_receipt_sha256: $receipt_sha,
             executable_name: $executable_name, executable_sha256: $executable_sha,
-            model_manifest_sha256: $model_manifest_sha, artifacts: $artifacts, host: $host, port: $port
+            model_manifest_sha256: $model_manifest_sha, artifacts: $artifacts,
+            artifact_verification: $artifact_verification, host: $host, port: $port
           }
         ') || return 1
         metal_llm_acquire_managed_lease "$identity_json" || return 1
@@ -652,6 +668,7 @@ metal_llm_bench() {
         trap "metal_llm_release_managed_lease '$managed_owner_token'" EXIT
         trap "metal_llm_release_managed_lease '$managed_owner_token'; exit 130" HUP INT TERM
     fi
+    metal_llm_print_artifact_verification_summary || return 1
     local run_buffer
     run_buffer=$(mktemp "${TMPDIR:-/tmp}/metal-llm-bench-runs.XXXXXX") || return 1
     : > "$run_buffer"
@@ -862,7 +879,7 @@ metal_llm_bench() {
       --arg experiment_id "$compact_timestamp-$suite_id" --arg date "${now[1,10]}" \
       --arg model "$model_id" --arg suite "$suite_id" --arg mode "$mode" \
       --argjson provenance "$provenance_json" '
-      {schema_version: 1, experiment_id: ($experiment_id | ascii_downcase), date: $date,
+      {schema_version: 2, experiment_id: ($experiment_id | ascii_downcase), date: $date,
        model_id: $model, suite_id: $suite, benchmark_mode: $mode, provenance: $provenance, runs: .}
     ' "$run_buffer" > "$result_part"; then
         rm -f -- "$run_buffer" "$result_part"

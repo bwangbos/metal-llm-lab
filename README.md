@@ -38,9 +38,9 @@ git clone https://github.com/bwangbos/metal-llm-lab.git
 cd metal-llm-lab
 ./scripts/bootstrap-macos.sh
 ./bin/metal-llm doctor
-./bin/metal-llm setup qwen3.8-flash-next
-./bin/metal-llm serve qwen3.8-flash-next
-./bin/metal-llm bench qwen3.8-flash-next --suite qwen3.8-smoke --mode local --dry-run
+./bin/metal-llm setup qwen3.8-flash-next --artifact-check cached
+./bin/metal-llm serve qwen3.8-flash-next --artifact-check cached
+./bin/metal-llm bench qwen3.8-flash-next --suite qwen3.8-smoke --mode local --artifact-check cached --dry-run
 ./bin/metal-llm report --check
 ```
 
@@ -48,6 +48,27 @@ Setup downloads approximately **100 GB**, checks every artifact checksum, and
 builds every unique pinned runtime required by the model's profiles, including
 the upstream reference runtime. Its duration depends on network speed, machine
 load, and compiler performance; no fixed completion time is guaranteed.
+
+`setup`, `serve`, and `bench` default to `--artifact-check cached`. After a
+successful full verification, a warm cached run validates each artifact against
+its local receipt and avoids rereading GGUF bodies. Their verification summary
+reports the requested and effective mode plus cache hits, misses, and full
+hashes. `cached` means every artifact matched a receipt; `mixed` means some
+receipts missed and those bodies were fully hashed; `full` means every required
+body was fully hashed. Artifact receipts live locally under
+`.lab/verification/artifacts/` and are deliberately not committed. Use
+`--artifact-check full` after suspicious changes, metadata-preserving restores,
+or before publishing a high-stakes benchmark.
+
+For an audit run, replace `cached` in any of the quick-start commands with
+`full`; the command-line option accepts only `cached` or `full`.
+
+An artifact receipt binds a downloaded model body to its manifest identity and
+file metadata. A runtime build receipt separately binds a built executable to
+its pinned runtime manifest. The managed lease in
+`${TMPDIR:-/tmp}/metal-llm-lab/full-model.lease` is neither receipt: it records
+the identity of a running full-model process so `serve` and `bench` can
+coordinate use of it.
 The server listens only on `127.0.0.1:8080` by default. Once it is ready, test
 its OpenAI-compatible API from another terminal:
 

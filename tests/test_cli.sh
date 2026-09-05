@@ -21,12 +21,12 @@ help_output=$("$cli" help)
 for command_name in doctor setup serve bench report help; do
     assert_contains "$help_output" "$command_name"
 done
-assert_contains "$help_output" 'metal-llm setup MODEL [--dry-run] [--yes]'
+assert_contains "$help_output" 'metal-llm setup MODEL [--artifact-check cached|full] [--dry-run] [--yes]'
 assert_contains "$help_output" 'METAL_LLM_BUILD_RESERVE_BYTES'
-assert_contains "$help_output" 'metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off]'
-assert_contains "$help_output" 'metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off]'
+assert_contains "$help_output" 'metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off] [--artifact-check cached|full]'
+assert_contains "$help_output" 'metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--artifact-check cached|full]'
 assert_contains "$help_output" 'serve defaults: --profile auto and model vision default'
-assert_contains "$help_output" 'metal-llm bench MODEL --suite SUITE [--mode MODE] [--dry-run]'
+assert_contains "$help_output" 'metal-llm bench MODEL --suite SUITE [--mode MODE] [--artifact-check cached|full] [--dry-run]'
 assert_contains "$help_output" 'metal-llm report [--check]'
 [[ "$help_output" != *'METAL_LLM_CONTEXT'* ]] || fail 'help advertises removed METAL_LLM_CONTEXT'
 
@@ -44,8 +44,8 @@ else
     serve_status=$?
 fi
 (( serve_status == 2 )) || fail "serve without arguments exited $serve_status, expected 2"
-assert_contains "$serve_output" 'usage: metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off]'
-assert_contains "$serve_output" 'metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off]'
+assert_contains "$serve_output" 'usage: metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off] [--artifact-check cached|full]'
+assert_contains "$serve_output" 'metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--artifact-check cached|full]'
 
 if bench_output=$("$cli" bench 2>&1); then
     fail 'bench without arguments succeeded'

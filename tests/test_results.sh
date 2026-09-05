@@ -104,7 +104,13 @@ jq -e '
 
 jq -e '
     .["$defs"].run.required as $required |
-    (.required | index("provenance") != null) and
+    .oneOf == [
+      {"$ref": "#/$defs/result_v1"},
+      {"$ref": "#/$defs/result_v2"}
+    ] and
+    (.["$defs"].common_result.required | index("provenance") != null) and
+    (.["$defs"].result_v1 | tostring | contains("#/$defs/provenance_v1")) and
+    (.["$defs"].result_v2 | tostring | contains("#/$defs/provenance_v2")) and
     ([
       "timestamp", "repository_revision", "hardware_id", "runtime_id",
       "runtime_revision", "profile", "profile_id", "runtime_alias", "context", "vision",
@@ -113,6 +119,13 @@ jq -e '
       "generation_tokens_per_second", "generation_settings", "command", "notes"
     ] - $required | length == 0)
 ' "$schema" >/dev/null || fail 'result schema does not require route-aware benchmark provenance'
+
+tracked_schema_one_results=("${(@f)$(git -C "$source_root" ls-files 'results/raw/*.json')}")
+(( ${#tracked_schema_one_results} > 0 )) || fail 'no tracked schema-1 results were found'
+for tracked_result in "${tracked_schema_one_results[@]}"; do
+    [[ "$(jq -r '.schema_version' "$source_root/$tracked_result")" == 1 ]] || \
+      fail "tracked historical result was rewritten: $tracked_result"
+done
 
 jq -e '
     .schema_version == 1 and
@@ -168,6 +181,20 @@ if unsafe_match=$(rg -n "$private_path_pattern|(^|[\"_])(api[_-]?key|token|passw
     fail "committed result or documentation contains a private path or secret-like key:\n$unsafe_match"
 fi
 
+tracked_schema_one_summaries=()
+for tracked_result in "${tracked_schema_one_results[@]}"; do
+    tracked_summary=$(jq -r '.summary.output // empty' "$source_root/$tracked_result")
+    [[ -z "$tracked_summary" ]] || tracked_schema_one_summaries+=("results/summaries/$tracked_summary")
+done
+tracked_schema_one_summaries=("${(@u)tracked_schema_one_summaries}")
+(( ${#tracked_schema_one_summaries} > 0 )) || fail 'no tracked schema-1 summaries were found'
+typeset -A schema_one_summary_sha_before
+for tracked_summary in "${tracked_schema_one_summaries[@]}"; do
+    git -C "$source_root" ls-files --error-unmatch "$tracked_summary" >/dev/null 2>&1 ||
+        fail "schema-1 summary is not tracked: $tracked_summary"
+    schema_one_summary_sha_before[$tracked_summary]=$(shasum -a 256 "$source_root/$tracked_summary" | awk '{print $1}')
+done
+
 generated=$($cli report)
 assert_contains "$generated" '| 99,405 | 34.4737 | 21.2468 | 160/188 |'
 assert_contains "$generated" '| 28,705 | 40.755 | 0.567 | 41.279 | 3.082 | +1.29% |'
@@ -176,7 +203,17 @@ assert_contains "$generated" 'approximately 33.6K'
 assert_contains "$(<"$dynamic_summary")" '| 32,767 | on | 44.778118828762345 | 44.2195854504937 | +1.2630904893804473% | Pass |'
 assert_contains "$(<"$dynamic_summary")" '| 32,769 | off | 43.14954799180947 | 41.1303088964011 | +4.909370120449208% | Pass |'
 assert_contains "$(<"$dynamic_summary")" '| 98,304 | off | 40.313009802029555 | 39.461672458980104 | +2.1573777541598282% | Pass |'
+for tracked_summary in "${tracked_schema_one_summaries[@]}"; do
+    [[ "$(shasum -a 256 "$source_root/$tracked_summary" | awk '{print $1}')" == \
+       "${schema_one_summary_sha_before[$tracked_summary]}" ]] ||
+        fail "schema-1 summary changed during report generation: $tracked_summary"
+done
 $cli report --check >/dev/null
+for tracked_summary in "${tracked_schema_one_summaries[@]}"; do
+    [[ "$(shasum -a 256 "$source_root/$tracked_summary" | awk '{print $1}')" == \
+       "${schema_one_summary_sha_before[$tracked_summary]}" ]] ||
+        fail "schema-1 summary changed during report generation: $tracked_summary"
+done
 
 temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-results.XXXXXX")
 trap 'rm -rf -- "$temporary_root"' EXIT
@@ -275,6 +312,136 @@ cp "$route_result" "$fixture_root/results/raw/result.json"
 route_output=$($fixture_cli report)
 assert_contains "$route_output" '| Run | Experiment | Prompt tokens | Effective prompt tokens | MTP policy | Selected route | Generated tokens | Prompt tok/s | Generation tok/s |'
 assert_contains "$route_output" '| dynamic-short | runtime-comparison | 3 | 32,768 | dynamic | on | 128 | 513.38 | 37.03 |'
+
+schema_two_result="$temporary_root/schema-two-result.json"
+jq '
+  .schema_version = 2 |
+  .provenance.artifact_verification = {
+    requested_mode: "cached", effective_mode: "mixed", cache_hits: 1,
+    cache_misses: 1, full_hashes: 1, receipt_set_sha256: ("a" * 64)
+  }
+' "$route_result" > "$schema_two_result"
+cp "$schema_two_result" "$fixture_root/results/raw/result.json"
+$fixture_cli report >/dev/null || fail 'valid schema-2 result did not pass report validation'
+
+assert_versioned_schema_invalid() {
+    local source_file=$1
+    local filter=$2
+    local description=$3
+    jq "$filter" "$source_file" > "$fixture_root/results/raw/result.json"
+    if versioned_schema_output=$($fixture_cli report --check 2>&1); then
+        fail "report accepted invalid versioned result provenance: $description"
+    fi
+    assert_contains "$versioned_schema_output" 'invalid result document'
+}
+
+assert_versioned_schema_invalid "$schema_two_result" \
+  'del(.provenance.artifact_verification)' 'schema 2 without verification provenance'
+assert_versioned_schema_invalid "$route_result" \
+  '.provenance.artifact_verification = {requested_mode: "cached", effective_mode: "cached", cache_hits: 1, cache_misses: 0, full_hashes: 0, receipt_set_sha256: ("a" * 64)}' \
+  'schema 1 with verification provenance'
+assert_versioned_schema_invalid "$schema_two_result" \
+  '.provenance.artifact_verification.receipt_set_sha256 = ("A" * 64)' \
+  'schema 2 with an invalid verification digest'
+assert_versioned_schema_invalid "$schema_two_result" \
+  '.provenance.artifact_verification.effective_mode = "full"' \
+  'schema 2 with impossible verification counters'
+assert_versioned_schema_invalid "$schema_two_result" \
+  '.provenance.artifact_verification.requested_mode = "full"' \
+  'schema 2 with contradictory requested and effective modes'
+assert_versioned_schema_invalid "$schema_two_result" \
+  '.provenance.artifact_verification.cache_misses = 0' \
+  'schema 2 mixed verification without a cache miss'
+
+assert_report_verification_invalid() {
+    local filter=$1
+    local description=$2
+    jq "$filter" "$schema_two_result" > "$fixture_root/results/raw/result.json"
+    if verification_output=$($fixture_cli report --check 2>&1); then
+        fail "report accepted impossible verification counters: $description"
+    fi
+    assert_contains "$verification_output" 'invalid artifact verification provenance'
+}
+
+assert_report_verification_invalid \
+  '.provenance.artifact_verification.cache_misses = 2' \
+  'fewer full hashes than cache misses'
+
+schema_two_summary_result="$temporary_root/schema-two-summary-result.json"
+jq --slurpfile route "$route_result" '
+  .schema_version = 2 |
+  .benchmark_mode = "endpoint" | .suite_id = $route[0].suite_id |
+  .provenance = ($route[0].provenance + {
+    artifact_verification: {
+      requested_mode: "cached", effective_mode: "mixed", cache_hits: 1,
+      cache_misses: 1, full_hashes: 1, receipt_set_sha256: ("a" * 64)
+    }
+  }) |
+  .summary.output = "schema-two.md" |
+  (.runs[] |= (
+    .repository_revision = $route[0].provenance.repository.revision |
+    .hardware_id = $route[0].provenance.hardware.id |
+    .runtime_id = $route[0].provenance.runtime.id |
+    .runtime_revision = $route[0].provenance.runtime.tested_revision |
+    .profile_id = $route[0].provenance.profile_id |
+    .runtime_alias = $route[0].provenance.runtime_alias |
+    .context = $route[0].provenance.context |
+    .vision = $route[0].provenance.vision |
+    .request_kind = "text" |
+    .mtp_policy = $route[0].provenance.mtp_policy |
+    .mtp_selected = (.effective_prompt_tokens <= $route[0].provenance.mtp_threshold) |
+    .mtp_threshold = $route[0].provenance.mtp_threshold |
+    .prompt_tokens = null
+  ))
+' "$raw_result" > "$schema_two_summary_result"
+cp "$schema_two_summary_result" "$fixture_root/results/raw/result.json"
+schema_two_output=$($fixture_cli report)
+assert_contains "$schema_two_output" '- Artifact verification requested/effective: `cached` / `mixed`'
+assert_contains "$schema_two_output" '- Artifact verification counts (hits/misses/full): `1` / `1` / `1`'
+if ! [[ "$schema_two_output" =~ '- Artifact receipt set: `[0-9a-f]{64}`' ]]; then
+    fail 'schema-2 report did not render a lowercase receipt-set digest'
+fi
+
+assert_schema_two_drift() {
+    local filter=$1
+    local description=$2
+    jq "$filter" "$schema_two_summary_result" > "$fixture_root/results/raw/result.json"
+    if schema_two_drift_output=$($fixture_cli report --check 2>&1); then
+        fail "report --check accepted schema-2 provenance drift: $description"
+    fi
+    assert_contains "$schema_two_drift_output" 'summary differs from generated output'
+}
+
+assert_schema_two_drift '
+  .provenance.artifact_verification |= (
+    .requested_mode = "full" |
+    .effective_mode = "full" |
+    .cache_hits = 0 |
+    .cache_misses = 0 |
+    .full_hashes = 1
+  )
+' \
+  'requested verification mode changed'
+assert_schema_two_drift '
+  .provenance.artifact_verification |= (
+    .effective_mode = "full" |
+    .cache_hits = 0
+  )
+' \
+  'effective verification mode changed'
+assert_schema_two_drift '.provenance.artifact_verification.cache_hits = 2' \
+  'cache-hit count changed'
+assert_schema_two_drift '
+  .provenance.artifact_verification |= (
+    .cache_misses = 2 |
+    .full_hashes = 2
+  )
+' \
+  'cache-miss count changed'
+assert_schema_two_drift '.provenance.artifact_verification.full_hashes = 2' \
+  'full-hash count changed'
+assert_schema_two_drift '.provenance.artifact_verification.receipt_set_sha256 = ("b" * 64)' \
+  'receipt-set digest changed'
 
 assert_route_invalid() {
     local filter=$1

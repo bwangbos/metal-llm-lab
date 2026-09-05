@@ -87,6 +87,38 @@ metal_llm_validate_accepted_allocation_observation() {
     ' <<< "$observation" >/dev/null 2>&1
 }
 
+metal_llm_validate_artifact_verification_provenance() {
+    local result_file=$1
+    jq -e '
+      .provenance.artifact_verification as $verification |
+      ($verification | keys | sort) == ([
+        "cache_hits", "cache_misses", "effective_mode", "full_hashes",
+        "receipt_set_sha256", "requested_mode"
+      ] | sort) and
+      ($verification.requested_mode == "cached" or $verification.requested_mode == "full") and
+      ($verification.effective_mode == "cached" or
+        $verification.effective_mode == "full" or $verification.effective_mode == "mixed") and
+      all(
+        [$verification.cache_hits, $verification.cache_misses, $verification.full_hashes][];
+        type == "number" and floor == . and . >= 0
+      ) and
+      ($verification.receipt_set_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+      (if $verification.requested_mode == "full" then
+         $verification.effective_mode == "full" and $verification.cache_hits == 0 and
+         $verification.cache_misses == 0 and $verification.full_hashes >= 1
+       elif $verification.effective_mode == "cached" then
+         $verification.cache_hits >= 1 and $verification.cache_misses == 0 and
+         $verification.full_hashes == 0
+       elif $verification.effective_mode == "full" then
+         $verification.cache_hits == 0 and $verification.cache_misses >= 1 and
+         $verification.full_hashes >= $verification.cache_misses
+       else
+         $verification.cache_hits >= 1 and $verification.cache_misses >= 1 and
+         $verification.full_hashes >= $verification.cache_misses
+       end)
+    ' "$result_file" >/dev/null 2>&1
+}
+
 metal_llm_resolve_result_evidence_path() {
     local relative_path=$1 repository_root=${METAL_LLM_ROOT:A}
     local current component
@@ -250,6 +282,12 @@ metal_llm_validate_result() {
         end;
       def valid($value; $input_spec):
         resolved($input_spec) as $spec |
+        (if $spec | has("allOf") then
+          [$spec.allOf[] | valid($value; .)] | all
+         else true end) and
+        (if $spec | has("oneOf") then
+          ([$spec.oneOf[] | valid($value; .) | select(.)] | length) == 1
+         else true end) and
         (if $spec | has("const") then $value == $spec.const else true end) and
         (if $spec | has("enum") then [$spec.enum[] | . as $choice | $value == $choice] | any else true end) and
         (if $spec | has("type") then type_ok($value; $spec.type) else true end) and
@@ -288,6 +326,13 @@ metal_llm_validate_result() {
         metal_llm_die "invalid result document: $result_label"
         return 1
     }
+
+    if [[ "$(jq -r '.schema_version' "$result_file")" == 2 ]]; then
+        metal_llm_validate_artifact_verification_provenance "$result_file" || {
+            metal_llm_die "invalid artifact verification provenance: $result_label"
+            return 1
+        }
+    fi
 
     result_sha=$(metal_llm_sha256 "$result_file") || return 1
     jq -e --arg result_sha "$result_sha" '
@@ -575,6 +620,16 @@ metal_llm_generate_summary() {
         "",
         .interpretation.limitation
       ] +
+      (if .schema_version == 2 then
+        [
+          "",
+          "## Artifact verification provenance",
+          "",
+          "- Artifact verification requested/effective: `" + .provenance.artifact_verification.requested_mode + "` / `" + .provenance.artifact_verification.effective_mode + "`",
+          "- Artifact verification counts (hits/misses/full): `" + (.provenance.artifact_verification.cache_hits | tostring) + "` / `" + (.provenance.artifact_verification.cache_misses | tostring) + "` / `" + (.provenance.artifact_verification.full_hashes | tostring) + "`",
+          "- Artifact receipt set: `" + .provenance.artifact_verification.receipt_set_sha256 + "`"
+        ]
+       else [] end) +
       (if any(.runs[]; .mtp_policy != null) then
         [
           "",
@@ -693,6 +748,13 @@ metal_llm_generate_dynamic_mtp_summary() {
         "- Correctness harness: `" + .configuration.correctness_evidence.harness_sha256 + "`",
         "- Checkpoint identity: `" + .configuration.checkpoint_identity_sha256 + "`"
       ] +
+      (if .schema_version == 2 then
+        [
+          "- Artifact verification requested/effective: `" + .provenance.artifact_verification.requested_mode + "` / `" + .provenance.artifact_verification.effective_mode + "`",
+          "- Artifact verification counts (hits/misses/full): `" + (.provenance.artifact_verification.cache_hits | tostring) + "` / `" + (.provenance.artifact_verification.cache_misses | tostring) + "` / `" + (.provenance.artifact_verification.full_hashes | tostring) + "`",
+          "- Artifact receipt set: `" + .provenance.artifact_verification.receipt_set_sha256 + "`"
+        ]
+       else [] end) +
       [.configuration.server_log_sha256[] |
         "- " + .policy + " server log (`" + .session_id + "`): `" + .sha256 + "`"] +
       [
@@ -736,7 +798,17 @@ metal_llm_generate_generic_summary() {
         " | " + (if .generated_tokens == null then "n/a" else (.generated_tokens | comma) end) + " | " +
         shown("prompt_tokens_per_second"; "prompt_tokens_per_second_display") + " | " +
         shown("generation_tokens_per_second"; "generation_tokens_per_second_display") + " |"
-      ] | join("\n")
+      ] +
+      (if .schema_version == 2 then
+        [
+          "",
+          "## Artifact verification provenance",
+          "",
+          "- Artifact verification requested/effective: `" + .provenance.artifact_verification.requested_mode + "` / `" + .provenance.artifact_verification.effective_mode + "`",
+          "- Artifact verification counts (hits/misses/full): `" + (.provenance.artifact_verification.cache_hits | tostring) + "` / `" + (.provenance.artifact_verification.cache_misses | tostring) + "` / `" + (.provenance.artifact_verification.full_hashes | tostring) + "`",
+          "- Artifact receipt set: `" + .provenance.artifact_verification.receipt_set_sha256 + "`"
+        ]
+       else [] end) | join("\n")
     ' "$result_file"
 }
 

@@ -19,6 +19,15 @@ assert_contains() {
     [[ "$haystack" == *"$needle"* ]] || fail "missing expected output: $needle"
 }
 
+assert_count() {
+    local haystack=$1
+    local needle=$2
+    local expected=$3
+    local actual
+    actual=$(print -r -- "$haystack" | /usr/bin/grep -F -c -- "$needle" || true)
+    (( actual == expected )) || fail "expected $expected occurrences of '$needle', got $actual"
+}
+
 [[ -f "$suite" ]] || fail 'missing benchmarks/suites/qwen3.8-smoke.json'
 jq -e '
     .schema_version == 1 and .id == "qwen3.8-smoke" and .default_mode == "local" and
@@ -118,6 +127,7 @@ $real_jq -n '{
 fake_bench="$fixture_root/.lab/runtimes/fixture-runtime/build-metal/bin/llama-bench"
 print -r -- '#!/bin/zsh' > "$fake_bench"
 print -r -- 'print -r -- "$*" >> "$FAKE_BENCH_LOG"' >> "$fake_bench"
+print -r -- '[[ -z "${BENCH_TEST_IDENTITY_CAPTURE:-}" ]] || /bin/cp -- "$TMPDIR/metal-llm-lab/full-model.lease/identity.json" "$BENCH_TEST_IDENTITY_CAPTURE"' >> "$fake_bench"
 print -r -- 'if [[ "$*" == *"-p 512"* ]]; then' >> "$fake_bench"
 print -r -- '  print -r -- '\''[{"n_prompt":512,"n_gen":0,"avg_ts":987.25}]'\''' >> "$fake_bench"
 print -r -- 'else' >> "$fake_bench"
@@ -253,6 +263,14 @@ print -- '1999-01-02T03:04:05Z'
 EOF
 chmod +x "$fake_bin/system_profiler" "$fake_bin/ps" "$fake_bin/sw_vers" "$fake_bin/xcrun" "$fake_bin/pmset" \
   "$fake_bin/date"
+cat > "$fake_bin/shasum" <<EOF
+#!/bin/zsh
+for argument in "\$@"; do
+  [[ "\$argument" == *.gguf ]] && print -r -- "\$argument" >> "\${BENCH_TEST_ARTIFACT_HASH_LOG:?}"
+done
+exec "$real_shasum" "\$@"
+EOF
+chmod +x "$fake_bin/shasum"
 
 $real_git -C "$fixture_root" init -q
 $real_git -C "$fixture_root" add .gitignore bin lib schemas benchmarks manifests
@@ -275,7 +293,10 @@ common_environment=(
   FAKE_BENCH_LOG="$temporary_root/bench.log"
   FAKE_CURL_LOG="$temporary_root/curl.log"
   FAKE_AUTH_CAPTURE="$temporary_root/auth.capture"
+  BENCH_TEST_ARTIFACT_HASH_LOG="$temporary_root/artifact-hashes.log"
+  BENCH_TEST_IDENTITY_CAPTURE="$temporary_root/local-bench-identity.json"
 )
+: > "$temporary_root/artifact-hashes.log"
 
 lease_dir="$managed_tmp/metal-llm-lab/full-model.lease"
 lease_record="$lease_dir/identity.json"
@@ -323,7 +344,7 @@ write_live_server_identity() {
             ;;
         *) fail "unknown managed identity test profile: $profile" ;;
     esac
-    local current_receipt_sha model_manifest_sha artifacts
+    local current_receipt_sha model_manifest_sha artifacts verification_receipt_sha
     current_receipt_sha=$($real_shasum -a 256 "$receipt_path" | awk '{print $1}')
     model_manifest_sha=$($real_shasum -a 256 "$fixture_root/manifests/models/fixture-model.json" | awk '{print $1}')
     artifacts=$($real_jq -c --argjson vision "$vision" --arg policy "$mtp_policy" '
@@ -332,6 +353,7 @@ write_live_server_identity() {
           ($policy != "off" and .kind == "mtp")) |
         {id, bytes, sha256}]
     ' "$fixture_root/manifests/models/fixture-model.json")
+    verification_receipt_sha=${ENDPOINT_RECEIPT_SET_SHA:-0000000000000000000000000000000000000000000000000000000000000000}
     mkdir -p "$lease_dir"
     $real_jq -n --argjson pid "$pid" --arg started "fixture-start-$pid" \
       --arg profile "$profile" --arg runtime_alias "$runtime_alias" \
@@ -340,8 +362,8 @@ write_live_server_identity() {
       --arg tree "$runtime_tree" \
       --arg runtime_manifest_sha "$runtime_manifest_sha" --arg receipt_sha "$current_receipt_sha" \
       --arg server_sha "$server_sha" --arg model_manifest_sha "$model_manifest_sha" \
-      --argjson artifacts "$artifacts" '{
-        schema_version: 2, owner_kind: "serve",
+      --argjson artifacts "$artifacts" --arg verification_receipt_sha "$verification_receipt_sha" '{
+        schema_version: 3, owner_kind: "serve",
         owner_token: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         pid: $pid, process_started_at: $started,
         model_id: "fixture-model", profile_id: $profile, vision: $vision,
@@ -351,11 +373,42 @@ write_live_server_identity() {
         runtime_tree_sha: $tree, runtime_manifest_sha256: $runtime_manifest_sha,
         build_receipt_sha256: $receipt_sha, executable_name: "llama-server",
         executable_sha256: $server_sha, model_manifest_sha256: $model_manifest_sha,
-        artifacts: $artifacts, host: "127.0.0.1", port: 8080
+        artifacts: $artifacts,
+        artifact_verification: {
+          requested_mode: "full", effective_mode: "full", cache_hits: 0,
+          cache_misses: 0, full_hashes: ($artifacts | length),
+          receipt_set_sha256: $verification_receipt_sha
+        },
+        host: "127.0.0.1", port: 8080
       }' > "$lease_record"
 }
 
+assert_bench_usage_rejected() {
+    local description=$1
+    shift
+    local usage_output usage_status
+    if usage_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+        --suite qwen3.8-smoke "$@" --dry-run 2>&1); then
+        fail "bench accepted invalid parser input: $description"
+    else
+        usage_status=$?
+    fi
+    (( usage_status == 2 )) || fail "bench parser rejection exited $usage_status, expected 2: $description"
+    assert_contains "$usage_output" 'usage: metal-llm bench MODEL --suite SUITE'
+}
+
+assert_bench_usage_rejected 'missing artifact-check value' --artifact-check
+assert_bench_usage_rejected 'duplicate artifact-check option' --artifact-check cached --artifact-check full
+assert_bench_usage_rejected 'removed artifact-check off value' --artifact-check off
+assert_bench_usage_rejected 'unknown artifact-check value' --artifact-check other
+assert_bench_usage_rejected 'artifact-check equals form' --artifact-check=full
+
+local_lab_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+: > "$temporary_root/artifact-hashes.log"
 dry_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model --suite qwen3.8-smoke --dry-run)
+assert_contains "$dry_output" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=1 full_hashes=1'
+assert_count "$dry_output" 'artifact verification:' 1
+assert_count "$(<"$temporary_root/artifact-hashes.log")" "${fixture_root:A}/.lab/artifacts/fixture-model/model.gguf" 1
 assert_contains "$dry_output" 'llama-bench'
 assert_contains "$dry_output" '-p 512 -n 0'
 assert_contains "$dry_output" '-p 0 -n 128'
@@ -364,6 +417,8 @@ assert_contains "$dry_output" '-p 0 -n 128'
 [[ "$dry_output" != *'HTTP POST'* ]] || fail 'local mode included endpoint cases'
 dry_result_files=("$results_dir"/*(N))
 (( ${#dry_result_files} == 0 )) || fail 'bench --dry-run wrote a result file'
+local_lab_after=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+[[ "$local_lab_after" == "$local_lab_before" ]] || fail 'local benchmark dry-run changed .lab files'
 
 upstream_dry=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
   --suite qwen3.8-smoke --runtime upstream --dry-run)
@@ -381,12 +436,39 @@ if invalid_runtime_output=$(env "${common_environment[@]}" "$fixture_cli" bench 
 fi
 assert_contains "$invalid_runtime_output" 'runtime must be tuned or upstream'
 
+: > "$temporary_root/artifact-hashes.log"
 run_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model --suite qwen3.8-smoke)
+assert_contains "$run_output" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=1 full_hashes=1'
+assert_count "$run_output" 'artifact verification:' 1
+assert_count "$(<"$temporary_root/artifact-hashes.log")" "${fixture_root:A}/.lab/artifacts/fixture-model/model.gguf" 1
 assert_contains "$run_output" 'wrote benchmark result:'
 [[ "$run_output" != *'command_json='* ]] || fail 'local benchmark leaked an internal shell variable'
 result_files=("$results_dir"/*.json(N))
 (( ${#result_files} == 1 )) || fail "expected one result, found ${#result_files}"
 result_file=$result_files[1]
+local_bench_identity="$temporary_root/local-bench-identity.json"
+[[ -f "$local_bench_identity" ]] || fail 'local benchmark did not expose its managed identity to the fixture executable'
+jq -e '
+  (keys | sort) == ([
+    "schema_version", "owner_kind", "owner_token", "pid", "process_started_at",
+    "model_id", "profile_id", "runtime_alias", "context", "vision", "mtp_policy",
+    "mtp_threshold", "runtime_id", "runtime_revision", "runtime_tree_sha",
+    "runtime_manifest_sha256", "build_receipt_sha256", "executable_name",
+    "executable_sha256", "model_manifest_sha256", "artifacts",
+    "artifact_verification", "host", "port"
+  ] | sort) and
+  .schema_version == 3 and .owner_kind == "local-bench" and
+  .artifact_verification == {
+    requested_mode: "cached", effective_mode: "full", cache_hits: 0,
+    cache_misses: 1, full_hashes: 1,
+    receipt_set_sha256: .artifact_verification.receipt_set_sha256
+  } and
+  (.artifact_verification | keys | sort) == ([
+    "requested_mode", "effective_mode", "cache_hits", "cache_misses",
+    "full_hashes", "receipt_set_sha256"
+  ] | sort) and
+  (.artifact_verification.receipt_set_sha256 | test("^[0-9a-f]{64}$"))
+' "$local_bench_identity" >/dev/null || fail 'local benchmark published an invalid schema-3 managed identity'
 jq -e '
   .date != "1999-01-02" and .date != "1998-01-02" and
   ((.experiment_id | startswith("19990102t030405z")) | not) and
@@ -408,7 +490,9 @@ jq -e '
 jq -e --arg revision "$fixture_revision" --arg tree "$fixture_tree" \
   --arg runtime_tree "$runtime_tree" --arg runtime_manifest_sha "$runtime_manifest_sha" \
   --arg receipt_sha "$receipt_sha" --arg bench_sha "$bench_sha" \
-  --arg model_manifest_sha "$model_manifest_sha" --arg model_sha "$model_sha" --arg suite_sha "$suite_sha" '
+  --arg model_manifest_sha "$model_manifest_sha" --arg model_sha "$model_sha" --arg suite_sha "$suite_sha" \
+  --argjson identity_verification "$(jq -c '.artifact_verification' "$local_bench_identity")" '
+  .schema_version == 2 and
   .provenance.repository == {revision: $revision, tree_sha: $tree, clean: true} and
   .provenance.hardware == {id: "fixture-hardware", chip: "Fixture Chip", unified_memory_bytes: 1073741824} and
   .provenance.system == {
@@ -428,6 +512,13 @@ jq -e --arg revision "$fixture_revision" --arg tree "$fixture_tree" \
   .provenance.model_manifest_sha256 == $model_manifest_sha and
   .provenance.artifacts == [{id: "model", bytes: 13, sha256: $model_sha}] and
   .provenance.suite == {id: "qwen3.8-smoke", sha256: $suite_sha, fixtures: []} and
+  .provenance.artifact_verification == {
+    requested_mode: "cached", effective_mode: "full", cache_hits: 0,
+    cache_misses: 1, full_hashes: 1,
+    receipt_set_sha256: .provenance.artifact_verification.receipt_set_sha256
+  } and
+  (.provenance.artifact_verification.receipt_set_sha256 | test("^[0-9a-f]{64}$")) and
+  .provenance.artifact_verification == $identity_verification and
   .runs[0].command == [
     "llama-bench", "-m", "artifact:model", "-ngl", "all", "-p", "512", "-n", "0",
     "-b", "512", "-ub", "512", "-r", "3", "-fa", "on", "-lm", "mmap", "-lzm", "on", "-o", "json"
@@ -444,6 +535,23 @@ partial_files=("$results_dir"/*.part*(N))
 (( ${#partial_files} == 0 )) || fail 'bench left a partial result behind'
 bench_log_contents=$(command cat -- "$temporary_root/bench.log")
 assert_contains "$bench_log_contents" '-m'
+
+: > "$temporary_root/artifact-hashes.log"
+warm_local_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --dry-run)
+assert_contains "$warm_local_output" 'artifact verification: requested=cached effective=cached cache_hits=1 cache_misses=0 full_hashes=0'
+assert_count "$warm_local_output" 'artifact verification:' 1
+[[ ! -s "$temporary_root/artifact-hashes.log" ]] || fail 'warm cached local bench hashed a GGUF body'
+
+local_full_inventory_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+: > "$temporary_root/artifact-hashes.log"
+full_local_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --dry-run --artifact-check full)
+assert_contains "$full_local_output" 'artifact verification: requested=full effective=full cache_hits=0 cache_misses=0 full_hashes=1'
+assert_count "$full_local_output" 'artifact verification:' 1
+assert_count "$(<"$temporary_root/artifact-hashes.log")" "${fixture_root:A}/.lab/artifacts/fixture-model/model.gguf" 1
+local_full_inventory_after=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+[[ "$local_full_inventory_after" == "$local_full_inventory_before" ]] || fail 'full local benchmark dry-run changed .lab state'
 
 collision_target="$temporary_root/collision-target.json"
 collision_part="$temporary_root/collision-part.json"
@@ -607,11 +715,27 @@ mkdir -p "$endpoint_results"
 # Strict receipt verification checks both recorded runtime executables even
 # though endpoint mode invokes only the already loaded server.
 
+rm -rf -- "$fixture_root/.lab/verification"
+endpoint_lab_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+: > "$temporary_root/artifact-hashes.log"
 endpoint_dry=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
     METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
     --suite qwen3.8-smoke --mode endpoint --dry-run)
+assert_contains "$endpoint_dry" 'artifact verification: requested=cached effective=full cache_hits=0 cache_misses=3 full_hashes=3'
+ENDPOINT_RECEIPT_SET_SHA=$(print -r -- "$endpoint_dry" | /usr/bin/sed -n \
+  's/.*receipt_set_sha256=\([0-9a-f]\{64\}\).*/\1/p')
+[[ "$ENDPOINT_RECEIPT_SET_SHA" =~ '^[0-9a-f]{64}$' ]] || \
+  fail 'endpoint dry-run did not expose a receipt-set digest'
+AUTO_ENDPOINT_RECEIPT_SET_SHA=$ENDPOINT_RECEIPT_SET_SHA
+assert_count "$endpoint_dry" 'artifact verification:' 1
+for required_name in model projector mtp; do
+  assert_count "$(<"$temporary_root/artifact-hashes.log")" \
+    "${fixture_root:A}/.lab/artifacts/fixture-model/$required_name.gguf" 1
+done
 assert_contains "$endpoint_dry" 'HTTP POST'
 [[ "$endpoint_dry" != *'llama-bench'* ]] || fail 'endpoint mode included local cases'
+endpoint_lab_after=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+[[ "$endpoint_lab_after" == "$endpoint_lab_before" ]] || fail 'endpoint benchmark dry-run changed .lab files'
 
 clear_managed_lease
 no_identity_results="$temporary_root/no-identity-results"
@@ -626,6 +750,17 @@ assert_contains "$identity_output" 'no managed full-model identity is available'
 sleep 60 &!
 managed_identity_pid=$!
 write_live_server_identity "$managed_identity_pid" auto true
+cp "$lease_record" "$lease_record.valid"
+$real_jq '.schema_version = 2' "$lease_record.valid" > "$lease_record"
+if schema_two_identity_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 \
+    METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
+    --suite qwen3.8-smoke --mode endpoint 2>&1); then
+    kill "$managed_identity_pid" 2>/dev/null || true
+    wait "$managed_identity_pid" 2>/dev/null || true
+    fail 'endpoint mode accepted a live schema-2 managed identity'
+fi
+assert_contains "$schema_two_identity_output" 'managed full-model identity is invalid'
+mv "$lease_record.valid" "$lease_record"
 if inactive_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$endpoint_results" \
     "$fixture_cli" bench fixture-model --suite qwen3.8-smoke --mode endpoint 2>&1); then
     kill "$managed_identity_pid" 2>/dev/null || true
@@ -633,6 +768,28 @@ if inactive_output=$(env "${common_environment[@]}" METAL_LLM_RESULTS_DIR="$endp
     fail 'endpoint mode ran when its managed server was not responding'
 fi
 assert_contains "$inactive_output" 'endpoint mode requires a running endpoint'
+
+: > "$temporary_root/artifact-hashes.log"
+warm_endpoint_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
+  METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --mode endpoint --dry-run)
+assert_contains "$warm_endpoint_output" 'artifact verification: requested=cached effective=cached cache_hits=3 cache_misses=0 full_hashes=0'
+assert_count "$warm_endpoint_output" 'artifact verification:' 1
+[[ ! -s "$temporary_root/artifact-hashes.log" ]] || fail 'warm cached endpoint bench hashed a GGUF body'
+
+endpoint_full_inventory_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+: > "$temporary_root/artifact-hashes.log"
+full_endpoint_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
+  METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --mode endpoint --dry-run --artifact-check full)
+assert_contains "$full_endpoint_output" 'artifact verification: requested=full effective=full cache_hits=0 cache_misses=0 full_hashes=3'
+assert_count "$full_endpoint_output" 'artifact verification:' 1
+for required_name in model projector mtp; do
+  assert_count "$(<"$temporary_root/artifact-hashes.log")" \
+    "${fixture_root:A}/.lab/artifacts/fixture-model/$required_name.gguf" 1
+done
+endpoint_full_inventory_after=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
+[[ "$endpoint_full_inventory_after" == "$endpoint_full_inventory_before" ]] || fail 'full endpoint benchmark dry-run changed .lab state'
 
 if mismatch_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 \
     METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
@@ -662,6 +819,7 @@ identity_mutations=(
   '.mtp_policy = "on" | .mtp_threshold = null'
   '.mtp_threshold = 32767'
   '.artifacts |= map(select(.id != "projector"))'
+  '.artifact_verification.receipt_set_sha256 = ("f" * 64)'
 )
 for identity_mutation in "${identity_mutations[@]}"; do
     $real_jq "$identity_mutation" "$identity_base" > "$lease_record.part"
@@ -713,10 +871,16 @@ endpoint_output=$(env "${common_environment[@]}" METAL_LLM_API_KEY="$endpoint_se
 endpoint_files=("$endpoint_results"/*.json(N))
 (( ${#endpoint_files} == 1 )) || fail "expected one endpoint result, found ${#endpoint_files}"
 jq -e '
-  .benchmark_mode == "endpoint" and (.runs | length == 2) and
+  .schema_version == 2 and .benchmark_mode == "endpoint" and (.runs | length == 2) and
   .provenance.profile_id == "auto" and .provenance.runtime_alias == "tuned" and
   .provenance.context == 262144 and .provenance.vision == true and
   .provenance.mtp_policy == "dynamic" and .provenance.mtp_threshold == 32768 and
+  .provenance.artifact_verification == {
+    requested_mode: "cached", effective_mode: "cached", cache_hits: 3,
+    cache_misses: 0, full_hashes: 0,
+    receipt_set_sha256: .provenance.artifact_verification.receipt_set_sha256
+  } and
+  .provenance.artifact_verification.receipt_set_sha256 == $server_receipt_set_sha and
   all(.runs[];
     .profile == null and .profile_id == "auto" and .runtime_alias == "tuned" and
     .runtime_id == "fixture-runtime" and .context == 262144 and .vision == true and
@@ -728,7 +892,7 @@ jq -e '
     {id: "deterministic-api-smoke", effective_prompt_tokens: 32768, mtp_selected: true},
     {id: "vision-spatial-smoke", effective_prompt_tokens: 32769, mtp_selected: false}
   ]
-' "$endpoint_files[1]" >/dev/null
+' --arg server_receipt_set_sha "$ENDPOINT_RECEIPT_SET_SHA" "$endpoint_files[1]" >/dev/null
 curl_log_contents=$(command cat -- "$temporary_root/curl.log")
 auth_capture_contents=$(command cat -- "$temporary_root/auth.capture")
 assert_contains "$curl_log_contents" 'data:image/png;base64,'
@@ -752,6 +916,14 @@ negative_usage_files=("$negative_usage_results"/*(N))
 
 custom_results="$temporary_root/custom-endpoint-results"
 mkdir -p "$custom_results"
+custom_verification_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 \
+  METAL_LLM_RESULTS_DIR="$custom_results" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --mode endpoint --profile custom --runtime tuned \
+  --mtp dynamic --context 65536 --vision off --dry-run)
+ENDPOINT_RECEIPT_SET_SHA=$(print -r -- "$custom_verification_output" | /usr/bin/sed -n \
+  's/.*receipt_set_sha256=\([0-9a-f]\{64\}\).*/\1/p')
+[[ "$ENDPOINT_RECEIPT_SET_SHA" =~ '^[0-9a-f]{64}$' ]] || \
+  fail 'custom endpoint dry-run did not expose a receipt-set digest'
 write_live_server_identity "$managed_identity_pid" custom false tuned 65536 dynamic
 custom_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 \
   METAL_LLM_RESULTS_DIR="$custom_results" "$fixture_cli" bench fixture-model \
@@ -831,6 +1003,7 @@ $real_git -C "$fixture_root" -c user.name='Bench Test' -c user.email='bench-test
 
 sleep 60 &!
 managed_identity_pid=$!
+ENDPOINT_RECEIPT_SET_SHA=$AUTO_ENDPOINT_RECEIPT_SET_SHA
 write_live_server_identity "$managed_identity_pid" auto true
 for fixture_suite in traversal-fixture symlink-fixture png-as-jpg jpeg-as-png uppercase-png; do
     fixture_escape_results="$temporary_root/$fixture_suite-results"
