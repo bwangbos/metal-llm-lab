@@ -31,6 +31,16 @@ and the predeclared performance gate on the recorded M5 Max 128 GiB system, so
 `auto` is the recommended preset for that exact tested configuration. This is a
 machine-specific acceptance result, not a performance promise for other hosts.
 
+## Benchmark readouts
+
+See the [prefill and generation context-scaling comparison](results/experiments/2026-09-06-extended-context-sweep/comparison.md)
+for near-zero through 256K prompts on the M5 Max 128 GB, with vision enabled.
+It compares `long` and `auto` with 256K custom equivalents of `fast` and
+`stable`; the shipped short-context presets remain unchanged. The readout links
+sample statistics, runtime provenance, and power/background-load caveats.
+The [original preset sweep](results/experiments/2026-09-06-preset-context-sweep/summary.md)
+measures each preset at its normal context allocation.
+
 ## Quick start
 
 ```sh
