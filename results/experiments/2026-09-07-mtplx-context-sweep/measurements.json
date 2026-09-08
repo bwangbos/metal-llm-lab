@@ -1,0 +1,3363 @@
+{
+  "experiment": {
+    "runtime": "MTPLX 2.11.2",
+    "model": "Youssofal/Qwen3.8-Flash-Next-MTPLX-Optimized-Speed",
+    "revision": "6bc2f6e8426ccb4af73c81bc56ba7718afc92cc6",
+    "memory_budget_gib": 104,
+    "token_id": 830,
+    "targets": [
+      128,
+      32768,
+      65536,
+      98304,
+      131072,
+      163840,
+      196608,
+      229376,
+      261888
+    ],
+    "output_tokens": 128,
+    "warmups": 1,
+    "retained_samples": 3,
+    "temperature": 0,
+    "seed": 1234,
+    "vision_enabled": true,
+    "context_window": 262144,
+    "mtp": "fixed depth 3",
+    "endpoint": "/v1/completions",
+    "cache_policy": "admin clear before every request; assert zero reused tokens",
+    "ignore_eos": "not supported by route; require exactly 128 output tokens in every response",
+    "harness_sha256": "61251821f2f39dcf76ff228542af20b4b66007ac2114eabbaf0325ce0be24962",
+    "launch_helper_sha256": "9d3c6918906b52dee5f9f3a670919a45091660068cd834f14c5f66be09af8e9c",
+    "snapshot_receipt_sha256": "5cf7630f7341be6b029c20a03e7c7e5ec8e54967aa82d7f1db87855af62f0e30",
+    "repository_revision": "7b5c3449d6f6d8523c5025d6b779c5e0dfa67b0d"
+  },
+  "statistics": [
+    {
+      "prompt_tokens": 128,
+      "n": 3,
+      "prefill_tok_s": {
+        "mean": 443.008,
+        "stdev": 1.573586031966484
+      },
+      "generation_tok_s": {
+        "mean": 79.01366666666667,
+        "stdev": 0.1630163590972807
+      },
+      "wall_seconds": {
+        "mean": 1.9142487049102783,
+        "stdev": 0.0028709779142438285
+      }
+    },
+    {
+      "prompt_tokens": 32768,
+      "n": 3,
+      "prefill_tok_s": {
+        "mean": 1309.5696666666668,
+        "stdev": 0.8947649598265158
+      },
+      "generation_tok_s": {
+        "mean": 62.719,
+        "stdev": 0.38822287413288786
+      },
+      "wall_seconds": {
+        "mean": 27.076254685719807,
+        "stdev": 0.020614320374654795
+      }
+    },
+    {
+      "prompt_tokens": 65536,
+      "n": 3,
+      "prefill_tok_s": {
+        "mean": 1231.5116666666668,
+        "stdev": 10.882122142915538
+      },
+      "generation_tok_s": {
+        "mean": 55.842,
+        "stdev": 0.1119866063420105
+      },
+      "wall_seconds": {
+        "mean": 55.53016416231791,
+        "stdev": 0.4748560739378381
+      }
+    },
+    {
+      "prompt_tokens": 98304,
+      "n": 3,
+      "prefill_tok_s": {
+        "mean": 1164.2636666666667,
+        "stdev": 6.150567805766651
+      },
+      "generation_tok_s": {
+        "mean": 49.245666666666665,
+        "stdev": 0.23304577518876948
+      },
+      "wall_seconds": {
+        "mean": 87.0609203974406,
+        "stdev": 0.45333225003940025
+      }
+    },
+    {
+      "prompt_tokens": 131072,
+      "n": 3,
+      "prefill_tok_s": {
+        "mean": 1135.705,
+        "stdev": 2.498978391263164
+      },
+      "generation_tok_s": {
+        "mean": 43.97,
+        "stdev": 0.10059324032955728
+      },
+      "wall_seconds": {
+        "mean": 118.3540043036143,
+        "stdev": 0.25534182876085937
+      }
+    },
+    {
+      "prompt_tokens": 163840,
+      "n": 3,
+      "prefill_tok_s": {
+        "mean": 1111.0513333333333,
+        "stdev": 6.839587292617402
+      },
+      "generation_tok_s": {
+        "mean": 38.24333333333333,
+        "stdev": 0.5844393324660274
+      },
+      "wall_seconds": {
+        "mean": 150.85514267285666,
+        "stdev": 0.9264951821308048
+      }
+    },
+    {
+      "prompt_tokens": 196608,
+      "n": 3,
+      "prefill_tok_s": {
+        "mean": 1037.429,
+        "stdev": 28.96038810168128
+      },
+      "generation_tok_s": {
+        "mean": 35.893,
+        "stdev": 0.2982415128717003
+      },
+      "wall_seconds": {
+        "mean": 193.22428592046103,
+        "stdev": 5.239016202516136
+      }
+    },
+    {
+      "prompt_tokens": 229376,
+      "n": 3,
+      "prefill_tok_s": {
+        "mean": 1072.159,
+        "stdev": 4.656450686950288
+      },
+      "generation_tok_s": {
+        "mean": 33.647333333333336,
+        "stdev": 0.1897269968489806
+      },
+      "wall_seconds": {
+        "mean": 217.80232985814413,
+        "stdev": 0.9502426732492183
+      }
+    },
+    {
+      "prompt_tokens": 261888,
+      "n": 3,
+      "prefill_tok_s": {
+        "mean": 1062.7283333333332,
+        "stdev": 1.068845327132683
+      },
+      "generation_tok_s": {
+        "mean": 31.405,
+        "stdev": 0.4193363804870744
+      },
+      "wall_seconds": {
+        "mean": 250.5612680117289,
+        "stdev": 0.24559650306590503
+      }
+    }
+  ],
+  "records": [
+    {
+      "name": "128-warmup",
+      "prompt_tokens": 128,
+      "sample": 0,
+      "started_at": 1788790006.390548,
+      "wall_seconds": 1.9359679222106934,
+      "prefill_tok_s": 425.354,
+      "generation_tok_s": 78.582,
+      "ttft_s": 0.30286620801780373,
+      "peak_memory_bytes": 83883485517,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 83897147951,
+        "promotion_bytes": 32735232,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b0"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "stock",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 128,
+          "capacity": 260,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "4719c594d7c8ba102db789392f3f2a3140880d1198045c94d533a3323419f9de",
+      "request_sha256": "6a26b054681c0f5e7bce4034abed87d6c4a4f3ba265cbbf451ea766195d89a08",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "5089712df937189af57c9f480cba45897e4d21249d6f118ce7288a40acca9a71"
+    },
+    {
+      "name": "128-s1",
+      "prompt_tokens": 128,
+      "sample": 1,
+      "started_at": 1788790008.333319,
+      "wall_seconds": 1.9139461517333984,
+      "prefill_tok_s": 441.207,
+      "generation_tok_s": 79.086,
+      "ttft_s": 0.2917300420231186,
+      "peak_memory_bytes": 83883486533,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 83622415160,
+        "promotion_bytes": 32735232,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b0"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "stock",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 128,
+          "capacity": 260,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "acc825122eb0bf52eedcb9933bd05b2419f5261aba9849b3200ce083a771c70f",
+      "request_sha256": "6a26b054681c0f5e7bce4034abed87d6c4a4f3ba265cbbf451ea766195d89a08",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "6322fcc3761b62a94591cbd89a8f00d3d336d43708509ea09288b62ea746e19e"
+    },
+    {
+      "name": "128-s2",
+      "prompt_tokens": 128,
+      "sample": 2,
+      "started_at": 1788790010.252832,
+      "wall_seconds": 1.9115409851074219,
+      "prefill_tok_s": 443.7,
+      "generation_tok_s": 79.128,
+      "ttft_s": 0.2898819160182029,
+      "peak_memory_bytes": 83883482469,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 83897157936,
+        "promotion_bytes": 32735232,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b0"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "stock",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 128,
+          "capacity": 260,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "cac688fe713f6f4aae9c1dea6eb6291b2e5137236d15ed403364678fb41a4ed1",
+      "request_sha256": "6a26b054681c0f5e7bce4034abed87d6c4a4f3ba265cbbf451ea766195d89a08",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "8272f1b60677e7b2e9859e6bb56ffdbe15aae1e02c3dc300f7f72166e06f003c"
+    },
+    {
+      "name": "128-s3",
+      "prompt_tokens": 128,
+      "sample": 3,
+      "started_at": 1788790012.170976,
+      "wall_seconds": 1.9172589778900146,
+      "prefill_tok_s": 444.117,
+      "generation_tok_s": 78.827,
+      "ttft_s": 0.2895609170082025,
+      "peak_memory_bytes": 83883486533,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 83897142800,
+        "promotion_bytes": 32735232,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b0"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "stock",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 128,
+          "capacity": 260,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "50dbedb92550d4e8e6cc592cffdcfaad14a8f20bae9e70344242aca10e5c0e1f",
+      "request_sha256": "6a26b054681c0f5e7bce4034abed87d6c4a4f3ba265cbbf451ea766195d89a08",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "f0ee9d44b217561653aed09b555087c9ea675686943621493aad0a47238e1085"
+    },
+    {
+      "name": "32768-warmup",
+      "prompt_tokens": 32768,
+      "sample": 0,
+      "started_at": 1788790014.097889,
+      "wall_seconds": 26.76298189163208,
+      "prefill_tok_s": 1325.787,
+      "generation_tok_s": 62.943,
+      "ttft_s": 24.730043624993414,
+      "peak_memory_bytes": 90393857234,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 93174803912,
+        "promotion_bytes": 960233472,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 32768,
+          "capacity": 32900,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "ec6fadaca9381e9c035422a6421a3f300990fb2b662d531ea60adf985b15a5fa",
+      "request_sha256": "ed8dde3e415352aea4e560045863d5a9bca57add7dd7d86d80416e5632cccbb0",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "3238f27836b2416988088b08b1e4cd4d84378b40a23ad9a998103863a2736452"
+    },
+    {
+      "name": "32768-s1",
+      "prompt_tokens": 32768,
+      "sample": 1,
+      "started_at": 1788790040.8880699,
+      "wall_seconds": 27.09428310394287,
+      "prefill_tok_s": 1308.538,
+      "generation_tok_s": 62.772,
+      "ttft_s": 25.058310499996878,
+      "peak_memory_bytes": 90393840850,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 93174894149,
+        "promotion_bytes": 960233472,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 32768,
+          "capacity": 32900,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "c775f9e411af9b520b3602b5d495b320c599e7d3c69d43b16568d7dd0ae626a6",
+      "request_sha256": "ed8dde3e415352aea4e560045863d5a9bca57add7dd7d86d80416e5632cccbb0",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "0743b6b42a40696e58ec4e9fc4b904a066c61fbaa161fd2cc834b238c92a80a9"
+    },
+    {
+      "name": "32768-s2",
+      "prompt_tokens": 32768,
+      "sample": 2,
+      "started_at": 1788790068.007263,
+      "wall_seconds": 27.05378007888794,
+      "prefill_tok_s": 1310.134,
+      "generation_tok_s": 63.078,
+      "ttft_s": 25.024840291996952,
+      "peak_memory_bytes": 90393840850,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 93174995197,
+        "promotion_bytes": 960233472,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 32768,
+          "capacity": 32900,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "223c1eacce4cea4c0ac1daf785c0ba4b252f537037da0e652cbfd6958f7514b1",
+      "request_sha256": "ed8dde3e415352aea4e560045863d5a9bca57add7dd7d86d80416e5632cccbb0",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "d1637732f851978411237c190ee66aaa6dded9aeb23fe21d2225450ef0f48c21"
+    },
+    {
+      "name": "32768-s3",
+      "prompt_tokens": 32768,
+      "sample": 3,
+      "started_at": 1788790095.0861921,
+      "wall_seconds": 27.080700874328613,
+      "prefill_tok_s": 1310.037,
+      "generation_tok_s": 62.307,
+      "ttft_s": 25.031793124973774,
+      "peak_memory_bytes": 90393840850,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 93174942093,
+        "promotion_bytes": 960233472,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 32768,
+          "capacity": 32900,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "9ddeef2b93229d8420d12cb2d9ccd49b64ac7aa1cfe9400618a5d85c928d3f9c",
+      "request_sha256": "ed8dde3e415352aea4e560045863d5a9bca57add7dd7d86d80416e5632cccbb0",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "9ffa37a191576d61b08d04bc8f6bd7bd4e053764628845bd61d5fb5a48903724"
+    },
+    {
+      "name": "65536-warmup",
+      "prompt_tokens": 65536,
+      "sample": 0,
+      "started_at": 1788790122.198955,
+      "wall_seconds": 54.89838004112244,
+      "prefill_tok_s": 1246.18,
+      "generation_tok_s": 55.894,
+      "ttft_s": 52.61013904202264,
+      "peak_memory_bytes": 90396906736,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 93114354580,
+        "promotion_bytes": 1891368960,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 65536,
+          "capacity": 65668,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "d6270e04aeeca266408adf5bb25e7968cb9ebce4e9577612a80b5ee5efacc36d",
+      "request_sha256": "9bd27d05dd2494c1fbf846021e578d8516ba1cf7305fbbca623b9420f094a6d6",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "7f658984f9f5769635658384717b41a929d81fb02105c580b68c3c363b9342e1"
+    },
+    {
+      "name": "65536-s1",
+      "prompt_tokens": 65536,
+      "sample": 1,
+      "started_at": 1788790177.1291652,
+      "wall_seconds": 55.07602667808533,
+      "prefill_tok_s": 1241.942,
+      "generation_tok_s": 55.963,
+      "ttft_s": 52.78598529205192,
+      "peak_memory_bytes": 90396906736,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 93114465840,
+        "promotion_bytes": 1891368960,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 65536,
+          "capacity": 65668,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "44bb3047fad8eea88fc07735cd3fb32b19dd08938f64c2bd92922a69f6eb72d4",
+      "request_sha256": "9bd27d05dd2494c1fbf846021e578d8516ba1cf7305fbbca623b9420f094a6d6",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "0655480c0a5da32e85812ced435aaf8cabe284541067bbff2dd69a9d006623d2"
+    },
+    {
+      "name": "65536-s2",
+      "prompt_tokens": 65536,
+      "sample": 2,
+      "started_at": 1788790232.235069,
+      "wall_seconds": 55.49113583564758,
+      "prefill_tok_s": 1232.365,
+      "generation_tok_s": 55.821,
+      "ttft_s": 53.19613283302169,
+      "peak_memory_bytes": 90396906736,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 93114462256,
+        "promotion_bytes": 1891368960,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 65536,
+          "capacity": 65668,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "bda86ee6b9d4c3eb2a9ac9c8e5aa5c82109ba89f0b9e4701d836863a7d155070",
+      "request_sha256": "9bd27d05dd2494c1fbf846021e578d8516ba1cf7305fbbca623b9420f094a6d6",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "868f1491e61a6a85cea6c400efcc8b7ed206aa0af3d77c50d60a70decaf06dae"
+    },
+    {
+      "name": "65536-s3",
+      "prompt_tokens": 65536,
+      "sample": 3,
+      "started_at": 1788790287.753463,
+      "wall_seconds": 56.023329973220825,
+      "prefill_tok_s": 1220.228,
+      "generation_tok_s": 55.742,
+      "ttft_s": 53.72941204201197,
+      "peak_memory_bytes": 90396906736,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 93114382384,
+        "promotion_bytes": 1891368960,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 65536,
+          "capacity": 65668,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "a82876ef1b98332b78cf7bc5abbb3b76163c5c2d3e84a4f344eb768d0b18fdd1",
+      "request_sha256": "9bd27d05dd2494c1fbf846021e578d8516ba1cf7305fbbca623b9420f094a6d6",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "b167b0b3092d6382f14246dcd893e0bf48e8292c8926b961b363efb4e426214b"
+    },
+    {
+      "name": "98304-warmup",
+      "prompt_tokens": 98304,
+      "sample": 0,
+      "started_at": 1788790343.811212,
+      "wall_seconds": 86.23255610466003,
+      "prefill_tok_s": 1175.844,
+      "generation_tok_s": 49.164,
+      "ttft_s": 83.63601791695692,
+      "peak_memory_bytes": 92162217725,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 95480673492,
+        "promotion_bytes": 2822504448,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 98304,
+          "capacity": 98436,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "ff08d7fa59c1dbdfa9e88d70dadb0a680ab8168bbb4dd3301ae5c8c44190dc22",
+      "request_sha256": "5b4f0ffdc511085b658e76ca20b5c819dc2e64c1d14f61b545bcc31d5df1a965",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "ee0361d63f93199fd166fa469f0c9232b8ccac8b812c410e6c97f5034c55c2a1"
+    },
+    {
+      "name": "98304-s1",
+      "prompt_tokens": 98304,
+      "sample": 1,
+      "started_at": 1788790430.078969,
+      "wall_seconds": 86.60744881629944,
+      "prefill_tok_s": 1170.347,
+      "generation_tok_s": 49.496,
+      "ttft_s": 84.02344012499088,
+      "peak_memory_bytes": 92162885245,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 95458553034,
+        "promotion_bytes": 2822504448,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 98304,
+          "capacity": 98436,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "af9c6bdb18d8b55c8513282b3bda67cbc3a7a853655328588909de7b73626d7e",
+      "request_sha256": "5b4f0ffdc511085b658e76ca20b5c819dc2e64c1d14f61b545bcc31d5df1a965",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "ba0da1627f88c756c69a0f5bc756a4b7d3fc8fb9509a2477a22cbde35e2f2dfc"
+    },
+    {
+      "name": "98304-s2",
+      "prompt_tokens": 98304,
+      "sample": 2,
+      "started_at": 1788790516.7177758,
+      "wall_seconds": 87.06119918823242,
+      "prefill_tok_s": 1164.396,
+      "generation_tok_s": 49.035,
+      "ttft_s": 84.46042854100233,
+      "peak_memory_bytes": 92162610129,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 95493465488,
+        "promotion_bytes": 2822504448,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 98304,
+          "capacity": 98436,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "7600b4bdedfbbfc1b0a9965187d01a7b4850278574d4eb4af4d75b899f1db07b",
+      "request_sha256": "5b4f0ffdc511085b658e76ca20b5c819dc2e64c1d14f61b545bcc31d5df1a965",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "d188e5c019edcc30a793dde252616e1b5d1a79439b92901a54321af644c9bf1e"
+    },
+    {
+      "name": "98304-s3",
+      "prompt_tokens": 98304,
+      "sample": 3,
+      "started_at": 1788790603.813442,
+      "wall_seconds": 87.51411318778992,
+      "prefill_tok_s": 1158.048,
+      "generation_tok_s": 49.206,
+      "ttft_s": 84.92515770799946,
+      "peak_memory_bytes": 92162472681,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 95478164964,
+        "promotion_bytes": 2822504448,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 98304,
+          "capacity": 98436,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "da54828ba016b82e07a99c61548d9ab65d82f6cba855e8bd9dc45ca9739b656b",
+      "request_sha256": "5b4f0ffdc511085b658e76ca20b5c819dc2e64c1d14f61b545bcc31d5df1a965",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "7a15c9719be09e7860d57dc76fc1c15c2e225f70b92f7298166aef48abdd5c13"
+    },
+    {
+      "name": "131072-warmup",
+      "prompt_tokens": 131072,
+      "sample": 0,
+      "started_at": 1788790691.372659,
+      "wall_seconds": 118.4855489730835,
+      "prefill_tok_s": 1134.803,
+      "generation_tok_s": 43.374,
+      "ttft_s": 115.54520929203136,
+      "peak_memory_bytes": 94780687817,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 96282576840,
+        "promotion_bytes": 3753639936,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 131072,
+          "capacity": 131204,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "701dd59cfe54dcea82b56d829abd9256a66bb172db5c2fc6eede64b7d95c084c",
+      "request_sha256": "308d09fdc315178cdab33dc10670b83184eb076fcf81d05bde011c6e212cbe9d",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "a64a4354aaa3af07c2e2099805a4e848db3653a413695fe11be10b709933756b"
+    },
+    {
+      "name": "131072-s1",
+      "prompt_tokens": 131072,
+      "sample": 1,
+      "started_at": 1788790809.8899,
+      "wall_seconds": 118.0837938785553,
+      "prefill_tok_s": 1138.384,
+      "generation_tok_s": 43.975,
+      "ttft_s": 115.1812200830318,
+      "peak_memory_bytes": 94780748977,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 96273257298,
+        "promotion_bytes": 3753639936,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 131072,
+          "capacity": 131204,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "371a28e9313b2c46cd64853a1df44e03874be19d213e47150391df5b46373fcd",
+      "request_sha256": "308d09fdc315178cdab33dc10670b83184eb076fcf81d05bde011c6e212cbe9d",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "555df7eb62d2110b822f77864f23460750cbaaf8a121633f1c2d53b9b1808f55"
+    },
+    {
+      "name": "131072-s2",
+      "prompt_tokens": 131072,
+      "sample": 2,
+      "started_at": 1788790928.00448,
+      "wall_seconds": 118.38693714141846,
+      "prefill_tok_s": 1135.294,
+      "generation_tok_s": 44.068,
+      "ttft_s": 115.49409212497994,
+      "peak_memory_bytes": 94780792353,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 96276258106,
+        "promotion_bytes": 3753639936,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 131072,
+          "capacity": 131204,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "c877f296082fe837aa9cc7c40131bf0f683c23a2cdb8692f452aa324173a44de",
+      "request_sha256": "308d09fdc315178cdab33dc10670b83184eb076fcf81d05bde011c6e212cbe9d",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "584bb8526ff9be08fa8d301d9b8a005b8120daafedebae082de04258df37d0ab"
+    },
+    {
+      "name": "131072-s3",
+      "prompt_tokens": 131072,
+      "sample": 3,
+      "started_at": 1788791046.4220932,
+      "wall_seconds": 118.59128189086914,
+      "prefill_tok_s": 1133.437,
+      "generation_tok_s": 43.867,
+      "ttft_s": 115.68769024999347,
+      "peak_memory_bytes": 94780935073,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 96303804552,
+        "promotion_bytes": 3753639936,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 131072,
+          "capacity": 131204,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "f3530254c6f5fbe1d02db5b8c4f2a74852237ccefaff3643fc2daf457ff5197c",
+      "request_sha256": "308d09fdc315178cdab33dc10670b83184eb076fcf81d05bde011c6e212cbe9d",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "1f74f142bc3d6ca72eb47edf476f44646edb24959ad782eae4b03b0b1b2753b0"
+    },
+    {
+      "name": "163840-warmup",
+      "prompt_tokens": 163840,
+      "sample": 0,
+      "started_at": 1788791165.0560582,
+      "wall_seconds": 150.0464267730713,
+      "prefill_tok_s": 1116.892,
+      "generation_tok_s": 38.64,
+      "ttft_s": 146.75501258298755,
+      "peak_memory_bytes": 97985137373,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 97951698096,
+        "promotion_bytes": 4684775424,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 163840,
+          "capacity": 163972,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "3ea63cc47a0ec9fee060b674f57691ad53683e22263f9efb92923debf3fdb9a4",
+      "request_sha256": "09f877a93205ecdc59fa023233f66354da54f73752232db67f54f75a0afdd55c",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "2f78edb9c85a9f2b3910c0359f3113218d5af8acbf2a4f5a330778ca1a52448a"
+    },
+    {
+      "name": "163840-s1",
+      "prompt_tokens": 163840,
+      "sample": 1,
+      "started_at": 1788791315.139224,
+      "wall_seconds": 149.92414116859436,
+      "prefill_tok_s": 1118.122,
+      "generation_tok_s": 38.196,
+      "ttft_s": 146.5993447920191,
+      "peak_memory_bytes": 97985300453,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 97922878216,
+        "promotion_bytes": 4684775424,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 163840,
+          "capacity": 163972,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "b3d3e79752efcdba5309ac7f8adedd1cc723cb0b9267cd4e86b3714e3c7a0209",
+      "request_sha256": "09f877a93205ecdc59fa023233f66354da54f73752232db67f54f75a0afdd55c",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "dc068e9c2c309ccb3a77584b29e7fb8bd065220e0a9f3e94060f3ac5be9ebb41"
+    },
+    {
+      "name": "163840-s2",
+      "prompt_tokens": 163840,
+      "sample": 2,
+      "started_at": 1788791465.096443,
+      "wall_seconds": 150.86422204971313,
+      "prefill_tok_s": 1110.563,
+      "generation_tok_s": 38.85,
+      "ttft_s": 147.58965633402113,
+      "peak_memory_bytes": 97985122013,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 97951745982,
+        "promotion_bytes": 4684775424,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 163840,
+          "capacity": 163972,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "8039d2092cf363b55d8fe71b7d742d4f3431fb7450b46c406e1869755e393dd3",
+      "request_sha256": "09f877a93205ecdc59fa023233f66354da54f73752232db67f54f75a0afdd55c",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "bcce4d19d5cb4dfb6346c6c6ec65c5823d5c545bf2ee4d324c38a04d3612af5c"
+    },
+    {
+      "name": "163840-s3",
+      "prompt_tokens": 163840,
+      "sample": 3,
+      "started_at": 1788791615.9930072,
+      "wall_seconds": 151.77706480026245,
+      "prefill_tok_s": 1104.469,
+      "generation_tok_s": 37.684,
+      "ttft_s": 148.39999995799735,
+      "peak_memory_bytes": 97985274457,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 97915147388,
+        "promotion_bytes": 4684775424,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 163840,
+          "capacity": 163972,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "4c381dc5573ce9e49b2e9e4c2d3bec6eb1c03a9daa45ebfddcaccf716686d1f1",
+      "request_sha256": "09f877a93205ecdc59fa023233f66354da54f73752232db67f54f75a0afdd55c",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "22e43b234c115d78c5b26a0867f1ef79e06331285e178ebc26fa43064fd1e46c"
+    },
+    {
+      "name": "196608-warmup",
+      "prompt_tokens": 196608,
+      "sample": 0,
+      "started_at": 1788791767.82431,
+      "wall_seconds": 193.84557580947876,
+      "prefill_tok_s": 1033.781,
+      "generation_tok_s": 35.378,
+      "ttft_s": 190.24883804202545,
+      "peak_memory_bytes": 100561261973,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 98854059548,
+        "promotion_bytes": 5615910912,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 196608,
+          "capacity": 196740,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "4a3729bce1de584e15c779ec5e1910d6564e3e2d6364ea910b27aca19cd0e628",
+      "request_sha256": "d2a3a6fad5a0440d4ac4bb384b5709a3e080cd7d934c81625af17b967dc1d884",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "4ff0536b8ca0cf3918f3f514b18714240a501b4d5655495e75af5d9c6df3e3d0"
+    },
+    {
+      "name": "196608-s1",
+      "prompt_tokens": 196608,
+      "sample": 1,
+      "started_at": 1788791961.709656,
+      "wall_seconds": 195.98965096473694,
+      "prefill_tok_s": 1022.062,
+      "generation_tok_s": 35.757,
+      "ttft_s": 192.43151695799315,
+      "peak_memory_bytes": 100561218821,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 98826843412,
+        "promotion_bytes": 5615910912,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 196608,
+          "capacity": 196740,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "aa8ad2611d1a32fe87df3dfa57fdc93ec53e7a545fc30e60a524bfbc824bcffc",
+      "request_sha256": "d2a3a6fad5a0440d4ac4bb384b5709a3e080cd7d934c81625af17b967dc1d884",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "de5ffb53720e9def72872de51b9ca6769a895b4cfa40da8dbc6809e6faa1b05c"
+    },
+    {
+      "name": "196608-s2",
+      "prompt_tokens": 196608,
+      "sample": 2,
+      "started_at": 1788792157.737688,
+      "wall_seconds": 196.50120186805725,
+      "prefill_tok_s": 1019.391,
+      "generation_tok_s": 35.687,
+      "ttft_s": 192.946152583987,
+      "peak_memory_bytes": 100561296793,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 98854634004,
+        "promotion_bytes": 5615910912,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 196608,
+          "capacity": 196740,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "470234dfe587023eaf6504df63388ca113d0625e4f675dcd7984989559172219",
+      "request_sha256": "d2a3a6fad5a0440d4ac4bb384b5709a3e080cd7d934c81625af17b967dc1d884",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "238bf13b023f1802768b99a651c1ba93d04cd1ba7fcf46361363b0eed73cb21b"
+    },
+    {
+      "name": "196608-s3",
+      "prompt_tokens": 196608,
+      "sample": 3,
+      "started_at": 1788792354.275966,
+      "wall_seconds": 187.18200492858887,
+      "prefill_tok_s": 1070.834,
+      "generation_tok_s": 36.235,
+      "ttft_s": 183.6837896250072,
+      "peak_memory_bytes": 100560948473,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 98772746788,
+        "promotion_bytes": 5615910912,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 196608,
+          "capacity": 196740,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "d21e8f299e30eb5bdcb72a5084383c530a234c4d3529dc8cdebab98676e46d7f",
+      "request_sha256": "d2a3a6fad5a0440d4ac4bb384b5709a3e080cd7d934c81625af17b967dc1d884",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "26670b1123baa91499334dc83f7fce96c27e5981c7032d48cd38b1a4826c0c04"
+    },
+    {
+      "name": "229376-warmup",
+      "prompt_tokens": 229376,
+      "sample": 0,
+      "started_at": 1788792541.51776,
+      "wall_seconds": 218.1587200164795,
+      "prefill_tok_s": 1070.285,
+      "generation_tok_s": 33.79,
+      "ttft_s": 214.39271979196928,
+      "peak_memory_bytes": 103179308041,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 99677496630,
+        "promotion_bytes": 6547046400,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 229376,
+          "capacity": 229508,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "53fae218e2fa02cdc721d23c59c3731ab537815a0eb6a6eafe5ad174794098a7",
+      "request_sha256": "b60e86d0086ab42ec88298caaa1a9481f6e6678c6b81a036c865b81dc7613094",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "aacc0203d7c41b90c9557dcf2464f3f8d70dd0561fe7bb113cffa31c3d1667ab"
+    },
+    {
+      "name": "229376-s1",
+      "prompt_tokens": 229376,
+      "sample": 1,
+      "started_at": 1788792759.7101598,
+      "wall_seconds": 217.08995127677917,
+      "prefill_tok_s": 1075.65,
+      "generation_tok_s": 33.803,
+      "ttft_s": 213.33651024999563,
+      "peak_memory_bytes": 103179389831,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 99705860356,
+        "promotion_bytes": 6547046400,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 229376,
+          "capacity": 229508,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "f93e35f77fc612aa013cb0cc195e41738952432e5edb7d527a4a1a9a1b879541",
+      "request_sha256": "b60e86d0086ab42ec88298caaa1a9481f6e6678c6b81a036c865b81dc7613094",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "a32292018730f6df41da7cef6ba8aa55475e21be396491d47c5c200076ea4671"
+    },
+    {
+      "name": "229376-s2",
+      "prompt_tokens": 229376,
+      "sample": 2,
+      "started_at": 1788792976.8339999,
+      "wall_seconds": 217.43578219413757,
+      "prefill_tok_s": 1073.955,
+      "generation_tok_s": 33.703,
+      "ttft_s": 213.66571387503063,
+      "peak_memory_bytes": 103179427213,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 99668884726,
+        "promotion_bytes": 6547046400,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 229376,
+          "capacity": 229508,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "54b3bf18925f7f8d81c217eff0280f5ab47617e27a900fdad8c28c07c49acd85",
+      "request_sha256": "b60e86d0086ab42ec88298caaa1a9481f6e6678c6b81a036c865b81dc7613094",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "005171d9584c404ec4b551cb32dfe7740f6208d8e8983048d1d330207d9c70a3"
+    },
+    {
+      "name": "229376-s3",
+      "prompt_tokens": 229376,
+      "sample": 3,
+      "started_at": 1788793194.311771,
+      "wall_seconds": 218.88125610351562,
+      "prefill_tok_s": 1066.872,
+      "generation_tok_s": 33.436,
+      "ttft_s": 215.10328179196222,
+      "peak_memory_bytes": 103179248891,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 99672292568,
+        "promotion_bytes": 6547046400,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 229376,
+          "capacity": 229508,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "b28c9bd7f731d7d45ee40b6c4507706cc2593e12a38ba3e34dc61987b06e2023",
+      "request_sha256": "b60e86d0086ab42ec88298caaa1a9481f6e6678c6b81a036c865b81dc7613094",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "257ea52d7245f4bd71a3d542c16d387752626f14e6a18cceed11c87bc0d08012"
+    },
+    {
+      "name": "261888-warmup",
+      "prompt_tokens": 261888,
+      "sample": 0,
+      "started_at": 1788793413.253189,
+      "wall_seconds": 252.04260110855103,
+      "prefill_tok_s": 1056.541,
+      "generation_tok_s": 31.152,
+      "ttft_s": 247.97754141699988,
+      "peak_memory_bytes": 105776268561,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 100377276492,
+        "promotion_bytes": 7470907392,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 261888,
+          "capacity": 262020,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "679dbed49daa8f20e8c218462d4eb638a4807c3d4ef510d39534c5adc9c482f5",
+      "request_sha256": "118e14ad57c68e8ed010a533ba8f67f98eb606d6ef6a53e95cb415e3eedb2861",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "987055c5be1ed0340bf431bf52d0e573fab079d07d952c5c2d9916a049eb7cd2"
+    },
+    {
+      "name": "261888-s1",
+      "prompt_tokens": 261888,
+      "sample": 1,
+      "started_at": 1788793665.329833,
+      "wall_seconds": 250.31594395637512,
+      "prefill_tok_s": 1063.907,
+      "generation_tok_s": 31.204,
+      "ttft_s": 246.27562258404214,
+      "peak_memory_bytes": 105776272785,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 100445450686,
+        "promotion_bytes": 7470907392,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 261888,
+          "capacity": 262020,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "090671f422f1bddb9b75b4c7503dade53558a7ef52d79f672ad6dff7ca2619c6",
+      "request_sha256": "118e14ad57c68e8ed010a533ba8f67f98eb606d6ef6a53e95cb415e3eedb2861",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "538311fca41f952364a0f414acfb4854e125740224e8e3cb76d3614572a23db2"
+    },
+    {
+      "name": "261888-s2",
+      "prompt_tokens": 261888,
+      "sample": 2,
+      "started_at": 1788793915.68238,
+      "wall_seconds": 250.80713605880737,
+      "prefill_tok_s": 1061.822,
+      "generation_tok_s": 31.124,
+      "ttft_s": 246.74241537495982,
+      "peak_memory_bytes": 105776293269,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 100507272850,
+        "promotion_bytes": 7470907392,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 261888,
+          "capacity": 262020,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "bb98328e81bee3096f30318854016ebb174fce4e480b934e63ac6d53a186deac",
+      "request_sha256": "118e14ad57c68e8ed010a533ba8f67f98eb606d6ef6a53e95cb415e3eedb2861",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "fdbef17157ac540dc9a1924b0bc89e8272b39fdc0ad63461d6dff813bef5f81a"
+    },
+    {
+      "name": "261888-s3",
+      "prompt_tokens": 261888,
+      "sample": 3,
+      "started_at": 1788794166.526697,
+      "wall_seconds": 250.56072402000427,
+      "prefill_tok_s": 1062.456,
+      "generation_tok_s": 31.887,
+      "ttft_s": 246.6124918340356,
+      "peak_memory_bytes": 105776405905,
+      "fixed_m4_admission": {
+        "requested_depth": 3,
+        "engaged": true,
+        "live_bytes_before": 100567787982,
+        "promotion_bytes": 7470907392,
+        "threshold_bytes": 108319075205,
+        "reason": "admitted"
+      },
+      "compiled_verify": {
+        "calls": 0,
+        "compiled_calls": 0,
+        "extended_calls": 0,
+        "fallback_calls": 0,
+        "fallback_reasons": {},
+        "buckets": {},
+        "promoted": 12,
+        "demotions": 0,
+        "traces": 0,
+        "parity_checks": 0,
+        "parity_failures": 0,
+        "parity2_calls": 0,
+        "parity2_divergent_calls": 0,
+        "parity2_first_divergence": null,
+        "growth_demotions": 0,
+        "growth_handoff_materializations": 0,
+        "growth_handoff_state_leaves": 0,
+        "growth_handoff_materialize_time_s": 0.0,
+        "fixed_m4_capacity_transitions": 0,
+        "fixed_m4_route_transitions": 0,
+        "mode": "on",
+        "max_verify_len": 4,
+        "request_max_tokens": 128,
+        "speculative_headroom": 4,
+        "growth_reserve_tokens": 132,
+        "capture_backend": "linear_gdn_from_conv_tape",
+        "permanent_eager": false,
+        "permanent_eager_reason": null,
+        "compiled_entry_count": 1,
+        "compiled_keys": [
+          "m4:post_norm:b1"
+        ],
+        "fixed_m4": {
+          "installed": true,
+          "aux_route": "staged_sidecar",
+          "aux_inputs": "host_ledger",
+          "kv_gather": "fused_m4",
+          "boundary": "both",
+          "donate": true,
+          "state_leaves": 134,
+          "capture_leaves": 218,
+          "base_offset": 261888,
+          "capacity": 262020,
+          "growth_tokens": 264
+        }
+      },
+      "verify_calls": 64,
+      "accepted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "drafted_by_depth": [
+        0,
+        0,
+        0
+      ],
+      "response_sha256": "87d29fa8d5d5f0fc5593f0181f13d80c3a9966b7c2b7752116d547afd6e4486d",
+      "request_sha256": "118e14ad57c68e8ed010a533ba8f67f98eb606d6ef6a53e95cb415e3eedb2861",
+      "context_copy": {
+        "context_copy_active": true,
+        "context_copy_rounds": 64,
+        "context_copy_drafted_tokens": 64,
+        "context_copy_accepted_tokens": 64,
+        "context_copy_accepted_blocks": 64
+      },
+      "metrics_sha256": "d7ea5d95309d440a0494433af07e0b40a67f3ca25425f875c5a522fbd341541c"
+    }
+  ],
+  "runtime_health_identity": {
+    "chip": "Apple M5 Max",
+    "machine_model": "Mac17,6",
+    "unified_memory_bytes": 137438953472,
+    "context_window": 262144,
+    "depth": 3,
+    "vision": {
+      "enabled": true,
+      "formats": [
+        "png",
+        "jpeg",
+        "webp"
+      ]
+    },
+    "metal_memory_caps": {
+      "applied": true,
+      "total_ram_bytes": 137438953472,
+      "total_ram_source": "sysctl_hw_memsize",
+      "minimum_resident_bytes": 89480048859,
+      "memory_limit_api": "mx.set_memory_limit",
+      "memory_limit_bytes": 111669149696,
+      "memory_limit_source": "env",
+      "wired_limit_api": "mx.set_wired_limit",
+      "wired_limit_bytes": 89480048859
+    },
+    "fan_mode": "default",
+    "mlx_runtime": {
+      "ok": true,
+      "version": "0.32.2",
+      "stock_pypi_layout": true
+    },
+    "tokenizer_template_hash": "c3cf9e34abf4f9e3",
+    "draft_head_identity": "12abcb7d8ceb591f"
+  },
+  "host_observations": {
+    "samples": 878,
+    "pressure_levels": [
+      "kern.memorystatus_vm_pressure_level: 1"
+    ],
+    "swap": [
+      "vm.swapusage: total = 0.00M  used = 0.00M  free = 0.00M  (encrypted)"
+    ],
+    "power_sources": [
+      "Now drawing from 'AC Power'"
+    ],
+    "minimum_reported_free_percent": 18
+  },
+  "raw_run": "context-sweep-20260907-100646"
+}

@@ -11,15 +11,15 @@ checked-out runtimes.
 | Area | Current status |
 | --- | --- |
 | Platform | macOS on Apple Silicon only; initial target: Apple M5 Max with 128 GB unified memory |
-| Model | Initial case study: Qwen3.8-Flash-Next |
-| Runtimes | Pinned upstream revisions plus versioned local patch series |
+| Model packages | `qwen3.8-flash-next` (GGUF/llama.cpp) and `qwen3.8-flash-next-mtplx` (MLX/MTPLX; managed integration acceptance pending) |
+| Runtimes | Pinned upstream revisions plus versioned local patch series; isolated pinned MTPLX environment |
 | Other systems and models | Reusable design; not yet tested |
 
 Supported platforms: macOS on Apple Silicon only. Non-macOS and
 non-Apple-Silicon environments are unsupported; commands must fail with clear,
 actionable diagnostics.
 
-The Qwen artifact download requires approximately **100 GB** of available
+The original GGUF package download requires approximately **100 GB** of available
 storage, in addition to space for source checkouts and build outputs. Confirm
 the artifact source, license, destination, size, and checksum before download.
 
@@ -41,7 +41,17 @@ sample statistics, runtime provenance, and power/background-load caveats.
 The [original preset sweep](results/experiments/2026-09-06-preset-context-sweep/summary.md)
 measures each preset at its normal context allocation.
 
+The experimental [MTPLX versus existing setup comparison](results/experiments/2026-09-07-mtplx-context-sweep/comparison.md)
+adds a September 7 full-context curve at a 104GiB runtime budget. It uses a
+different quant and the runtime's context-copy shortcut on repeated-token
+prompts; it is not a quality evaluation or a change to the recommended profile.
+
 ## Quick start
+
+Choose a package, then use the same `setup`, `serve` and API `bench` commands.
+These are different quantized packages of the same underlying model family,
+not identical weights with interchangeable backends. The original package's
+`auto` profile remains the recommendation on its accepted hardware.
 
 ```sh
 git clone https://github.com/bwangbos/metal-llm-lab.git
@@ -54,7 +64,33 @@ cd metal-llm-lab
 ./bin/metal-llm report --check
 ```
 
-Setup downloads approximately **100 GB**, checks every artifact checksum, and
+For the MTPLX alternative, after the same bootstrap and doctor steps:
+
+```sh
+./bin/metal-llm setup qwen3.8-flash-next-mtplx
+./bin/metal-llm serve qwen3.8-flash-next-mtplx
+```
+
+MTPLX downloads approximately **115.1 GB** of model files, plus its isolated
+Python environment. Its default profile is `default`, with 256K context, MTP
+depth 3 and vision on. Its exact custom equivalent is:
+
+```sh
+./bin/metal-llm serve qwen3.8-flash-next-mtplx --profile custom --mtp on --context 262144 --vision on
+```
+
+Use `--vision off` independently, or `--profile custom --mtp off --context 32768`
+for a smaller non-MTP configuration. MTPLX does not support the original
+package's `auto`, `fast`, `long`, `stable`, `tuned|upstream` or dynamic-MTP
+controls. It supports one serial request. The tested 104 GiB memory budget is
+defaulted only on M5 Max 128 GiB hardware, not every Mac.
+
+See the [MTPLX guide](docs/models/qwen3.8-flash-next-mtplx.md) for snapshot import,
+memory controls, API examples, pinned versions, licensing and qualification
+limits. [Managed-integration live acceptance](docs/experiments/2026-09-07-mtplx-integration-acceptance.md)
+is pending; earlier experimental measurements do not qualify the new launcher.
+
+Original-package setup downloads approximately **100 GB**, checks every artifact checksum, and
 builds every unique pinned runtime required by the model's profiles, including
 the upstream reference runtime. Its duration depends on network speed, machine
 load, and compiler performance; no fixed completion time is guaranteed.
@@ -88,7 +124,7 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   -d '{"model":"qwen3.8-flash-next","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-`serve` defaults to the model's `auto` preset. Vision is an independent switch
+For `qwen3.8-flash-next`, `serve` defaults to the model's `auto` preset. Vision is an independent switch
 and defaults to `on` for every preset. All context sizes below are binary token
 counts (32K = 32,768 and 256K = 262,144):
 
@@ -107,7 +143,7 @@ context, or MTP policy:
 ./bin/metal-llm serve qwen3.8-flash-next --profile long --vision on
 ```
 
-Named presets reject `--runtime`, `--mtp`, and `--context` overrides. A custom
+For the original package, named presets reject `--runtime`, `--mtp`, and `--context` overrides. A custom
 profile requires all three controls; `upstream` supports only `--mtp off`, and
 context must be a positive integer no larger than 262,144. Use `--vision on` or
 `--vision off` independently. The removed standalone vision preset and context
@@ -191,16 +227,31 @@ running them. `report` validates raw results and regenerates Markdown summaries;
 `report --check` detects drift without rewriting files and is appropriate for
 CI.
 
+For MTPLX use `--mode endpoint`; `llama-bench` local cases are not portable to
+MLX. Run these from a second terminal against the matching managed server:
+
+```sh
+./bin/metal-llm bench qwen3.8-flash-next-mtplx --suite qwen3.8-smoke --mode endpoint --dry-run
+./bin/metal-llm bench qwen3.8-flash-next-mtplx --suite qwen3.8-smoke --mode endpoint
+```
+
+Use API model name `qwen3.8-flash-next-mtplx` for that server. MTPLX uses native
+tool prompting with agent rewrites disabled; native chat-template/tool-schema
+tokens still count. A single lab-managed full-model lease coordinates both
+packages. It never automatically stops an independently launched model.
+
 ## Reproducible work
 
 New harness benchmarks require a clean Git checkout and record its actual commit
 and tree, an exact detected chip/memory hardware-manifest match, the verified
 runtime revision/tree/manifest/receipt/executable, model manifest and artifact
 identities, suite and fixture checksums, and sanitized exact argument arrays.
-Runtime verification rejects hidden Git index flags and compares every tracked
+For llama.cpp, runtime verification rejects hidden Git index flags and compares every tracked
 path's raw, unfiltered bytes and executable mode with the index; every call also
 verifies both `llama-server` and `llama-bench` as regular, non-symlink
-executables against the build receipt. Benchmark timestamps always come from the
+executables against the build receipt. MTPLX instead uses an isolated environment
+and pinned dependency/runtime identities; it does not have a llama.cpp source
+tree or `llama-bench` executable. Benchmark timestamps always come from the
 trusted absolute system clock executable `/bin/date`; `PATH` and environment
 overrides cannot supply recorded time.
 OS, compiler, SDK, and power evidence is recorded from the host; unavailable
