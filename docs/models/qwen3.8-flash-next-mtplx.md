@@ -1,6 +1,6 @@
 # Qwen3.8 Flash Next — MTPLX package
 
-Integration status: implementation and offline validation in progress; live
+Integration status: implementation and offline validation accepted; live
 acceptance of the managed integration is pending. The earlier experimental
 server is not acceptance evidence for the new launcher. The existing
 `qwen3.8-flash-next` `auto` profile remains the recommendation on its qualified
@@ -18,6 +18,8 @@ Python 3.12 must be available for the pinned runtime. Setup creates its own
 environment and installs locked packages there; it does not install a global
 Python interpreter or change your system packages. The repository bootstrap is
 a prerequisite check, not a silent package-manager installation.
+If Python 3.12 is not named `python3.12` on your `PATH`, set `METAL_LLM_PYTHON`
+to its executable when running setup.
 
 ```sh
 ./bin/metal-llm setup qwen3.8-flash-next-mtplx --dry-run

@@ -1,14 +1,43 @@
 # Managed MTPLX integration acceptance
 
-Status: **pending**. No live test of the new managed launcher has been performed.
+Status: **offline integration accepted; live acceptance pending**. No live test
+of the new managed launcher has been performed.
 The existing independently launched benchmark instance must not be interrupted
 or used for these checks without its owner's release.
 
 ## Offline gate
 
-Record the integration commit, full regression command and outcome, targeted
-adapter tests and independent code review. Confirm install/download tests use
-small isolated fixtures and do not mutate the evaluation environment.
+Initial integration commit `34a2475` passed `zsh tests/run.sh`, including all
+21 then-current MTPLX tests and the original regression suites. Independent
+review subsequently identified startup credential logging, incomplete result
+validation and empty-partial resume defects, resolved below.
+
+Fix commit `25f3489` addressed all three findings, and independent scoped
+re-review approved them. A fresh `zsh tests/run.sh` on that revision exited 0:
+all original checks, 23 MTPLX tests and the new malformed-result report checks
+passed. Final independent whole-branch review of `7b5c344..25f3489` approved the
+implementation/offline scope with no remaining findings. None of these tests
+loaded the real model or contacted the independent benchmark instance.
+
+An actual isolated runtime-only install also passed on the M5 Max 128 GiB host:
+45 locked packages installed with wheel hash verification; dependency checks
+reported no broken requirements; 7,297 installed files were verified. The
+receipt inventories 46 distributions including bootstrap pip. Approximate disk
+use including managed wheel cache: 534 MB. Lock SHA256:
+`88c33df0e5a6171aa503713d8b1af04b0801c39560cb2db3f5079f64a22157b0`.
+This exercised the adapter's runtime installation function only, with Python
+3.12, not full model setup or inference. No existing evaluation environment was
+modified. No model weights were downloaded, imported, or loaded.
+
+Setup/serve/endpoint-benchmark dry-runs passed without a managed model snapshot.
+A hardware-aware serving preview selected the 104 GiB budget on the actual
+M5 Max 128 GiB host; restricted hardware inspection correctly fell back to
+unqualified/upstream-default reporting. Neither preview launched the server.
+
+The offline gate is closed for this revision. Model download/import tests used
+small isolated fixtures; the real dependency installation used a separate
+managed environment. Re-run applicable tests and review if implementation changes
+before live acceptance. Main-branch integration and publication remain deferred.
 
 ## Live gate (explicitly deferred)
 
