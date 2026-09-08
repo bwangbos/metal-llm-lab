@@ -256,13 +256,36 @@ metal_llm_validate_dynamic_mtp_derived_data() {
     ' "$result_file" >/dev/null 2>&1
 }
 
+metal_llm_validate_result_privacy() {
+    local result_file=$1 result_label=$2 unsafe_path secret_key
+    unsafe_path=$(jq -r '[.. | strings | select(test("/" + "Users" + "/[^/[:space:]]+/"))][0] // empty' \
+      "$result_file") || return 1
+    [[ -z "$unsafe_path" ]] || {
+        metal_llm_die "unsafe private path in $result_label"
+        return 1
+    }
+    secret_key=$(jq -r '
+      . as $root | [paths | . as $path |
+        select(.[-1] | type == "string") |
+        select(.[-1] | test("(^|[_-])(api[_-]?key|access[_-]?token|token|password|secret)($|[_-])"; "i")) |
+        select(($root.schema_version == 3 and
+          $path == ["provenance", "configuration", "api_key_configured"] and
+          ($root | getpath($path) | type == "boolean")) | not) | .[-1]
+      ][0] // empty' "$result_file") || return 1
+    [[ -z "$secret_key" ]] || {
+        metal_llm_die "secret-like key in $result_label: $secret_key"
+        return 1
+    }
+}
+
 metal_llm_validate_result() {
     local result_file=$1
+    local result_label=${2:-${result_file#$METAL_LLM_ROOT/}}
     if [[ "$(jq -r '.schema_version' "$result_file" 2>/dev/null)" == 3 ]]; then
-        python3 -I -B "$METAL_LLM_ROOT/lib/mtplx_adapter.py" validate-result --file "$result_file"
+        python3 -I -B "$METAL_LLM_ROOT/lib/mtplx_adapter.py" validate-result --file "$result_file" || return 1
+        metal_llm_validate_result_privacy "$result_file" "$result_label"
         return $?
     fi
-    local result_label=${2:-${result_file#$METAL_LLM_ROOT/}}
     local schema_file="$METAL_LLM_ROOT/schemas/result.schema.json"
     local result_sha
 
@@ -468,20 +491,7 @@ metal_llm_validate_result() {
         }
     fi
 
-    local unsafe_path secret_key
-    unsafe_path=$(jq -r '[.. | strings | select(test("/" + "Users" + "/[^/[:space:]]+/"))][0] // empty' \
-      "$result_file") || return 1
-    [[ -z "$unsafe_path" ]] || {
-        metal_llm_die "unsafe private path in $result_label"
-        return 1
-    }
-    secret_key=$(jq -r '[.. | objects | keys[] |
-      select(test("(^|[_-])(api[_-]?key|access[_-]?token|token|password|secret)($|[_-])"; "i"))][0] // empty' \
-      "$result_file") || return 1
-    [[ -z "$secret_key" ]] || {
-        metal_llm_die "secret-like key in $result_label: $secret_key"
-        return 1
-    }
+    metal_llm_validate_result_privacy "$result_file" "$result_label" || return 1
 
     local hardware_id runtime_id
     for hardware_id in "${(@f)$(jq -r '.runs[].hardware_id' "$result_file" | sort -u)}"; do

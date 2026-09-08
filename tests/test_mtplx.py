@@ -247,6 +247,52 @@ class AdapterTests(unittest.TestCase):
             adapter.install_snapshot(other, [self.artifact()])
         self.assertEqual((other / "config.json.part").read_bytes(), b"fixture ")
 
+    def test_resume_existing_zero_byte_partial_without_overwriting_other_files(self):
+        import io
+        directory = self.root / "resume-zero"
+        directory.mkdir()
+        (directory / "config.json.part").touch()
+        with patch.object(adapter.urllib.request, "urlopen", return_value=io.BytesIO(b"fixture data")):
+            adapter.install_snapshot(directory, [self.artifact()])
+        self.assertEqual((directory / "config.json").read_bytes(), b"fixture data")
+        self.assertFalse((directory / "config.json.part").exists())
+
+    def test_live_startup_redaction_keeps_authentication_and_request_guard(self):
+        import contextlib
+        import io
+        import secrets
+        from types import SimpleNamespace
+        key = "synthetic-test-key"
+        args = SimpleNamespace(api_key=key, host="127.0.0.1", port=8080)
+        def create_app(state):
+            async def app(scope, receive, send):
+                supplied = dict(scope.get("headers", [])).get(b"authorization", b"").decode().removeprefix("Bearer ")
+                authenticated = secrets.compare_digest(supplied, state.api_key)
+                await send({"type": "http.response.start", "status": 200 if authenticated else 401, "headers": []})
+                await send({"type": "http.response.body", "body": b""})
+            return app
+        server = SimpleNamespace(create_app=create_app,
+            _startup_chat_url=lambda a: "http://127.0.0.1:8080/",
+            _startup_printable_chat_url=lambda a: "http://127.0.0.1:8080/mtplx/browser-auth?mtplx_api_key=" + a.api_key)
+        adapter.configure_server_boundary(server, vision=False)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            print("Chat UI: " + server._startup_printable_chat_url(args))
+        self.assertNotIn(key, stdout.getvalue() + stderr.getvalue())
+        self.assertNotIn("mtplx_api_key", stdout.getvalue())
+        self.assertEqual(args.api_key, key)
+        async def request(token):
+            sent = []
+            async def receive():
+                return {"type": "http.request", "body": b""}
+            async def send(message):
+                sent.append(message)
+            await server.create_app(args)({"type": "http", "method": "GET", "path": "/v1/models",
+                "headers": [(b"authorization", ("Bearer " + token).encode())]}, receive, send)
+            return sent[0]["status"]
+        self.assertEqual(asyncio.run(request(key)), 200)
+        self.assertEqual(asyncio.run(request("wrong")), 401)
+
     def test_snapshot_preserves_empty_metadata(self):
         directory = self.root / "empty"
         adapter.install_snapshot(directory, [self.artifact(b"", ".metadata_never_index")])
@@ -313,7 +359,7 @@ class AdapterTests(unittest.TestCase):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(value))
-        for relative in (runtime["lock"], "benchmarks/suites/qwen3.8-smoke.json"):
+        for relative in (runtime["lock"], "benchmarks/suites/qwen3.8-smoke.json", "schemas/mtplx-result.schema.json"):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes((ROOT / relative).read_bytes())
@@ -359,6 +405,42 @@ class AdapterTests(unittest.TestCase):
                                      "fixture", str(self.root), str(ROOT), str(next((self.root / "results/raw").glob("*.json")))], capture_output=True, text=True)
             self.assertEqual(report.returncode, 0, report.stderr)
             self.assertIn("deterministic-api-smoke", report.stdout)
+            mutations = [("missing " + ".".join(map(str, path)), path, None, True) for path in (
+                ("experiment_id",), ("date",), ("provenance", "model_manifest_sha256"),
+                ("provenance", "artifacts"), ("provenance", "artifact_verification"),
+                ("provenance", "hardware"), ("provenance", "system"),
+                ("runs", 0, "request_sha256"), ("runs", 0, "reasoning_settings"), ("runs", 0, "vision"))]
+            mutations += [
+                ("display override", ("runs", 0, "generation_tokens_per_second_display"), "999,999", False),
+                ("private path", ("private_path",), "/Users/example/private/secret", False),
+                ("secret field", ("api_key",), "synthetic-test-key", False),
+                ("private note", ("runs", 0, "notes"), "/Users/example/private/secret", False),
+                ("wrong model manifest", ("provenance", "model_manifest_sha256"), "0" * 64, False),
+                ("wrong artifact hash", ("provenance", "artifacts", 0, "sha256"), "0" * 64, False),
+                ("wrong request hash", ("runs", 0, "request_sha256"), "0" * 64, False),
+                ("wrong reasoning", ("runs", 0, "reasoning_settings", "reasoning"), "off", False),
+                ("wrong vision", ("runs", 0, "vision"), False, False),
+                ("invalid date", ("date",), "2026-02-30", False),
+                ("wrong hardware", ("provenance", "hardware", "unified_memory_bytes"), 123, False),
+                ("impossible hash counts", ("provenance", "artifact_verification", "full_hashes"), 999, False)]
+            for label, path, value, delete in mutations:
+                damaged = copy.deepcopy(result)
+                parent = damaged
+                for part in path[:-1]:
+                    parent = parent[part]
+                if delete:
+                    del parent[path[-1]]
+                else:
+                    parent[path[-1]] = value
+                with self.subTest(label), self.assertRaises(ValueError):
+                    adapter.validate_result(damaged)
+                bad_file = self.root / ".lab/invalid-result.json"
+                bad_file.write_text(json.dumps(damaged))
+                rejected = subprocess.run(["zsh", "-c", 'METAL_LLM_ROOT=$1; source "$2/lib/common.zsh"; source "$2/lib/report.zsh"; metal_llm_validate_result "$3" && metal_llm_generate_generic_summary "$3"',
+                    "fixture", str(self.root), str(ROOT), str(bad_file)], capture_output=True, text=True)
+                with self.subTest("report " + label):
+                    self.assertNotEqual(rejected.returncode, 0)
+                    self.assertNotIn("999,999", rejected.stdout)
             bad_result = copy.deepcopy(result)
             bad_result["provenance"]["runtime"]["lock_sha256"] = "0" * 64
             with self.assertRaises(ValueError):

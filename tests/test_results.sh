@@ -768,4 +768,9 @@ jq '
 equal_output=$($fixture_cli report)
 assert_contains "$equal_output" 'was unchanged at 51.09 tok/s (0%)'
 
+# The MTPLX fixture exercises the same report entry point with valid evidence,
+# missing required fields, forged hashes/settings, private paths, and displays.
+python3 -B "$source_root/tests/test_mtplx.py" \
+  AdapterTests.test_offline_endpoint_bench_roundtrip_is_report_validated_and_detects_forgery
+
 print -- 'result checks: PASS'

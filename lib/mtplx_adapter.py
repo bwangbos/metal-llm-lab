@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import base64
 import csv
+from datetime import datetime
 import hashlib
 import json
 import math
@@ -196,7 +197,8 @@ def install_snapshot(directory, artifacts, source=None):
             with (source / artifact["filename"]).open("rb") as incoming, partial.open("xb") as outgoing:
                 shutil.copyfileobj(incoming, outgoing, 8 * 1024 * 1024)
         else:
-            offset = fingerprint(partial)[2] if partial.exists() else 0
+            partial_state = fingerprint(partial) if partial.exists() else None
+            offset = partial_state[2] if partial_state is not None else 0
             require(offset <= artifact["bytes"], "partial artifact exceeds expected byte count")
             if artifact["bytes"] == 0 and not partial.exists():
                 partial.touch(exist_ok=False)
@@ -209,7 +211,14 @@ def install_snapshot(directory, artifacts, source=None):
                     if offset:
                         require(response.status == 206 and response.headers.get("Content-Range", "").startswith(f"bytes {offset}-"),
                                 "server did not honor download resume range; partial preserved")
-                    with partial.open("ab" if offset else "xb") as output:
+                    flags = os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW
+                    if partial_state is None:
+                        flags |= os.O_CREAT | os.O_EXCL
+                    with os.fdopen(os.open(partial, flags, 0o600), "ab") as output:
+                        opened = os.fstat(output.fileno())
+                        require(opened.st_size == offset and (partial_state is None or
+                                (opened.st_dev, opened.st_ino) == tuple(partial_state[:2])),
+                                "partial artifact changed before resume")
                         shutil.copyfileobj(response, output, 8 * 1024 * 1024)
         check_file(partial, artifact)
         # Link refuses a concurrent replacement, unlike an overwriting rename.
@@ -527,6 +536,16 @@ def validate_runtime_identity(identity):
         require(re.fullmatch(r"[a-f0-9]{64}", identity[key]), "invalid runtime integrity digest")
 
 
+def configure_server_boundary(server, vision):
+    # Pinned 2.11.2's printable URL embeds its real browser-auth key. Only
+    # replace that presentation helper; retain args/state/authentication intact.
+    server._startup_printable_chat_url = server._startup_chat_url
+    original = server.create_app
+    def create_app(state):
+        return NativeBoundary(original(state), vision=vision)
+    server.create_app = create_app
+
+
 def launch(identity_path, model, runtime):
     identity = json.loads(identity_path.read_text())
     validate_identity(identity)
@@ -553,10 +572,7 @@ def launch(identity_path, model, runtime):
         os.environ["MTPLX_API_KEY"] = os.environ["METAL_LLM_API_KEY"]
     # Runtime-only wrapping: no upstream files or user prompt text are changed.
     from mtplx.server import openai as server
-    original = server.create_app
-    def create_app(state):
-        return NativeBoundary(original(state), vision=config["vision"])
-    server.create_app = create_app
+    configure_server_boundary(server, config["vision"])
     from mtplx import cli
     return cli.main(launch_arguments(config, snapshot_paths()[0]))
 
@@ -681,7 +697,66 @@ def bench(args, model, runtime):
     print("wrote benchmark result: " + str(output))
 
 
+def validate_result_schema(value, schema, definitions=None):
+    """Validate the finite JSON Schema subset used by our versioned result.
+
+    Kept stdlib-only so report validation does not require the MLX environment.
+    Unknown result properties are rejected at every closed schema boundary.
+    """
+    definitions = schema.get("$defs", {}) if definitions is None else definitions
+    if "$ref" in schema:
+        return validate_result_schema(value, definitions[schema["$ref"].split("/")[-1]], definitions)
+    types = {"object": dict, "array": list, "string": str, "integer": int,
+             "number": (int, float), "boolean": bool, "null": type(None)}
+    if "type" in schema:
+        requested = schema["type"] if isinstance(schema["type"], list) else [schema["type"]]
+        require(any(type(value) in (types[t] if isinstance(types[t], tuple) else (types[t],)) for t in requested),
+                "invalid result schema field type")
+    if "const" in schema:
+        require(json_sha(value) == json_sha(schema["const"]), "invalid result schema constant")
+    if "enum" in schema:
+        require(any(json_sha(value) == json_sha(item) for item in schema["enum"]), "invalid result schema enum")
+    if isinstance(value, dict):
+        require(set(schema.get("required", [])) <= set(value), "missing required result evidence")
+        properties = schema.get("properties", {})
+        require(schema.get("additionalProperties", True) or set(value) <= set(properties), "unknown result field")
+        for key in value.keys() & properties.keys():
+            validate_result_schema(value[key], properties[key], definitions)
+    elif isinstance(value, list):
+        require(len(value) >= schema.get("minItems", 0), "incomplete result array")
+        if "items" in schema:
+            for item in value:
+                validate_result_schema(item, schema["items"], definitions)
+    elif isinstance(value, str):
+        require("pattern" not in schema or re.search(schema["pattern"], value), "invalid result string format")
+        if schema.get("format") in ("date", "date-time"):
+            pattern = "%Y-%m-%d" if schema["format"] == "date" else "%Y-%m-%dT%H:%M:%SZ"
+            require(datetime.strptime(value, pattern).strftime(pattern) == value, "invalid result calendar timestamp")
+    elif type(value) in (int, float):
+        require(math.isfinite(value) and value >= schema.get("minimum", -math.inf) and value <= schema.get("maximum", math.inf),
+                "invalid result numeric value")
+
+
+def validate_public_result(value, path=()):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            item_path = (*path, key)
+            configured_marker = item_path == ("provenance", "configuration", "api_key_configured") and type(item) is bool
+            require(configured_marker or not re.search(r"(^|[_-])(api[_-]?key|access[_-]?token|token|password|secret)($|[_-])", key, re.I),
+                    "secret-like field in result")
+            require(not key.endswith("_display"), "display overrides are not allowed in MTPLX results")
+            validate_public_result(item, item_path)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            validate_public_result(item, (*path, index))
+    elif isinstance(value, str):
+        require(not re.search(r"/(?:Users|home)/[^/\s]+/", value.replace("\\/", "/")), "unsafe private path in result")
+
+
 def validate_result(result):
+    schema = json.loads((ROOT / "schemas/mtplx-result.schema.json").read_text())
+    validate_result_schema(result, schema)
+    validate_public_result(result)
     require(result["schema_version"] == 3 and result["model_id"] == MODEL_ID and result["benchmark_mode"] == "endpoint", "invalid MTPLX benchmark identity")
     suite_id = result.get("suite_id", "")
     require(re.fullmatch(r"[a-z0-9]+([.-][a-z0-9]+)*", suite_id), "invalid benchmark suite id")
@@ -692,6 +767,20 @@ def validate_result(result):
     provenance = result["provenance"]
     validate_configuration(provenance["configuration"])
     validate_runtime_identity(provenance["runtime"])
+    model, _ = load_manifests()
+    config = provenance["configuration"]
+    require(provenance["model_manifest_sha256"] == digest(ROOT / "manifests/models" / (MODEL_ID + ".json")), "model manifest provenance mismatch")
+    require(provenance["artifacts"] == [{"id": a["filename"], "bytes": a["bytes"], "sha256": a["sha256"]} for a in model["artifacts"]],
+            "model artifact provenance mismatch")
+    require(provenance["hardware"] == {"chip": config["chip"], "unified_memory_bytes": config["unified_memory_bytes"]}, "hardware provenance mismatch")
+    verification = provenance["artifact_verification"]
+    hits, misses, hashes = (verification[k] for k in ("cache_hits", "cache_misses", "full_hashes"))
+    require(hits + hashes == len(model["artifacts"]), "artifact verification counts do not cover snapshot")
+    if verification["requested_mode"] == "full":
+        require(verification["effective_mode"] == "full" and hits == misses == 0 and hashes > 0, "invalid full artifact verification")
+    else:
+        require(misses == hashes and verification["effective_mode"] == ("mixed" if hits and hashes else "cached" if hits else "full"),
+                "invalid cached artifact verification")
     require(provenance["suite"]["id"] == suite_id and provenance["suite"]["sha256"] == digest(suite_path), "benchmark suite provenance mismatch")
     require(provenance["model_revision"] == REVISION and provenance["runtime"]["id"] == RUNTIME_ID and
             provenance["runtime"]["version"] == "2.11.2" and provenance["configuration"]["prompt_path"] == "native" and
@@ -701,11 +790,35 @@ def validate_result(result):
     require(result["runs"], "empty benchmark result")
     require(len({r["id"] for r in result["runs"]}) == len(result["runs"]), "duplicate benchmark run")
     require({c["id"] for c in cases.values() if not c.get("optional", False)} <= {r["id"] for r in result["runs"]}, "missing required benchmark case")
+    expected_fixtures = []
     for run in result["runs"]:
         require(run["id"] in cases, "unregistered benchmark case")
         case = cases[run["id"]]
+        require(run["timestamp"][:10] == result["date"] and result["experiment_id"] ==
+                run["timestamp"].replace(":", "").replace("-", "").lower() + "-" + suite_id, "benchmark date/experiment mismatch")
+        require(all(run[k] == config[k] for k in ("profile_id", "vision", "context", "mtp_policy")) and
+                run["reasoning_settings"] == {k: config[k] for k in ("reasoning", "reasoning_effort", "preserve_thinking")},
+                "benchmark effective settings mismatch")
+        require(run["request_kind"] == ("vision" if case["kind"] == "vision" else "text") and run["notes"] == case["notes"], "benchmark case provenance mismatch")
         require(run["stream"] == case.get("stream", False) and
-                all(run["generation_settings"][k] == case[k] for k in ("max_tokens", "temperature", "seed")), "benchmark request settings mismatch")
+                all(run["generation_settings"][k] == case[k] for k in ("max_tokens", "temperature", "seed")) and
+                all(run["generation_settings"][k] == config[k] for k in ("top_p", "top_k")), "benchmark request settings mismatch")
+        content = case["prompt"]
+        if case["kind"] == "vision":
+            require(config["vision"], "vision benchmark recorded with vision off")
+            relative = Path(case["fixture"])
+            require(not relative.is_absolute() and ".." not in relative.parts and relative.parts[:2] == ("benchmarks", "fixtures"), "unsafe fixture path")
+            fixture = safe_path(ROOT / relative)
+            require(fixture.suffix.lower() in (".png", ".jpg", ".jpeg"), "unsupported fixture type")
+            mime = "image/png" if fixture.suffix.lower() == ".png" else "image/jpeg"
+            expected_fixtures.append({"path": str(relative), "sha256": digest(fixture)})
+            content = [{"type": "text", "text": content}, {"type": "image_url", "image_url": {"url":
+                "data:" + mime + ";base64," + base64.b64encode(fixture.read_bytes()).decode()}}]
+        expected_request = {"model": MODEL_ID, "messages": [{"role": "user", "content": content}],
+                            **run["generation_settings"], "stream": run["stream"]}
+        if run["stream"]:
+            expected_request["stream_options"] = {"include_usage": True}
+        require(run["request_sha256"] == json_sha(expected_request), "benchmark request hash mismatch")
         parsed = parse_response(run["raw_response"], run["stream"], MODEL_ID)
         require(all(run[key] == value for key, value in parsed.items()), "benchmark response provenance mismatch")
         require(run["prompt_path"] == "native" and math.isfinite(run["wall_seconds"]) and run["wall_seconds"] >= 0 and
@@ -714,6 +827,7 @@ def validate_result(result):
         require(run["prompt_tokens"] == parsed["usage"]["prompt_tokens"] and run["generated_tokens"] == parsed["usage"]["completion_tokens"] and
                 run["generation_tokens_per_second"] == parsed["timings"]["predicted_per_second"] and
                 run["prompt_tokens_per_second"] == parsed["timings"]["prompt_per_second"], "benchmark throughput mismatch")
+    require(provenance["suite"]["fixtures"] == expected_fixtures, "benchmark fixture provenance mismatch")
 
 
 def main(argv=None):
