@@ -227,10 +227,14 @@ running them. `report` validates raw results and regenerates Markdown summaries;
 `report --check` detects drift without rewriting files and is appropriate for
 CI.
 
-For MTPLX use `--mode endpoint`; `llama-bench` local cases are not portable to
-MLX. Run these from a second terminal against the matching managed server:
+For API comparisons, run the command for the package served by the matching
+managed server. Do not run both package commands against one server or try to
+serve both packages simultaneously; stop the current owned server normally
+before starting the other package. MTPLX requires `--mode endpoint` because
+`llama-bench` local cases are not portable to MLX. Run from a second terminal:
 
 ```sh
+./bin/metal-llm bench qwen3.8-flash-next --suite qwen3.8-smoke --mode endpoint
 ./bin/metal-llm bench qwen3.8-flash-next-mtplx --suite qwen3.8-smoke --mode endpoint --dry-run
 ./bin/metal-llm bench qwen3.8-flash-next-mtplx --suite qwen3.8-smoke --mode endpoint
 ```

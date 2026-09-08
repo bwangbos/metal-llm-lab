@@ -28,8 +28,8 @@ configuration, including the prompt policy and memory budget.
 | Vision on/off | Actual tracked image fixture succeeds when on; image input is rejected clearly when off; text still works |
 | MTP on/off | Separate owned launches and runtime evidence of configured MTP versus AR; do not infer execution from CLI flags alone |
 | Cancellation | Disconnect a streaming client, then complete a fresh request without restarting |
-| Short context | Record exact prompt/output counts, wall time, public timing fields and native speculative-path metrics |
-| Near-max context | Leave output headroom; require exact input counts and successful completion; collect pressure, swap and actual verification path |
+| Short context | Record exact prompt/output counts, wall time, public timing fields, process/runtime memory measurements, host pressure and swap, and native evidence of the actual speculative path; if the runtime exposes no path metric, record it as unavailable rather than inferring a path |
+| Near-max context | Leave output headroom; require exact input counts and successful completion; collect process/runtime memory measurements, host pressure and swap, and native evidence of the actual speculative path; if the runtime exposes no path metric, record it as unavailable rather than inferring a path |
 | Cleanup | Stop only the test-owned process and verify lease recovery; preserve failed samples and logs |
 
 For the capacity check, use the earlier 261,888-token input with 128 output

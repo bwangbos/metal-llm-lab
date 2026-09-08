@@ -14,6 +14,11 @@ whole setup; this is not a backend toggle for identical weights.
 
 After the repository's macOS bootstrap and doctor checks:
 
+Python 3.12 must be available for the pinned runtime. Setup creates its own
+environment and installs locked packages there; it does not install a global
+Python interpreter or change your system packages. The repository bootstrap is
+a prerequisite check, not a silent package-manager installation.
+
 ```sh
 ./bin/metal-llm setup qwen3.8-flash-next-mtplx --dry-run
 ./bin/metal-llm setup qwen3.8-flash-next-mtplx
