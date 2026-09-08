@@ -15,6 +15,10 @@ metal_llm_trim_space() {
 
 metal_llm_validate_managed_identity() {
     local record=$1
+    if [[ "$(jq -r '.runtime_alias // empty' "$record" 2>/dev/null)" == mtplx ]]; then
+        python3 -I -B "$METAL_LLM_ROOT/lib/mtplx_adapter.py" validate-identity --file "$record" >/dev/null 2>&1
+        return $?
+    fi
     jq -e '
       (keys | sort) == ([
         "artifact_verification", "artifacts", "build_receipt_sha256", "executable_name",

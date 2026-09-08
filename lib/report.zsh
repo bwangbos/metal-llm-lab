@@ -258,6 +258,10 @@ metal_llm_validate_dynamic_mtp_derived_data() {
 
 metal_llm_validate_result() {
     local result_file=$1
+    if [[ "$(jq -r '.schema_version' "$result_file" 2>/dev/null)" == 3 ]]; then
+        python3 -I -B "$METAL_LLM_ROOT/lib/mtplx_adapter.py" validate-result --file "$result_file"
+        return $?
+    fi
     local result_label=${2:-${result_file#$METAL_LLM_ROOT/}}
     local schema_file="$METAL_LLM_ROOT/schemas/result.schema.json"
     local result_sha

@@ -114,5 +114,12 @@ metal_llm_doctor() {
         return 1
     fi
 
+    local mtplx_python=${METAL_LLM_PYTHON:-}
+    [[ -n "$mtplx_python" ]] || mtplx_python=$(command -v python3.12 2>/dev/null || true)
+    if [[ -n "$mtplx_python" ]] && "$mtplx_python" -I -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' >/dev/null 2>&1; then
+        print -- 'MTPLX prerequisite: Python 3.12 found'
+    else
+        print -- 'MTPLX prerequisite: Python 3.12 not found; install explicitly or set METAL_LLM_PYTHON (not required for llama.cpp)'
+    fi
     print -- 'doctor: ready'
 }

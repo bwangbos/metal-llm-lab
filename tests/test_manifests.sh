@@ -69,6 +69,10 @@ hardware_files=("$root"/manifests/hardware/*.json(N))
 (( ${#hardware_files} > 0 )) || fail 'missing hardware manifests'
 
 for manifest_file in "${runtime_files[@]}"; do
+    if [[ "$(jq -r '.runtime_type // empty' "$manifest_file")" == mtplx ]]; then
+        metal_llm_validate_runtime_manifest "$manifest_file" mtplx-2.11.2 || fail 'invalid MTPLX runtime'
+        continue
+    fi
     jq -e '
         .schema_version == 1 and
         ([.id, .repository, .base_revision, .tested_revision, .tested_tree_sha] |
@@ -94,6 +98,8 @@ for manifest_file in "${model_files[@]}"; do
     manifest_id=$(jq -er '.id' "$manifest_file")
     metal_llm_validate_model_manifest "$manifest_file" "$manifest_id" ||
       fail "invalid model manifest: $manifest_file"
+
+    [[ "$manifest_id" != qwen3.8-flash-next-mtplx ]] || continue
 
     jq -e --arg sha_pattern "$sha_pattern" --argjson expected_text_artifacts "$expected_text_artifacts" '
         .schema_version == 2 and
@@ -166,12 +172,12 @@ done
 
 jq -s -e '
     (.[0] | map(.id)) as $runtime_ids |
-    all(.[1][] .runtime_aliases[]; . as $runtime_id | ($runtime_ids | index($runtime_id)) != null)
+    all(.[1][] | (.runtime_aliases[]? // .runtime_id); . as $runtime_id | ($runtime_ids | index($runtime_id)) != null)
 ' <(jq -s '.' "${runtime_files[@]}") <(jq -s '.' "${model_files[@]}") >/dev/null
 
 temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/metal-llm-manifests.XXXXXX")
 trap 'rm -rf -- "$temporary_root"' EXIT
-real_model=$model_files[1]
+real_model="$root/manifests/models/qwen3.8-flash-next.json"
 model_id=$(jq -er '.id' "$real_model")
 
 assert_invalid_model_change() {

@@ -4,6 +4,10 @@ metal_llm_validate_model_manifest() {
     local schema_version
 
     schema_version=$(jq -er '.schema_version' "$manifest" 2>/dev/null) || return 1
+    if [[ "$schema_version" == 3 && "$expected_id" == qwen3.8-flash-next-mtplx ]]; then
+        python3 -I -B "$METAL_LLM_ROOT/lib/mtplx_adapter.py" validate-model --file "$manifest"
+        return $?
+    fi
     if [[ "$schema_version" == 1 ]]; then
         jq -er --arg expected_id "$expected_id" '
         (.schema_version == 1) and
@@ -130,6 +134,11 @@ metal_llm_validate_model_manifest() {
 metal_llm_validate_runtime_manifest() {
     local manifest=$1
     local expected_id=$2
+
+    if [[ "$expected_id" == mtplx-2.11.2 ]]; then
+        python3 -I -B "$METAL_LLM_ROOT/lib/mtplx_adapter.py" validate-runtime --file "$manifest"
+        return $?
+    fi
 
     jq -er --arg expected_id "$expected_id" '
         (.schema_version == 1) and

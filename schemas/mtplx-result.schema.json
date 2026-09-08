@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Managed MTPLX API benchmark result v3",
+  "description": "Cross-field configuration, pin, suite, raw response and throughput consistency is enforced by mtplx_adapter.validate_result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "date",
+    "model_id",
+    "suite_id",
+    "benchmark_mode",
+    "provenance",
+    "runs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 3
+    },
+    "experiment_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+([.-][a-z0-9]+)*$"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "model_id": {
+      "const": "qwen3.8-flash-next-mtplx"
+    },
+    "suite_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+([.-][a-z0-9]+)*$"
+    },
+    "benchmark_mode": {
+      "const": "endpoint"
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "repository",
+        "hardware",
+        "system",
+        "runtime",
+        "configuration",
+        "model_revision",
+        "model_manifest_sha256",
+        "artifacts",
+        "artifact_verification",
+        "suite"
+      ]
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "timestamp",
+          "context",
+          "vision",
+          "mtp_policy",
+          "mtp_selected",
+          "prompt_path",
+          "effective_prompt_tokens",
+          "generation_settings",
+          "reasoning_settings",
+          "timings",
+          "usage",
+          "raw_response",
+          "wall_seconds",
+          "stream",
+          "request_sha256",
+          "output_sha256"
+        ]
+      }
+    }
+  }
+}

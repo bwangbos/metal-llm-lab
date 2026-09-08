@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Managed MTPLX snapshot model manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "name",
+    "runtime_type",
+    "runtime_id",
+    "repository",
+    "revision",
+    "license_url",
+    "default_profile",
+    "max_context",
+    "profiles",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 3
+    },
+    "id": {
+      "const": "qwen3.8-flash-next-mtplx"
+    },
+    "name": {
+      "type": "string"
+    },
+    "runtime_type": {
+      "const": "mtplx"
+    },
+    "runtime_id": {
+      "const": "mtplx-2.11.2"
+    },
+    "repository": {
+      "const": "https://huggingface.co/Youssofal/Qwen3.8-Flash-Next-MTPLX-Optimized-Speed"
+    },
+    "revision": {
+      "const": "6bc2f6e8426ccb4af73c81bc56ba7718afc92cc6"
+    },
+    "license_url": {
+      "type": "string"
+    },
+    "default_profile": {
+      "const": "default"
+    },
+    "max_context": {
+      "const": 262144
+    },
+    "profiles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "context",
+          "mtp_policy",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "const": "default"
+          },
+          "context": {
+            "const": 262144
+          },
+          "mtp_policy": {
+            "const": "on"
+          },
+          "status": {
+            "const": "pending-acceptance"
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 39,
+      "maxItems": 39,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "filename",
+          "bytes",
+          "sha256",
+          "url"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "not": {
+              "enum": [
+                ".",
+                ".."
+              ]
+            }
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://huggingface\\.co/Youssofal/Qwen3\\.8-Flash-Next-MTPLX-Optimized-Speed/resolve/6bc2f6e8426ccb4af73c81bc56ba7718afc92cc6/"
+          }
+        }
+      }
+    }
+  }
+}
