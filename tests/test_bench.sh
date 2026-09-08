@@ -543,6 +543,11 @@ assert_contains "$warm_local_output" 'artifact verification: requested=cached ef
 assert_count "$warm_local_output" 'artifact verification:' 1
 [[ ! -s "$temporary_root/artifact-hashes.log" ]] || fail 'warm cached local bench hashed a GGUF body'
 
+disabled_local_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --dry-run --artifact-check disabled)
+assert_contains "$disabled_local_output" 'requested=disabled effective=disabled'
+[[ ! -s "$temporary_root/artifact-hashes.log" ]] || fail 'disabled local bench hashed a GGUF body'
+
 local_full_inventory_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
 : > "$temporary_root/artifact-hashes.log"
 full_local_output=$(env "${common_environment[@]}" "$fixture_cli" bench fixture-model \
@@ -776,6 +781,12 @@ warm_endpoint_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL
 assert_contains "$warm_endpoint_output" 'artifact verification: requested=cached effective=cached cache_hits=3 cache_misses=0 full_hashes=0'
 assert_count "$warm_endpoint_output" 'artifact verification:' 1
 [[ ! -s "$temporary_root/artifact-hashes.log" ]] || fail 'warm cached endpoint bench hashed a GGUF body'
+
+disabled_endpoint_output=$(env "${common_environment[@]}" FAKE_SERVER_ACTIVE=1 METAL_LLM_INCLUDE_OPTIONAL=1 \
+  METAL_LLM_RESULTS_DIR="$endpoint_results" "$fixture_cli" bench fixture-model \
+  --suite qwen3.8-smoke --mode endpoint --dry-run --artifact-check disabled)
+assert_contains "$disabled_endpoint_output" 'requested=disabled effective=disabled'
+[[ ! -s "$temporary_root/artifact-hashes.log" ]] || fail 'disabled endpoint bench hashed a GGUF body'
 
 endpoint_full_inventory_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
 : > "$temporary_root/artifact-hashes.log"

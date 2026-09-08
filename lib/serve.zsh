@@ -1,6 +1,6 @@
 metal_llm_serve_usage() {
-    metal_llm_error 'usage: metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off] [--artifact-check cached|full] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
-    metal_llm_error '       metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--artifact-check cached|full] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
+    metal_llm_error 'usage: metal-llm serve MODEL [--profile auto|fast|long|stable] [--vision on|off] [--artifact-check cached|full|disabled] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
+    metal_llm_error '       metal-llm serve MODEL --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--artifact-check cached|full|disabled] [--dry-run] [-- EXTRA_LLAMA_ARGS]'
     return 2
 }
 
@@ -85,7 +85,7 @@ metal_llm_serve() {
             --artifact-check)
                 (( $# > 0 && artifact_check_seen == 0 )) || { metal_llm_serve_usage; return $?; }
                 case "$1" in
-                    cached|full) artifact_check=$1 ;;
+                    cached|full|disabled) artifact_check=$1 ;;
                     *) metal_llm_serve_usage; return $? ;;
                 esac
                 artifact_check_seen=1

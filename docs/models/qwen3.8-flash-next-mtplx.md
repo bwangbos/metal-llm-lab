@@ -57,7 +57,14 @@ process might still be using it.
 
 Cached artifact verification is the default. `--artifact-check full` requests
 a complete rehash; use it after suspicious changes or before an audited run.
-Neither mode is permission to skip download integrity checks.
+Both modes verify downloads. The explicit `--artifact-check disabled` opt-out
+skips all model-file hashing, including downloads, imports, and launch rechecks.
+It retains file existence, size, safe-path and runtime integrity checks, but
+cannot detect same-size corruption. It never creates or refreshes trusted model
+receipts. Results are marked UNVERIFIED; model SHA-256 fields are expected
+manifest values, not measured hashes. Use this flag on each command; it does
+not change the cached default. A server started this way also requires
+`--artifact-check disabled` for endpoint benchmarks until restarted with verification.
 
 ## Profiles
 

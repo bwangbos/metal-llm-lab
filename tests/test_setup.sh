@@ -36,7 +36,7 @@ assert_setup_usage_rejected() {
         exit_status=$?
     fi
     (( exit_status == 2 )) || fail "setup rejected $description with status $exit_status, expected 2"
-    assert_contains "$output" 'usage: metal-llm setup MODEL [--artifact-check cached|full] [--dry-run] [--yes]'
+    assert_contains "$output" 'usage: metal-llm setup MODEL [--artifact-check cached|full|disabled] [--dry-run] [--yes]'
 }
 
 inventory_lab() {
@@ -479,9 +479,15 @@ assert_contains "$reuse_output" 'remaining artifact bytes: 0'
 assert_contains "$reuse_output" 'total required disk bytes: 1024'
 assert_contains "$reuse_output" $'artifact: fixture-artifact\nsource: file://'
 assert_contains "$reuse_output" $'license: https://example.invalid/license\nexpected bytes:'
-assert_contains "$reuse_output" 'using verified artifact: fixture-artifact'
+assert_contains "$reuse_output" 'using checked artifact: fixture-artifact'
 assert_contains "$reuse_output" 'artifact verification: requested=cached effective=cached cache_hits=1 cache_misses=0 full_hashes=0'
 [[ ! -s "$SETUP_TEST_ARTIFACT_HASH_LOG" ]] || fail 'warm cached setup hashed a GGUF body'
+
+disabled_output=$(METAL_LLM_BUILD_RESERVE_BYTES=1024 SETUP_TEST_BLOCKS=1 \
+    PATH="$test_path" "$fixture_root/bin/metal-llm" setup fixture-model --yes --artifact-check disabled)
+assert_contains "$disabled_output" 'requested=disabled effective=disabled'
+assert_contains "$disabled_output" 'UNVERIFIED'
+[[ ! -s "$SETUP_TEST_ARTIFACT_HASH_LOG" ]] || fail 'disabled setup hashed a GGUF body'
 
 : > "$SETUP_TEST_ARTIFACT_HASH_LOG"
 full_output=$(METAL_LLM_BUILD_RESERVE_BYTES=1024 SETUP_TEST_BLOCKS=1 \

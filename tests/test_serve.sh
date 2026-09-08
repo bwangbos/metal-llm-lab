@@ -377,6 +377,11 @@ assert_contains "$warm_output" 'artifact verification: requested=cached effectiv
 assert_count "$warm_output" 'artifact verification:' 1
 [[ ! -s "$SERVE_TEST_ARTIFACT_HASH_LOG" ]] || fail 'warm cached serve hashed a GGUF body'
 
+disabled_output=$(PATH="$test_path" "$cli" serve fixture-model --artifact-check disabled --dry-run)
+assert_contains "$disabled_output" 'requested=disabled effective=disabled'
+assert_contains "$disabled_output" 'UNVERIFIED'
+[[ ! -s "$SERVE_TEST_ARTIFACT_HASH_LOG" ]] || fail 'disabled serve hashed a GGUF body'
+
 full_inventory_before=$(find "$fixture_root/.lab" -type f -exec "$real_shasum" -a 256 {} \; | LC_ALL=C sort)
 : > "$SERVE_TEST_ARTIFACT_HASH_LOG"
 full_output=$(PATH="$test_path" "$cli" serve fixture-model --dry-run --artifact-check full)

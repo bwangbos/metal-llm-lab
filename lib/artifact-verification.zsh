@@ -1,7 +1,7 @@
 metal_llm_artifact_verification_begin() {
     local requested_mode=$1 dry_run=$2
-    [[ "$requested_mode" == cached || "$requested_mode" == full ]] || {
-        metal_llm_die "artifact check must be cached or full"
+    [[ "$requested_mode" == cached || "$requested_mode" == full || "$requested_mode" == disabled ]] || {
+        metal_llm_die "artifact check must be cached, full or disabled"
         return 1
     }
     [[ "$dry_run" == 0 || "$dry_run" == 1 ]] || {
@@ -524,6 +524,11 @@ metal_llm_verify_model_artifact() {
         return 1
     }
     memo_key="$model_id:$manifest_sha:$artifact_id:$canonical_path:$fingerprint"
+    if [[ "$METAL_LLM_ARTIFACT_CHECK_REQUESTED" == disabled ]]; then
+        metal_llm_artifact_register "$artifact_id" "$canonical_path" "$fingerprint" '' \
+          "$memo_key" "$expected_bytes" "$expected_sha"
+        return $?
+    fi
     if [[ "${METAL_LLM_ARTIFACT_MEMO_KEYS[$artifact_id]:-}" == "$memo_key" ]]; then
         return 0
     fi
@@ -667,8 +672,10 @@ metal_llm_install_verified_artifact() {
             metal_llm_die "byte count mismatch for $artifact_id: expected $expected_bytes, got $(jq -r '.size_bytes' <<< "$pre_fingerprint")"
             return 1
         }
-        (( METAL_LLM_ARTIFACT_FULL_HASHES += 1 ))
-        actual_sha=$(metal_llm_artifact_compute_sha256 "$part_path") || return 1
+        if [[ "$METAL_LLM_ARTIFACT_CHECK_REQUESTED" != disabled ]]; then
+            (( METAL_LLM_ARTIFACT_FULL_HASHES += 1 ))
+            actual_sha=$(metal_llm_artifact_compute_sha256 "$part_path") || return 1
+        fi
         post_fingerprint=$(metal_llm_artifact_fingerprint "$part_path") || return 1
         if [[ "$pre_fingerprint" != "$post_fingerprint" ]]; then
             if (( attempt == 1 )); then
@@ -677,7 +684,7 @@ metal_llm_install_verified_artifact() {
             metal_llm_die "artifact changed repeatedly during hashing: $artifact_id"
             return 1
         fi
-        [[ "$actual_sha" == "$expected_sha" ]] || {
+        [[ "$METAL_LLM_ARTIFACT_CHECK_REQUESTED" == disabled || "$actual_sha" == "$expected_sha" ]] || {
             metal_llm_die "checksum mismatch for $artifact_id: expected $expected_sha, got $actual_sha"
             return 1
         }
@@ -702,6 +709,12 @@ metal_llm_install_verified_artifact() {
         return 1
     }
     manifest_sha=$(metal_llm_sha256 "$manifest") || return 1
+    if [[ "$METAL_LLM_ARTIFACT_CHECK_REQUESTED" == disabled ]]; then
+        memo_key="$model_id:$manifest_sha:$artifact_id:$final_path:$final_fingerprint"
+        metal_llm_artifact_register "$artifact_id" "$final_path" "$final_fingerprint" '' \
+          "$memo_key" "$expected_bytes" "$expected_sha"
+        return $?
+    fi
     binding_json=$(metal_llm_artifact_binding_json "$model_id" "$manifest_sha" "$artifact_id" \
       "$expected_bytes" "$expected_sha" "$final_path" "$final_fingerprint") || return 1
     binding=$(metal_llm_artifact_sha256_text "$binding_json") || return 1
@@ -713,7 +726,9 @@ metal_llm_install_verified_artifact() {
 }
 
 metal_llm_artifact_effective_mode() {
-    if (( METAL_LLM_ARTIFACT_CACHE_HITS > 0 && METAL_LLM_ARTIFACT_FULL_HASHES > 0 )); then
+    if [[ "$METAL_LLM_ARTIFACT_CHECK_REQUESTED" == disabled ]]; then
+        print -- disabled
+    elif (( METAL_LLM_ARTIFACT_CACHE_HITS > 0 && METAL_LLM_ARTIFACT_FULL_HASHES > 0 )); then
         print -- mixed
     elif (( METAL_LLM_ARTIFACT_CACHE_HITS > 0 )); then
         print -- cached
@@ -753,6 +768,12 @@ metal_llm_artifact_verification_finalize() {
         metal_llm_die 'a complete artifact verification set cannot be empty'
         return 1
     }
+    if [[ "$effective_mode" == disabled ]]; then
+        (( ${#METAL_LLM_ARTIFACT_ORDER} > 0 )) || { metal_llm_die 'artifact set cannot be empty'; return 1; }
+        typeset -g METAL_LLM_ARTIFACT_RECEIPT_SET_SHA256=''
+        typeset -g METAL_LLM_ARTIFACT_VERIFICATION_JSON='{"requested_mode":"disabled","effective_mode":"disabled","cache_hits":0,"cache_misses":0,"full_hashes":0,"receipt_set_sha256":null}'
+        return 0
+    fi
     sorted_ids=("${(@f)$(metal_llm_artifact_sort_ids "${METAL_LLM_ARTIFACT_ORDER[@]}")}") || return 1
     for artifact_id in "${sorted_ids[@]}"; do
         receipt_set=$(jq -cn --argjson receipt_set "$receipt_set" \
@@ -782,6 +803,9 @@ metal_llm_print_artifact_verification_summary() {
         metal_llm_die 'artifact verification has not been finalized'
         return 1
     }
+    if [[ "$METAL_LLM_ARTIFACT_EFFECTIVE_MODE" == disabled ]]; then
+        print -- 'WARNING: model artifacts are UNVERIFIED; checksums were skipped; manifest hashes are expected values only.'
+    fi
     print -n -- "artifact verification: requested=$METAL_LLM_ARTIFACT_CHECK_REQUESTED effective=$METAL_LLM_ARTIFACT_EFFECTIVE_MODE cache_hits=$METAL_LLM_ARTIFACT_CACHE_HITS cache_misses=$METAL_LLM_ARTIFACT_CACHE_MISSES full_hashes=$METAL_LLM_ARTIFACT_FULL_HASHES"
     if [[ -n "${METAL_LLM_ARTIFACT_RECEIPT_SET_SHA256:-}" ]]; then
         print -- " receipt_set_sha256=$METAL_LLM_ARTIFACT_RECEIPT_SET_SHA256"

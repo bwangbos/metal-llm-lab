@@ -50,6 +50,32 @@ artifact_hash_count() {
     wc -l < "$artifact_hash_log" | tr -d ' '
 }
 
+# Disabled must neither read model bodies nor mint trust for a later cached run.
+disabled_dir="$fixture_root/disabled"
+mkdir -p "$disabled_dir"
+print -n -- 'wrong' > "$disabled_dir/model-a.gguf"
+print -n -- 'foobar' > "$disabled_dir/model-b.gguf.part"
+metal_llm_artifact_verification_begin disabled 0
+metal_llm_verify_model_artifact "$manifest" fixture-model "$disabled_dir" model-a
+metal_llm_install_verified_artifact "$manifest" fixture-model "$disabled_dir" model-b "$disabled_dir/model-b.gguf.part"
+metal_llm_artifact_verification_finalize 1
+(( $(artifact_hash_count) == 0 )) || fail 'disabled verification hashed model bytes'
+jq -e '.requested_mode == "disabled" and .effective_mode == "disabled" and
+  .cache_hits == 0 and .cache_misses == 0 and .full_hashes == 0 and .receipt_set_sha256 == null' \
+  <<< "$METAL_LLM_ARTIFACT_VERIFICATION_JSON" >/dev/null || fail 'disabled claims trusted verification'
+[[ ! -e "$fixture_root/.lab/verification/artifacts" ]] || fail 'disabled created a trusted receipt'
+metal_llm_artifact_verification_begin cached 0
+if metal_llm_verify_model_artifact "$manifest" fixture-model "$disabled_dir" model-a 2>/dev/null; then
+    fail 'cached mode trusted a previously unchecked artifact'
+fi
+(( $(artifact_hash_count) == 1 )) || fail 'cached must hash after disabled'
+print -n -- 'bad' > "$disabled_dir/model-a.gguf"
+metal_llm_artifact_verification_begin disabled 0
+if metal_llm_verify_model_artifact "$manifest" fixture-model "$disabled_dir" model-a 2>/dev/null; then
+    fail 'disabled accepted wrong byte count'
+fi
+: > "$artifact_hash_log"
+
 metal_llm_artifact_verification_begin cached 0
 metal_llm_verify_model_artifact "$manifest" fixture-model "$artifact_dir" model-a
 metal_llm_artifact_verification_finalize 1
@@ -71,6 +97,13 @@ receipt_path="$fixture_root/.lab/verification/artifacts/fixture-model/model-a.js
 verification_root="$fixture_root/.lab/verification/artifacts"
 model_receipt_root="$verification_root/fixture-model"
 before_verified_at=$(jq -r '.full_verified_at' "$receipt_path")
+
+receipt_before_disabled=$(metal_llm_sha256 "$receipt_path")
+metal_llm_artifact_verification_begin disabled 0
+metal_llm_verify_model_artifact "$manifest" fixture-model "$artifact_dir" model-a
+metal_llm_artifact_verification_finalize 1
+(( $(artifact_hash_count) == 0 )) || fail 'disabled warm check hashed model'
+[[ "$(metal_llm_sha256 "$receipt_path")" == "$receipt_before_disabled" ]] || fail 'disabled rewrote trusted receipt'
 
 : > "$artifact_hash_log"
 /bin/sleep 1

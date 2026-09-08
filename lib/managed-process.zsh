@@ -61,12 +61,14 @@ metal_llm_validate_managed_identity() {
         type == "object" and
         (keys | sort) == (["requested_mode", "effective_mode", "cache_hits", "cache_misses",
           "full_hashes", "receipt_set_sha256"] | sort) and
-        (.requested_mode == "cached" or .requested_mode == "full") and
-        (.effective_mode == "cached" or .effective_mode == "full" or .effective_mode == "mixed") and
+        (.requested_mode == "cached" or .requested_mode == "full" or .requested_mode == "disabled") and
+        (.effective_mode == "cached" or .effective_mode == "full" or .effective_mode == "mixed" or .effective_mode == "disabled") and
         ([.cache_hits, .cache_misses, .full_hashes] |
           all(type == "number" and . >= 0 and floor == .)) and
-        (.receipt_set_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
-        (if .requested_mode == "full" then
+        (if .requested_mode == "disabled" then .receipt_set_sha256 == null else (.receipt_set_sha256 | type == "string" and test("^[0-9a-f]{64}$")) end) and
+        (if .requested_mode == "disabled" then
+          .effective_mode == "disabled" and .cache_hits == 0 and .cache_misses == 0 and .full_hashes == 0
+        elif .requested_mode == "full" then
           .effective_mode == "full" and .cache_hits == 0 and .cache_misses == 0 and
           .full_hashes > 0
         elif .effective_mode == "cached" then

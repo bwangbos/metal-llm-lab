@@ -116,7 +116,19 @@ body was fully hashed. Artifact receipts live locally under
 or before publishing a high-stakes benchmark.
 
 For an audit run, replace `cached` in any of the quick-start commands with
-`full`; the command-line option accepts only `cached` or `full`.
+`full`. Both packages also accept `--artifact-check disabled`: this skips all
+model-file hashing, including downloads, local imports, and launch rechecks.
+Existence, size, safe-path checks, and runtime integrity checks still apply.
+Same-size corruption cannot be detected in this mode. It never creates or
+refreshes trusted artifact receipts; benchmark readouts mark artifacts
+**UNVERIFIED**, and recorded model hashes are expected manifest values only.
+The next `cached` command will hash files without valid receipts. This is a
+per-command opt-out, not a change to the safe `cached` default.
+
+```sh
+./bin/metal-llm serve qwen3.8-flash-next --artifact-check disabled
+./bin/metal-llm serve qwen3.8-flash-next-mtplx --artifact-check disabled
+```
 
 An artifact receipt binds a downloaded model body to its manifest identity and
 file metadata. A runtime build receipt separately binds a built executable to

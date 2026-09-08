@@ -95,15 +95,17 @@ metal_llm_validate_artifact_verification_provenance() {
         "cache_hits", "cache_misses", "effective_mode", "full_hashes",
         "receipt_set_sha256", "requested_mode"
       ] | sort) and
-      ($verification.requested_mode == "cached" or $verification.requested_mode == "full") and
+      ($verification.requested_mode == "cached" or $verification.requested_mode == "full" or $verification.requested_mode == "disabled") and
       ($verification.effective_mode == "cached" or
-        $verification.effective_mode == "full" or $verification.effective_mode == "mixed") and
+        $verification.effective_mode == "full" or $verification.effective_mode == "mixed" or $verification.effective_mode == "disabled") and
       all(
         [$verification.cache_hits, $verification.cache_misses, $verification.full_hashes][];
         type == "number" and floor == . and . >= 0
       ) and
-      ($verification.receipt_set_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
-      (if $verification.requested_mode == "full" then
+      (if $verification.requested_mode == "disabled" then $verification.receipt_set_sha256 == null else ($verification.receipt_set_sha256 | type == "string" and test("^[0-9a-f]{64}$")) end) and
+      (if $verification.requested_mode == "disabled" then
+          $verification.effective_mode == "disabled" and $verification.cache_hits == 0 and $verification.cache_misses == 0 and $verification.full_hashes == 0
+        elif $verification.requested_mode == "full" then
          $verification.effective_mode == "full" and $verification.cache_hits == 0 and
          $verification.cache_misses == 0 and $verification.full_hashes >= 1
        elif $verification.effective_mode == "cached" then
@@ -113,6 +115,7 @@ metal_llm_validate_artifact_verification_provenance() {
          $verification.cache_hits == 0 and $verification.cache_misses >= 1 and
          $verification.full_hashes >= $verification.cache_misses
        else
+         $verification.effective_mode == "mixed" and
          $verification.cache_hits >= 1 and $verification.cache_misses >= 1 and
          $verification.full_hashes >= $verification.cache_misses
        end)
@@ -634,14 +637,15 @@ metal_llm_generate_summary() {
         "",
         .interpretation.limitation
       ] +
-      (if .schema_version == 2 then
+      (if .schema_version == 2 or .provenance.artifact_verification.requested_mode == "disabled" then
         [
           "",
           "## Artifact verification provenance",
           "",
           "- Artifact verification requested/effective: `" + .provenance.artifact_verification.requested_mode + "` / `" + .provenance.artifact_verification.effective_mode + "`",
           "- Artifact verification counts (hits/misses/full): `" + (.provenance.artifact_verification.cache_hits | tostring) + "` / `" + (.provenance.artifact_verification.cache_misses | tostring) + "` / `" + (.provenance.artifact_verification.full_hashes | tostring) + "`",
-          "- Artifact receipt set: `" + .provenance.artifact_verification.receipt_set_sha256 + "`"
+          "- Artifact receipt set: `" + (.provenance.artifact_verification.receipt_set_sha256 // "none") + "`",
+          (if .provenance.artifact_verification.requested_mode == "disabled" then "- UNVERIFIED model artifacts: hashing disabled; artifact SHA-256 values are expected manifest values only." else empty end)
         ]
        else [] end) +
       (if any(.runs[]; .mtp_policy != null) then
@@ -762,11 +766,12 @@ metal_llm_generate_dynamic_mtp_summary() {
         "- Correctness harness: `" + .configuration.correctness_evidence.harness_sha256 + "`",
         "- Checkpoint identity: `" + .configuration.checkpoint_identity_sha256 + "`"
       ] +
-      (if .schema_version == 2 then
+      (if .schema_version == 2 or .provenance.artifact_verification.requested_mode == "disabled" then
         [
           "- Artifact verification requested/effective: `" + .provenance.artifact_verification.requested_mode + "` / `" + .provenance.artifact_verification.effective_mode + "`",
           "- Artifact verification counts (hits/misses/full): `" + (.provenance.artifact_verification.cache_hits | tostring) + "` / `" + (.provenance.artifact_verification.cache_misses | tostring) + "` / `" + (.provenance.artifact_verification.full_hashes | tostring) + "`",
-          "- Artifact receipt set: `" + .provenance.artifact_verification.receipt_set_sha256 + "`"
+          "- Artifact receipt set: `" + (.provenance.artifact_verification.receipt_set_sha256 // "none") + "`",
+          (if .provenance.artifact_verification.requested_mode == "disabled" then "- UNVERIFIED model artifacts: hashing disabled; artifact SHA-256 values are expected manifest values only." else empty end)
         ]
        else [] end) +
       [.configuration.server_log_sha256[] |
@@ -813,14 +818,15 @@ metal_llm_generate_generic_summary() {
         shown("prompt_tokens_per_second"; "prompt_tokens_per_second_display") + " | " +
         shown("generation_tokens_per_second"; "generation_tokens_per_second_display") + " |"
       ] +
-      (if .schema_version == 2 then
+      (if .schema_version == 2 or .provenance.artifact_verification.requested_mode == "disabled" then
         [
           "",
           "## Artifact verification provenance",
           "",
           "- Artifact verification requested/effective: `" + .provenance.artifact_verification.requested_mode + "` / `" + .provenance.artifact_verification.effective_mode + "`",
           "- Artifact verification counts (hits/misses/full): `" + (.provenance.artifact_verification.cache_hits | tostring) + "` / `" + (.provenance.artifact_verification.cache_misses | tostring) + "` / `" + (.provenance.artifact_verification.full_hashes | tostring) + "`",
-          "- Artifact receipt set: `" + .provenance.artifact_verification.receipt_set_sha256 + "`"
+          "- Artifact receipt set: `" + (.provenance.artifact_verification.receipt_set_sha256 // "none") + "`",
+          (if .provenance.artifact_verification.requested_mode == "disabled" then "- UNVERIFIED model artifacts: hashing disabled; artifact SHA-256 values are expected manifest values only." else empty end)
         ]
        else [] end) | join("\n")
     ' "$result_file"

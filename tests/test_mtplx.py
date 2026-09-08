@@ -19,6 +19,47 @@ if SPEC.loader and Path(SPEC.origin).exists():
 
 
 class AdapterTests(unittest.TestCase):
+    def test_disabled_never_hashes_snapshot_or_creates_trust(self):
+        target = self.root / "model"
+        target.mkdir()
+        artifact = self.artifact()
+        (target / "config.json").write_bytes(b"corrupt data")
+        receipt = self.root / "receipt.json"
+        with patch.object(adapter, "digest", side_effect=AssertionError("model hashed")):
+            result = adapter.verify_snapshot(target, [artifact], "disabled", receipt, "pin")
+        self.assertEqual(result, {"requested_mode": "disabled", "effective_mode": "disabled",
+            "cache_hits": 0, "cache_misses": 0, "full_hashes": 0, "receipt_set_sha256": None})
+        self.assertFalse(receipt.exists())
+        with self.assertRaisesRegex(ValueError, "checksum"):
+            adapter.verify_snapshot(target, [artifact], "cached", receipt, "pin")
+        (target / "config.json").write_bytes(b"bad")
+        with self.assertRaisesRegex(ValueError, "byte count"):
+            adapter.verify_snapshot(target, [artifact], "disabled", receipt, "pin")
+
+    def test_disabled_import_and_completed_download_skip_hashes_and_preserve_receipt(self):
+        source = self.root / "source"
+        source.mkdir()
+        (source / "config.json").write_bytes(b"corrupt data")
+        target, receipt = self.root / "target", self.root / "receipt.json"
+        receipt.write_text("old receipt must not be replaced")
+        with patch.object(adapter, "digest", side_effect=AssertionError("model hashed")):
+            result = adapter.setup_snapshot(target, [self.artifact()], "disabled", receipt, "pin", source)
+        self.assertEqual(result["full_hashes"], 0)
+        self.assertEqual((target / "config.json").read_bytes(), b"corrupt data")
+        self.assertEqual(receipt.read_text(), "old receipt must not be replaced")
+        download = self.root / "download"
+        download.mkdir()
+        (download / "config.json.part").write_bytes(b"corrupt data")
+        with patch.object(adapter, "digest", side_effect=AssertionError("model hashed")):
+            adapter.setup_snapshot(download, [self.artifact()], "disabled", self.root / "missing.json", "pin")
+        self.assertEqual((download / "config.json").read_bytes(), b"corrupt data")
+        self.assertFalse((self.root / "missing.json").exists())
+
+    def test_verification_default_and_disabled_cli(self):
+        for command in ("setup", "serve", "bench"):
+            self.assertEqual(adapter.parse_args([command]).artifact_check, "cached")
+            self.assertEqual(adapter.parse_args([command, "--artifact-check", "disabled"]).artifact_check, "disabled")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -344,7 +385,10 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(result["cache_hits"], 1)
         self.assertEqual(result["full_hashes"], 0)
 
-    def test_offline_endpoint_bench_roundtrip_is_report_validated_and_detects_forgery(self):
+    def test_disabled_endpoint_bench_roundtrip(self):
+        self.test_offline_endpoint_bench_roundtrip_is_report_validated_and_detects_forgery("disabled")
+
+    def test_offline_endpoint_bench_roundtrip_is_report_validated_and_detects_forgery(self, mode="cached"):
         """Real tiny install/lease/result, with only external HTTP substituted."""
         import io
         model, runtime = adapter.load_manifests(ROOT)
@@ -386,17 +430,38 @@ class AdapterTests(unittest.TestCase):
             return io.BytesIO(json.dumps(payload).encode())
         with patch.object(adapter, "ROOT", self.root), patch.dict(os.environ, env, clear=True), patch.object(adapter.urllib.request, "urlopen", respond):
             config = adapter.resolve_config(adapter.parse_args(["serve"]), model, os.environ, *adapter.hardware())
-            identity = adapter.verified_identity(config, model, runtime, "full")
+            identity = adapter.verified_identity(config, model, runtime, "disabled" if mode == "disabled" else "full")
             identity.update(schema_version=3, owner_token="a" * 64, pid=os.getpid(), process_started_at="fixture start")
             identity_path = self.root / ".lab/identity.json"
             adapter.atomic_json(identity_path, identity)
             adapter.validate_identity(identity)
+            if mode == "disabled":
+                with patch.object(adapter, "verified_identity", side_effect=RuntimeError("launch boundary")) as recheck:
+                    with self.assertRaisesRegex(RuntimeError, "launch boundary"):
+                        adapter.launch(identity_path, model, runtime)
+                    self.assertEqual(recheck.call_args.args[-1], "disabled")
+                interpreter = installed / "venv/bin/python"
+                interpreter.write_bytes(b"tampered runtime")
+                with self.assertRaises(ValueError):
+                    adapter.verified_identity(config, model, runtime, "disabled")
+                interpreter.write_bytes(b"test interpreter")
             bad_identity = copy.deepcopy(identity)
             bad_identity["configuration"]["telemetry"] = True
             with self.subTest("identity telemetry"), self.assertRaises(ValueError):
                 adapter.validate_identity(bad_identity)
-            args = adapter.parse_args(["bench", "--suite", "qwen3.8-smoke", "--mode", "endpoint", "--identity", str(identity_path)])
-            adapter.bench(args, model, runtime)
+            args = adapter.parse_args(["bench", "--suite", "qwen3.8-smoke", "--mode", "endpoint", "--identity", str(identity_path), "--artifact-check", mode])
+            if mode == "disabled":
+                verified_args = copy.copy(args)
+                verified_args.artifact_check = "cached"
+                with self.assertRaisesRegex(ValueError, "server launched with unverified"):
+                    adapter.bench(verified_args, model, runtime)
+            original_digest = adapter.digest
+            def guarded_digest(path):
+                if mode == "disabled" and ".lab/artifacts" in str(path):
+                    raise AssertionError("disabled benchmark hashed model")
+                return original_digest(path)
+            with patch.object(adapter, "digest", guarded_digest):
+                adapter.bench(args, model, runtime)
             result = json.loads(next((self.root / "results/raw").glob("*.json")).read_text())
             adapter.validate_result(result)
             (self.root / "lib").mkdir()
@@ -405,6 +470,9 @@ class AdapterTests(unittest.TestCase):
                                      "fixture", str(self.root), str(ROOT), str(next((self.root / "results/raw").glob("*.json")))], capture_output=True, text=True)
             self.assertEqual(report.returncode, 0, report.stderr)
             self.assertIn("deterministic-api-smoke", report.stdout)
+            if mode == "disabled":
+                self.assertIn("UNVERIFIED", report.stdout)
+                self.assertIsNone(result["provenance"]["artifact_verification"]["receipt_set_sha256"])
             mutations = [("missing " + ".".join(map(str, path)), path, None, True) for path in (
                 ("experiment_id",), ("date",), ("provenance", "model_manifest_sha256"),
                 ("provenance", "artifacts"), ("provenance", "artifact_verification"),

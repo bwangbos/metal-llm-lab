@@ -11,6 +11,9 @@ planned.
   generation settings, and raw measurements.
 - Verify cryptographic checksums before using downloaded artifacts; retain each
   artifact's source, license, and expected checksum.
+  Explicit `--artifact-check disabled` is a user-authorized model-only exception:
+  retain basic file checks, mark results unverified, and never mint trusted
+  receipts. Runtime integrity verification is not disabled.
 - Do not perform hidden system mutation: scripts must not use `sudo`, silently
   install global packages, alter macOS settings, or enable telemetry.
 - Run relevant automated tests before benchmark or correctness claims, clearly

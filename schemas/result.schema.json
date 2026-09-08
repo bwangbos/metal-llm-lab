@@ -85,50 +85,169 @@
     "artifact_verification": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["requested_mode", "effective_mode", "cache_hits", "cache_misses", "full_hashes", "receipt_set_sha256"],
+      "required": [
+        "requested_mode",
+        "effective_mode",
+        "cache_hits",
+        "cache_misses",
+        "full_hashes",
+        "receipt_set_sha256"
+      ],
       "properties": {
-        "requested_mode": { "enum": ["cached", "full"] },
-        "effective_mode": { "enum": ["cached", "full", "mixed"] },
-        "cache_hits": { "type": "integer", "minimum": 0 },
-        "cache_misses": { "type": "integer", "minimum": 0 },
-        "full_hashes": { "type": "integer", "minimum": 0 },
-        "receipt_set_sha256": { "$ref": "#/$defs/sha256" }
+        "requested_mode": {
+          "enum": [
+            "cached",
+            "full",
+            "disabled"
+          ]
+        },
+        "effective_mode": {
+          "enum": [
+            "cached",
+            "full",
+            "mixed",
+            "disabled"
+          ]
+        },
+        "cache_hits": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cache_misses": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "full_hashes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "receipt_set_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
       },
       "oneOf": [
         {
           "properties": {
-            "requested_mode": { "const": "full" },
-            "effective_mode": { "const": "full" },
-            "cache_hits": { "const": 0 },
-            "cache_misses": { "const": 0 },
-            "full_hashes": { "type": "integer", "minimum": 1 }
+            "requested_mode": {
+              "const": "full"
+            },
+            "effective_mode": {
+              "const": "full"
+            },
+            "cache_hits": {
+              "const": 0
+            },
+            "cache_misses": {
+              "const": 0
+            },
+            "full_hashes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "receipt_set_sha256": {
+              "$ref": "#/$defs/sha256"
+            }
           }
         },
         {
           "properties": {
-            "requested_mode": { "const": "cached" },
-            "effective_mode": { "const": "cached" },
-            "cache_hits": { "type": "integer", "minimum": 1 },
-            "cache_misses": { "const": 0 },
-            "full_hashes": { "const": 0 }
+            "requested_mode": {
+              "const": "cached"
+            },
+            "effective_mode": {
+              "const": "cached"
+            },
+            "cache_hits": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "cache_misses": {
+              "const": 0
+            },
+            "full_hashes": {
+              "const": 0
+            },
+            "receipt_set_sha256": {
+              "$ref": "#/$defs/sha256"
+            }
           }
         },
         {
           "properties": {
-            "requested_mode": { "const": "cached" },
-            "effective_mode": { "const": "full" },
-            "cache_hits": { "const": 0 },
-            "cache_misses": { "type": "integer", "minimum": 1 },
-            "full_hashes": { "type": "integer", "minimum": 1 }
+            "requested_mode": {
+              "const": "cached"
+            },
+            "effective_mode": {
+              "const": "full"
+            },
+            "cache_hits": {
+              "const": 0
+            },
+            "cache_misses": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "full_hashes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "receipt_set_sha256": {
+              "$ref": "#/$defs/sha256"
+            }
           }
         },
         {
           "properties": {
-            "requested_mode": { "const": "cached" },
-            "effective_mode": { "const": "mixed" },
-            "cache_hits": { "type": "integer", "minimum": 1 },
-            "cache_misses": { "type": "integer", "minimum": 1 },
-            "full_hashes": { "type": "integer", "minimum": 1 }
+            "requested_mode": {
+              "const": "cached"
+            },
+            "effective_mode": {
+              "const": "mixed"
+            },
+            "cache_hits": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "cache_misses": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "full_hashes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "receipt_set_sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        {
+          "properties": {
+            "requested_mode": {
+              "const": "disabled"
+            },
+            "effective_mode": {
+              "const": "disabled"
+            },
+            "cache_hits": {
+              "const": 0
+            },
+            "cache_misses": {
+              "const": 0
+            },
+            "full_hashes": {
+              "const": 0
+            },
+            "receipt_set_sha256": {
+              "type": "null"
+            }
           }
         }
       ]

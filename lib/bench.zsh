@@ -1,7 +1,7 @@
 metal_llm_bench_usage() {
-    metal_llm_error 'usage: metal-llm bench MODEL --suite SUITE [--mode local] [--runtime tuned|upstream] [--artifact-check cached|full] [--dry-run]'
-    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint [--profile auto|fast|long|stable] [--vision on|off] [--artifact-check cached|full] [--dry-run]'
-    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--artifact-check cached|full] [--dry-run]'
+    metal_llm_error 'usage: metal-llm bench MODEL --suite SUITE [--mode local] [--runtime tuned|upstream] [--artifact-check cached|full|disabled] [--dry-run]'
+    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint [--profile auto|fast|long|stable] [--vision on|off] [--artifact-check cached|full|disabled] [--dry-run]'
+    metal_llm_error '       metal-llm bench MODEL --suite SUITE --mode endpoint --profile custom --runtime tuned|upstream --mtp on|off|dynamic --context TOKENS [--vision on|off] [--artifact-check cached|full|disabled] [--dry-run]'
     return 2
 }
 
@@ -272,7 +272,7 @@ metal_llm_bench() {
             --artifact-check)
                 (( $# > 0 && artifact_check_seen == 0 )) || { metal_llm_bench_usage; return $?; }
                 case "$1" in
-                    cached|full) artifact_check=$1 ;;
+                    cached|full|disabled) artifact_check=$1 ;;
                     *) metal_llm_bench_usage; return $? ;;
                 esac
                 artifact_check_seen=1
@@ -505,7 +505,7 @@ metal_llm_bench() {
           .runtime_manifest_sha256 == $manifest_sha and .build_receipt_sha256 == $receipt_sha and
           .executable_name == "llama-server" and .executable_sha256 == $executable_sha and
           .model_manifest_sha256 == $model_manifest_sha and .artifacts == $artifacts and
-          .artifact_verification.receipt_set_sha256 == $verification_receipt_sha
+          ($verification_receipt_sha == "" or .artifact_verification.receipt_set_sha256 == $verification_receipt_sha)
         ' "$managed_identity_record" >/dev/null || {
             metal_llm_die "managed endpoint identity does not match resolved configuration at $host:$port"
             return 1

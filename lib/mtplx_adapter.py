@@ -137,17 +137,24 @@ def fingerprint(path):
     return [info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
 
 
-def check_file(path, artifact):
+def check_file(path, artifact, mode="full"):
+    require(mode in ("cached", "full", "disabled"), "invalid artifact check mode")
     before = fingerprint(path)
     require(before[2] == artifact["bytes"], "artifact byte count mismatch: " + artifact["filename"])
-    require(digest(path) == artifact["sha256"], "artifact checksum mismatch: " + artifact["filename"])
+    if mode != "disabled":
+        require(digest(path) == artifact["sha256"], "artifact checksum mismatch: " + artifact["filename"])
     require(before == fingerprint(path), "artifact changed during verification")
     return before
 
 
 def verify_snapshot(directory, artifacts, mode, receipt_path, binding, write=True):
-    require(mode in ("cached", "full"), "artifact check must be cached or full")
+    require(mode in ("cached", "full", "disabled"), "artifact check must be cached, full or disabled")
     safe_path(directory)
+    if mode == "disabled":
+        for artifact in artifacts:
+            check_file(directory / artifact["filename"], artifact, mode)
+        return {"requested_mode": "disabled", "effective_mode": "disabled",
+                "cache_hits": 0, "cache_misses": 0, "full_hashes": 0, "receipt_set_sha256": None}
     cached = {}
     if mode == "cached" and receipt_path.exists():
         try:
@@ -176,21 +183,22 @@ def verify_snapshot(directory, artifacts, mode, receipt_path, binding, write=Tru
             "full_hashes": hashes, "receipt_set_sha256": json_sha(receipt)}
 
 
-def install_snapshot(directory, artifacts, source=None):
+def install_snapshot(directory, artifacts, source=None, mode="full"):
+    require(mode in ("cached", "full", "disabled"), "invalid artifact check mode")
     safe_path(directory)
     if source is not None:
         safe_path(source)
         require(source.resolve() != directory.resolve(), "import source must differ from managed destination")
         # Preflight every source before copying; preserve source bytes and metadata.
         for artifact in artifacts:
-            check_file(source / artifact["filename"], artifact)
+            check_file(source / artifact["filename"], artifact, mode)
     directory.mkdir(parents=True, exist_ok=True)
     verified = {}
     for artifact in artifacts:
         target = safe_path(directory / artifact["filename"])
         partial = safe_path(directory / (artifact["filename"] + ".part"))
         if target.exists():
-            verified[artifact["filename"]] = {"fingerprint": check_file(target, artifact), "sha256": artifact["sha256"], "bytes": artifact["bytes"]}
+            verified[artifact["filename"]] = {"fingerprint": check_file(target, artifact, mode), "sha256": artifact["sha256"], "bytes": artifact["bytes"]}
             continue
         if source is not None:
             require(not partial.exists(), "import partial already exists; verify/resume download or remove it explicitly")
@@ -220,7 +228,7 @@ def install_snapshot(directory, artifacts, source=None):
                                 (opened.st_dev, opened.st_ino) == tuple(partial_state[:2])),
                                 "partial artifact changed before resume")
                         shutil.copyfileobj(response, output, 8 * 1024 * 1024)
-        check_file(partial, artifact)
+        check_file(partial, artifact, mode)
         # Link refuses a concurrent replacement, unlike an overwriting rename.
         os.link(partial, target)
         partial.unlink()
@@ -230,6 +238,9 @@ def install_snapshot(directory, artifacts, source=None):
 
 def setup_snapshot(directory, artifacts, mode, receipt_path, binding, source=None):
     safe_path(directory)
+    if mode == "disabled":
+        install_snapshot(directory, artifacts, source=source, mode=mode)
+        return verify_snapshot(directory, artifacts, mode, receipt_path, binding)
     if source is not None:
         safe_path(source)
         for artifact in artifacts:
@@ -251,7 +262,7 @@ def parse_args(argv):
     parser = argparse.ArgumentParser(prog="metal-llm MTPLX")
     parser.add_argument("command", choices=("setup", "serve", "bench", "launch", "validate-model", "validate-runtime", "validate-identity", "validate-result"))
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--artifact-check", choices=("cached", "full"), default="cached")
+    parser.add_argument("--artifact-check", choices=("cached", "full", "disabled"), default="cached")
     for name in ("profile", "mtp", "context", "vision", "runtime", "import-from", "suite", "mode", "identity", "file"):
         parser.add_argument("--" + name)
     parser.add_argument("--yes", action="store_true")
@@ -491,7 +502,23 @@ def verified_identity(config, model, runtime, mode, root=None):
             "artifact_verification": verification}
 
 
+def validate_artifact_verification(verification, count):
+    require(set(verification) == {"requested_mode", "effective_mode", "cache_hits", "cache_misses", "full_hashes", "receipt_set_sha256"}, "invalid artifact verification fields")
+    hits, misses, hashes = (verification[k] for k in ("cache_hits", "cache_misses", "full_hashes"))
+    require(all(type(n) is int and n >= 0 for n in (hits, misses, hashes)), "invalid verification counts")
+    if verification["requested_mode"] == "disabled":
+        require(verification["effective_mode"] == "disabled" and hits == misses == hashes == 0 and verification["receipt_set_sha256"] is None, "invalid disabled verification")
+        return
+    require(verification["requested_mode"] in ("cached", "full") and isinstance(verification["receipt_set_sha256"], str) and re.fullmatch(r"[a-f0-9]{64}", verification["receipt_set_sha256"]), "invalid verified receipt")
+    require(hits + hashes == count, "artifact verification counts do not cover snapshot")
+    if verification["requested_mode"] == "full":
+        require(verification["effective_mode"] == "full" and hits == misses == 0 and hashes > 0, "invalid full artifact verification")
+    else:
+        require(misses == hashes and verification["effective_mode"] == ("mixed" if hits and hashes else "cached" if hits else "full"), "invalid cached artifact verification")
+
+
 def validate_identity(identity):
+    validate_artifact_verification(identity["artifact_verification"], len(identity["artifacts"]))
     require(identity["schema_version"] == 3 and identity["owner_kind"] == "serve" and identity["model_id"] == MODEL_ID and
             identity["runtime_alias"] == "mtplx" and identity["runtime_id"] == RUNTIME_ID and identity["model_revision"] == REVISION,
             "invalid MTPLX managed identity")
@@ -550,7 +577,8 @@ def launch(identity_path, model, runtime):
     identity = json.loads(identity_path.read_text())
     validate_identity(identity)
     config = identity["configuration"]
-    current = verified_identity(config, model, runtime, "cached")
+    current = verified_identity(config, model, runtime,
+                                "disabled" if identity["artifact_verification"]["requested_mode"] == "disabled" else "cached")
     for field in ("model_manifest_sha256", "artifacts", "runtime"):
         require(current[field] == identity[field], "installation changed after lease acquisition")
     local = ROOT / ".lab/mtplx" / MODEL_ID
@@ -614,7 +642,7 @@ def bench(args, model, runtime):
     if args.dry_run:
         config = resolve_config(args, model, os.environ, *hardware())
         print(json.dumps({"configuration": config, "suite_id": args.suite, "mode": "endpoint", "cases": [c["id"] for c in cases],
-                          "provenance": "managed identity, verified snapshot/runtime, native path, raw timings, wall time; live acceptance pending"}, indent=2))
+                          "provenance": "managed identity, explicit snapshot verification status, verified runtime, native path, raw timings, wall time; live acceptance pending"}, indent=2))
         return
     require(args.identity, "API bench requires a live managed MTPLX server")
     identity_path = Path(args.identity)
@@ -630,6 +658,8 @@ def bench(args, model, runtime):
     args.vision = args.vision or ("on" if serving["vision"] else "off")
     config = resolve_config(args, model, os.environ, *hardware())
     require(config == serving, "requested benchmark settings do not match managed server identity")
+    require(args.artifact_check == "disabled" or identity["artifact_verification"]["requested_mode"] != "disabled",
+            "server launched with unverified artifacts; use --artifact-check disabled or restart with verification")
     current = verified_identity(config, model, runtime, args.artifact_check)
     for field in ("runtime", "artifacts", "model_manifest_sha256"):
         require(current[field] == identity[field], "managed runtime or artifacts changed")
@@ -704,6 +734,15 @@ def validate_result_schema(value, schema, definitions=None):
     Unknown result properties are rejected at every closed schema boundary.
     """
     definitions = schema.get("$defs", {}) if definitions is None else definitions
+    if "oneOf" in schema:
+        matches = 0
+        for branch in schema["oneOf"]:
+            try:
+                validate_result_schema(value, branch, definitions)
+                matches += 1
+            except ValueError:
+                pass
+        require(matches == 1, "result must match exactly one schema branch")
     if "$ref" in schema:
         return validate_result_schema(value, definitions[schema["$ref"].split("/")[-1]], definitions)
     types = {"object": dict, "array": list, "string": str, "integer": int,
@@ -774,13 +813,7 @@ def validate_result(result):
             "model artifact provenance mismatch")
     require(provenance["hardware"] == {"chip": config["chip"], "unified_memory_bytes": config["unified_memory_bytes"]}, "hardware provenance mismatch")
     verification = provenance["artifact_verification"]
-    hits, misses, hashes = (verification[k] for k in ("cache_hits", "cache_misses", "full_hashes"))
-    require(hits + hashes == len(model["artifacts"]), "artifact verification counts do not cover snapshot")
-    if verification["requested_mode"] == "full":
-        require(verification["effective_mode"] == "full" and hits == misses == 0 and hashes > 0, "invalid full artifact verification")
-    else:
-        require(misses == hashes and verification["effective_mode"] == ("mixed" if hits and hashes else "cached" if hits else "full"),
-                "invalid cached artifact verification")
+    validate_artifact_verification(verification, len(model["artifacts"]))
     require(provenance["suite"]["id"] == suite_id and provenance["suite"]["sha256"] == digest(suite_path), "benchmark suite provenance mismatch")
     require(provenance["model_revision"] == REVISION and provenance["runtime"]["id"] == RUNTIME_ID and
             provenance["runtime"]["version"] == "2.11.2" and provenance["configuration"]["prompt_path"] == "native" and
@@ -840,6 +873,8 @@ def main(argv=None):
         return 0
     model, runtime = load_manifests()
     require(platform.system() == "Darwin" and platform.machine() == "arm64", "MTPLX requires macOS arm64")
+    if args.artifact_check == "disabled":
+        print("WARNING: model artifacts are UNVERIFIED; hashing disabled; manifest hashes are expected values only.", file=sys.stderr)
     if args.command == "setup":
         require(not any((args.profile, args.mtp, args.context, args.vision, args.runtime, args.suite, args.mode, args.identity)), "unsupported setup option")
         snapshot, receipt = snapshot_paths()
@@ -854,7 +889,7 @@ def main(argv=None):
             return 0
         require(shutil.disk_usage(ROOT).free >= remaining + int(reserve), "insufficient disk space for managed snapshot and runtime reserve")
         if not args.yes and sys.stdin.isatty():
-            require(input("Install pinned runtime and verified model snapshot? [y/N] ").lower() in ("y", "yes"), "setup cancelled")
+            require(input("Install pinned runtime and model snapshot (artifact check: " + args.artifact_check + ")? [y/N] ").lower() in ("y", "yes"), "setup cancelled")
         install_runtime(runtime)
         verification = setup_snapshot(snapshot, model["artifacts"], args.artifact_check, receipt, json_sha(model),
                                       Path(args.import_from).absolute() if args.import_from else None)

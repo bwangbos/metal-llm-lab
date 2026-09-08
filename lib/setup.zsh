@@ -160,7 +160,7 @@ metal_llm_validate_runtime_manifest() {
 }
 
 metal_llm_setup_usage() {
-    metal_llm_error 'usage: metal-llm setup MODEL [--artifact-check cached|full] [--dry-run] [--yes]'
+    metal_llm_error 'usage: metal-llm setup MODEL [--artifact-check cached|full|disabled] [--dry-run] [--yes]'
     return 2
 }
 
@@ -331,7 +331,7 @@ metal_llm_setup() {
                 (( artifact_check_set == 0 && $# >= 2 )) || { metal_llm_setup_usage; return $?; }
                 shift
                 case "$1" in
-                    cached|full) artifact_check=$1 ;;
+                    cached|full|disabled) artifact_check=$1 ;;
                     *) metal_llm_setup_usage; return $? ;;
                 esac
                 artifact_check_set=1
@@ -452,14 +452,18 @@ metal_llm_setup() {
             fi
             [[ -n "${HF_TOKEN:-}" ]] && print -- 'authorization: Bearer <redacted>'
             print -- "verify bytes: $part_path"
-            print -- "verify sha256: $part_path"
+            if [[ "$artifact_check" == disabled ]]; then
+                print -- "skip model sha256 (UNVERIFIED): $part_path"
+            else
+                print -- "verify sha256: $part_path"
+            fi
             print -- "publish artifact atomically: $part_path -> $final_path"
             continue
         fi
 
         if [[ -e "$final_path" ]]; then
             metal_llm_verify_model_artifact "$model_manifest" "$model_id" "$artifact_dir" "$artifact_id" || return 1
-            print -- "using verified artifact: $artifact_id"
+            print -- "using checked artifact: $artifact_id"
             continue
         fi
 
@@ -495,7 +499,7 @@ metal_llm_setup() {
 
         metal_llm_install_verified_artifact \
             "$model_manifest" "$model_id" "$artifact_dir" "$artifact_id" "$part_path" || return 1
-        print -- "verified artifact: $artifact_id"
+        print -- "checked artifact: $artifact_id"
     done < <(jq -er '.artifacts[] | [.id, .filename, .url, (.bytes | tostring), .sha256, .license_url] | @tsv' "$model_manifest")
 
     if (( dry_run == 1 && dry_run_missing_artifact == 1 )); then

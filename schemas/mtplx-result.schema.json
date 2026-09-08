@@ -250,6 +250,19 @@
     "artifact_verification": {
       "type": "object",
       "additionalProperties": false,
+      "oneOf": [
+        {"properties": {
+          "requested_mode": {"const": "disabled"},
+          "effective_mode": {"const": "disabled"},
+          "cache_hits": {"const": 0}, "cache_misses": {"const": 0}, "full_hashes": {"const": 0},
+          "receipt_set_sha256": {"type": "null"}
+        }},
+        {"properties": {
+          "requested_mode": {"enum": ["cached", "full"]},
+          "effective_mode": {"enum": ["cached", "full", "mixed"]},
+          "receipt_set_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }}
+      ],
       "required": [
         "requested_mode",
         "effective_mode",
@@ -262,14 +275,16 @@
         "requested_mode": {
           "enum": [
             "full",
-            "cached"
+            "cached",
+            "disabled"
           ]
         },
         "effective_mode": {
           "enum": [
             "full",
             "cached",
-            "mixed"
+            "mixed",
+            "disabled"
           ]
         },
         "cache_hits": {
@@ -285,7 +300,10 @@
           "minimum": 0
         },
         "receipt_set_sha256": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "pattern": "^[a-f0-9]{64}$"
         }
       }
