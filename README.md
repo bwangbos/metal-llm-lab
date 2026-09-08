@@ -11,7 +11,7 @@ checked-out runtimes.
 | Area | Current status |
 | --- | --- |
 | Platform | macOS on Apple Silicon only; initial target: Apple M5 Max with 128 GB unified memory |
-| Model packages | `qwen3.8-flash-next` (GGUF/llama.cpp) and `qwen3.8-flash-next-mtplx` (MLX/MTPLX; managed integration acceptance pending) |
+| Model packages | `qwen3.8-flash-next` (GGUF/llama.cpp; recommended `auto`) and `qwen3.8-flash-next-mtplx` (MLX/MTPLX alternative; offline integration verified, live acceptance pending) |
 | Runtimes | Pinned upstream revisions plus versioned local patch series; isolated pinned MTPLX environment |
 | Other systems and models | Reusable design; not yet tested |
 
@@ -53,6 +53,10 @@ These are different quantized packages of the same underlying model family,
 not identical weights with interchangeable backends. The original package's
 `auto` profile remains the recommendation on its accepted hardware.
 
+Both packages are included in the normal repository checkout; no evaluation
+branch, separate worktree, or private launch script is required. Existing
+checkouts can update with `git pull --ff-only` before choosing a package.
+
 ```sh
 git clone https://github.com/bwangbos/metal-llm-lab.git
 cd metal-llm-lab
@@ -64,7 +68,8 @@ cd metal-llm-lab
 ./bin/metal-llm report --check
 ```
 
-For the MTPLX alternative, after the same bootstrap and doctor steps:
+For the MTPLX alternative, after the same bootstrap and doctor steps, make
+Python 3.12 available as `python3.12` or set `METAL_LLM_PYTHON` to its executable:
 
 ```sh
 ./bin/metal-llm setup qwen3.8-flash-next-mtplx
@@ -88,7 +93,11 @@ defaulted only on M5 Max 128 GiB hardware, not every Mac.
 See the [MTPLX guide](docs/models/qwen3.8-flash-next-mtplx.md) for snapshot import,
 memory controls, API examples, pinned versions, licensing and qualification
 limits. [Managed-integration live acceptance](docs/experiments/2026-09-07-mtplx-integration-acceptance.md)
-is pending; earlier experimental measurements do not qualify the new launcher.
+is pending. The source integration has passed the full repository suite,
+23 MTPLX tests, independent review and a real isolated runtime installation.
+Publishing it as an alternative is not a claim of live qualification or a
+recommendation change; earlier experimental measurements do not qualify the
+new launcher.
 
 Original-package setup downloads approximately **100 GB**, checks every artifact checksum, and
 builds every unique pinned runtime required by the model's profiles, including

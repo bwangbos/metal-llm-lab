@@ -1,6 +1,6 @@
 # 0003 — Separate model packages with shared commands
 
-Date: 2026-09-07. Decision approved; managed integration acceptance pending.
+Date: 2026-09-07. Decision approved; offline integration accepted; live acceptance pending.
 
 ## Decision
 
@@ -46,6 +46,12 @@ No dynamic MTPLX policy, automatic backend selection, quant/runtime upgrade,
 system-wide memory tuning or fresh full sweep is included. Live acceptance
 waits for the existing benchmark instance to be released; it is never stopped
 automatically by this integration.
+
+After offline verification and review, the owner authorized source publication
+on the main branch before live acceptance. Publish the pending qualification
+status explicitly and retain the original recommendation. The normal checkout
+must remain self-contained; preserving the old evaluation worktree for an
+ongoing benchmark does not make it a dependency of the published integration.
 
 See the [package guide](../models/qwen3.8-flash-next-mtplx.md) and
 [acceptance record](../experiments/2026-09-07-mtplx-integration-acceptance.md).

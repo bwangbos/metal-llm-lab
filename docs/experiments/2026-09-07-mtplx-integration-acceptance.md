@@ -37,7 +37,17 @@ unqualified/upstream-default reporting. Neither preview launched the server.
 The offline gate is closed for this revision. Model download/import tests used
 small isolated fixtures; the real dependency installation used a separate
 managed environment. Re-run applicable tests and review if implementation changes
-before live acceptance. Main-branch integration and publication remain deferred.
+before live acceptance.
+
+## Source publication authorization
+
+After reviewing the offline implementation, the repository owner explicitly
+requested the README/docs update, main-branch merge and GitHub push. This
+supersedes the earlier source-publication deferral, not the live-acceptance
+gate. The integration may be published as an available alternative with this
+pending status retained. No model restart, cache clear or inference is part
+of publication. Preserve the evaluation worktree and its local assets while
+the independently launched benchmark may still depend on them.
 
 ## Live gate (explicitly deferred)
 
@@ -74,8 +84,9 @@ part of this gate.
 
 ## Release decision
 
-Only mark the managed integration accepted after all applicable checks pass and
+Only mark the managed integration live-accepted after all applicable checks pass and
 their evidence is recorded. Keep unavailable evidence explicitly pending.
-Acceptance makes the package an available alternative, not the recommended
-replacement. Historical experimental smoke checks and context curves remain
+Source availability is authorized separately above; neither publication nor
+live acceptance makes the package the recommended replacement automatically.
+Historical experimental smoke checks and context curves remain
 separate evidence with their original configuration and limitations.

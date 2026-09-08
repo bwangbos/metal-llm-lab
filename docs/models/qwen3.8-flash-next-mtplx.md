@@ -6,6 +6,11 @@ server is not acceptance evidence for the new launcher. The existing
 `qwen3.8-flash-next` `auto` profile remains the recommendation on its qualified
 M5 Max 128 GiB configuration.
 
+Source availability is approved for the main repository. Use the normal
+checkout and the commands below; no experimental worktree or private helper
+is required. Publishing the integration does not mark the pending live checks
+as passed.
+
 This package and `qwen3.8-flash-next` use the same underlying model family but
 different quantized weight packages and runtimes. Selecting one selects the
 whole setup; this is not a backend toggle for identical weights.
@@ -20,6 +25,10 @@ Python interpreter or change your system packages. The repository bootstrap is
 a prerequisite check, not a silent package-manager installation.
 If Python 3.12 is not named `python3.12` on your `PATH`, set `METAL_LLM_PYTHON`
 to its executable when running setup.
+
+For an existing checkout, update first with `git pull --ff-only`. Run setup in
+the checkout you intend to use: model and runtime storage are managed locally
+under that checkout's `.lab` directory, not implicitly shared with worktrees.
 
 ```sh
 ./bin/metal-llm setup qwen3.8-flash-next-mtplx --dry-run
